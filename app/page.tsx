@@ -1,18 +1,29 @@
 import { getSupabase } from '@/lib/supabase-server'
 import SearchBar from '@/components/search-bar'
-import TrendingPills from '@/components/trending-pills'
+import FeaturedScroll from '@/components/featured-scroll'
 import FeaturedBusinesses from '@/components/featured-businesses'
 import Footer from '@/components/footer'
 
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
+  const { data: scrollBusinesses } = await getSupabase()
+    .from('businesses')
+    .select('*')
+    .eq('verified', true)
+    .order('created_at', { ascending: false })
+    .limit(12)
+
   const { data: featured } = await getSupabase()
     .from('businesses')
     .select('*')
     .eq('verified', true)
     .order('rating', { ascending: false })
     .limit(3)
+
+  const { count } = await getSupabase()
+    .from('businesses')
+    .select('*', { count: 'exact', head: true })
 
   return (
     <>
@@ -27,7 +38,12 @@ export default async function HomePage() {
           <div className="max-w-xl mx-auto">
             <SearchBar large />
           </div>
-          <TrendingPills />
+          {count !== null && (
+            <p className="mt-4 text-sm text-text-secondary">
+              <span className="font-semibold text-whatsapp-600">{count.toLocaleString()}</span> businesses listed
+            </p>
+          )}
+          <FeaturedScroll businesses={scrollBusinesses || []} />
         </div>
         <FeaturedBusinesses businesses={featured || []} />
       </div>

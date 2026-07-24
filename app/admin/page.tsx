@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { getClient } from '@/lib/supabase-client'
 import type { Business } from '@/types'
+import { categories } from '@/data/categories'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
 
 const PAGE_SIZE = 15
 
@@ -58,6 +60,13 @@ export default function AdminPage() {
   const [adminPassword, setAdminPassword] = useState('')
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [addForm, setAddForm] = useState({
+    name: '', category: [] as string[], phone: '', city: '', area: '',
+    bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '',
+  })
+  const [adding, setAdding] = useState(false)
+  const [addError, setAddError] = useState('')
 
   useEffect(() => {
     const auth = localStorage.getItem('admin_auth') === 'true'
@@ -148,6 +157,29 @@ export default function AdminPage() {
     }
   }
 
+  const handleAddBusiness = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!adminPassword) { router.push('/admin-login'); return }
+    setAddError('')
+    setAdding(true)
+    const res = await fetch('/api/admin/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      body: JSON.stringify({ ...addForm, verified: true }),
+    })
+    const data = await res.json()
+    setAdding(false)
+    if (res.ok) {
+      setShowAddModal(false)
+      setAddForm({ name: '', category: [], phone: '', city: '', area: '', bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '' })
+      getClient().from('businesses').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+        if (data) setBusinesses(data as Business[])
+      })
+    } else {
+      setAddError(data.error || 'Failed to add business')
+    }
+  }
+
   if (loading) return null
   if (!isAuthenticated) return null
 
@@ -161,21 +193,114 @@ export default function AdminPage() {
         />
       )}
 
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 bg-black/40 animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5 animate-slide-up my-auto">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-text-primary">Add Business</h2>
+              <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-text-secondary transition-all">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleAddBusiness} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Name *</label>
+                  <input type="text" required value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} className="input-field text-sm" placeholder="Business name" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Phone *</label>
+                  <input type="text" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} className="input-field text-sm" placeholder="+263 77 123 4567" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Category *</label>
+                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 border border-gray-200 rounded-xl">
+                    {categories.filter(c => c.name !== 'Other').map(cat => {
+                      const selected = addForm.category.includes(cat.name)
+                      return (
+                        <button key={cat.name} type="button" onClick={() => setAddForm(f => ({
+                          ...f,
+                          category: selected ? f.category.filter(c => c !== cat.name) : [...f.category, cat.name],
+                        }))}
+                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-all ${selected ? 'bg-whatsapp-500 text-white' : 'bg-gray-100 text-text-secondary hover:bg-gray-200'}`}
+                        >
+                          {cat.icon} {cat.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">City</label>
+                  <select value={addForm.city} onChange={e => setAddForm(f => ({ ...f, city: e.target.value, area: '' }))} className="input-field text-sm">
+                    <option value="">Select city</option>
+                    {zimbabweCities.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Area</label>
+                  <select value={addForm.area} onChange={e => setAddForm(f => ({ ...f, area: e.target.value }))} className="input-field text-sm" disabled={!addForm.city}>
+                    <option value="">Select area</option>
+                    {zimbabweCities.find(c => c.name === addForm.city)?.areas.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Bio</label>
+                  <textarea rows={2} value={addForm.bio} onChange={e => setAddForm(f => ({ ...f, bio: e.target.value }))} className="input-field text-sm resize-none" placeholder="Brief description..." />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Price Range</label>
+                  <input type="text" value={addForm.price_range} onChange={e => setAddForm(f => ({ ...f, price_range: e.target.value }))} className="input-field text-sm" placeholder="$10-$50" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Link</label>
+                  <input type="text" value={addForm.whatsapp_link} onChange={e => setAddForm(f => ({ ...f, whatsapp_link: e.target.value }))} className="input-field text-sm" placeholder="https://wa.me/..." />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Logo URL</label>
+                  <input type="text" value={addForm.logo_url} onChange={e => setAddForm(f => ({ ...f, logo_url: e.target.value }))} className="input-field text-sm" placeholder="https://..." />
+                </div>
+              </div>
+              {addError && <p className="text-red-500 text-sm">{addError}</p>}
+              <div className="flex gap-2 justify-end pt-2 border-t border-gray-100">
+                <button type="button" onClick={() => setShowAddModal(false)} className="h-10 px-5 border border-gray-200 rounded-xl text-sm font-medium text-text-primary hover:bg-gray-50 transition-all">Cancel</button>
+                <button type="submit" disabled={adding || addForm.category.length === 0} className="h-10 px-5 bg-whatsapp-500 hover:bg-whatsapp-600 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all active:scale-[0.97]">
+                  {adding ? 'Adding...' : 'Add Business'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-2xl font-bold text-text-primary">Admin Dashboard</h1>
-        <button
-          onClick={() => {
-            localStorage.removeItem('admin_auth')
-            sessionStorage.removeItem('admin_password')
-            router.push('/admin-login')
-          }}
-          className="h-10 px-5 border border-gray-300 rounded-xl flex items-center gap-1.5 text-sm font-medium text-text-primary hover:bg-gray-50 active:bg-gray-100 transition-all"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          Logout
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="h-10 px-4 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-sm font-medium rounded-xl flex items-center gap-1.5 transition-all hover:shadow-lg hover:shadow-whatsapp-500/25 active:scale-[0.97]"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Business
+          </button>
+          <button
+            onClick={() => {
+              localStorage.removeItem('admin_auth')
+              sessionStorage.removeItem('admin_password')
+              router.push('/admin-login')
+            }}
+            className="h-10 px-5 border border-gray-300 rounded-xl flex items-center gap-1.5 text-sm font-medium text-text-primary hover:bg-gray-50 active:bg-gray-100 transition-all"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Logout
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
