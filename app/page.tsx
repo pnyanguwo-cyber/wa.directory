@@ -18,7 +18,7 @@ export default async function HomePage() {
     <>
       <div className="max-w-4xl mx-auto px-4 py-8 sm:py-16">
         <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold text-text-primary mb-3 animate-slide-up">
+          <h1 className="text-3xl sm:text-4xl font-bold text-text-primary mb-3">
             Find any business on WhatsApp
           </h1>
           <p className="text-text-secondary text-[16px] mb-6">
