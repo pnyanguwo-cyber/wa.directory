@@ -111,7 +111,7 @@ export default function FeaturedScroll({ businesses }: { businesses: Business[] 
       <div
         ref={scrollRef}
         aria-label="Recently added businesses list"
-        className="flex gap-3.5 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-3 pt-1"
+        className="flex gap-3.5 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-3 pt-1 pl-3"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         {businesses.map(b => (
