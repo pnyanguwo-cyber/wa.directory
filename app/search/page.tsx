@@ -5,6 +5,7 @@ import BusinessCard from '@/components/business-card'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
 import { matchCategory } from '@/data/categories'
+import { expandSearchQuery } from '@/lib/gemini'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,9 +29,18 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
   if (q) {
     const conditions = [`name.ilike.%${q}%`, `bio.ilike.%${q}%`]
     const matchedCat = matchCategory(q)
-    if (matchedCat !== 'Other') {
-      conditions.push(`category.cs.{${matchedCat}}`)
+    if (matchedCat !== 'Other') conditions.push(`category.cs.{${matchedCat}}`)
+
+    const related = await expandSearchQuery(q)
+    const relatedCats = new Set<string>()
+    for (const term of related) {
+      const cat = matchCategory(term)
+      if (cat !== 'Other') relatedCats.add(cat)
     }
+    Array.from(relatedCats).forEach(cat => {
+      conditions.push(`category.cs.{${cat}}`)
+    })
+
     query = query.or(conditions.join(','))
   }
 

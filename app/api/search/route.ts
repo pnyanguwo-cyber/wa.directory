@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { matchCategory } from '@/data/categories'
+import { expandSearchQuery } from '@/lib/gemini'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -17,9 +18,17 @@ export async function GET(request: Request) {
 
   const conditions = [`name.ilike.%${q}%`]
   const matchedCat = matchCategory(q)
-  if (matchedCat !== 'Other') {
-    conditions.push(`category.cs.{${matchedCat}}`)
+  if (matchedCat !== 'Other') conditions.push(`category.cs.{${matchedCat}}`)
+
+  const related = await expandSearchQuery(q)
+  const relatedCats = new Set<string>()
+  for (const term of related) {
+    const cat = matchCategory(term)
+    if (cat !== 'Other') relatedCats.add(cat)
   }
+  Array.from(relatedCats).forEach(cat => {
+    conditions.push(`category.cs.{${cat}}`)
+  })
 
   const { data } = await supabase
     .from('businesses')
