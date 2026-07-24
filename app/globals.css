@@ -67,6 +67,34 @@
   .chip-active {
     @apply bg-whatsapp-100 text-whatsapp-700 font-medium;
   }
+
+  .hero-title {
+    position: relative;
+    display: inline-block;
+    background: linear-gradient(
+      90deg,
+      #1a1a1a 0%, #555 20%, #1a1a1a 40%,
+      #1a1a1a 60%, #555 80%, #1a1a1a 100%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gloss-sweep 4s ease-in-out infinite;
+  }
+
+  .hero-title::after {
+    content: '';
+    position: absolute;
+    top: 48%;
+    left: -4%;
+    width: 108%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #25D366, #25D366, transparent);
+    transform: rotate(-12deg);
+    pointer-events: none;
+    box-shadow: 0 0 8px rgba(37, 211, 102, 0.5), 0 0 16px rgba(37, 211, 102, 0.25);
+  }
 }
 
 @layer utilities {
@@ -99,4 +127,9 @@
   to {
     stroke-dashoffset: 0;
   }
+}
+
+@keyframes gloss-sweep {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
