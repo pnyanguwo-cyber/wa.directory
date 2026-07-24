@@ -68,46 +68,7 @@
     @apply bg-whatsapp-100 text-whatsapp-700 font-medium;
   }
 
-  .hero-title {
-    position: relative;
-    display: inline-block;
-    overflow: hidden;
-    background: linear-gradient(
-      90deg,
-      #1a1a1a 0%, #555 20%, #1a1a1a 40%,
-      #1a1a1a 60%, #555 80%, #1a1a1a 100%
-    );
-    background-size: 200% 100%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: gloss-sweep 4s ease-in-out infinite;
-  }
 
-  .hero-title::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -40%;
-    width: 30%;
-    height: 100%;
-    background: linear-gradient(
-      135deg,
-      transparent 25%,
-      rgba(37, 211, 102, 0.15) 35%,
-      rgba(37, 211, 102, 0.35) 45%,
-      rgba(170, 255, 200, 0.5) 48%,
-      rgba(170, 255, 200, 0.5) 52%,
-      rgba(37, 211, 102, 0.35) 55%,
-      rgba(37, 211, 102, 0.15) 65%,
-      transparent 75%
-    );
-    transform: skewX(-18deg);
-    pointer-events: none;
-    animation: sweep-line 5s ease-in-out infinite;
-    box-shadow: 0 0 30px rgba(37, 211, 102, 0.2);
-    mix-blend-mode: screen;
-  }
 }
 
 @layer utilities {
@@ -142,14 +103,4 @@
   }
 }
 
-@keyframes gloss-sweep {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
 
-@keyframes sweep-line {
-  0%   { left: -40%; }
-  12%  { left: -40%; }
-  40%  { left: 110%; }
-  100% { left: 110%; }
-}
