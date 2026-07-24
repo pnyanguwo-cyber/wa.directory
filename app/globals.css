@@ -71,6 +71,7 @@
   .hero-title {
     position: relative;
     display: inline-block;
+    overflow: hidden;
     background: linear-gradient(
       90deg,
       #1a1a1a 0%, #555 20%, #1a1a1a 40%,
@@ -86,14 +87,23 @@
   .hero-title::after {
     content: '';
     position: absolute;
-    top: 48%;
-    left: -4%;
-    width: 108%;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, #25D366, #25D366, transparent);
-    transform: rotate(-12deg);
+    top: 0;
+    left: -35%;
+    width: 30%;
+    height: 100%;
+    background: linear-gradient(
+      135deg,
+      transparent 30%,
+      rgba(37, 211, 102, 0.7) 42%,
+      #25D366 48%,
+      #25D366 52%,
+      rgba(37, 211, 102, 0.7) 58%,
+      transparent 70%
+    );
+    transform: skewX(-18deg);
     pointer-events: none;
-    box-shadow: 0 0 8px rgba(37, 211, 102, 0.5), 0 0 16px rgba(37, 211, 102, 0.25);
+    animation: sweep-line 2.5s ease-in-out infinite;
+    box-shadow: 0 0 20px rgba(37, 211, 102, 0.4);
   }
 }
 
@@ -132,4 +142,9 @@
 @keyframes gloss-sweep {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
+}
+
+@keyframes sweep-line {
+  0% { left: -35%; }
+  100% { left: 110%; }
 }
