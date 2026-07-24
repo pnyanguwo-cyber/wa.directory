@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { getClient } from '@/lib/supabase-client'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { categories, matchCategory } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
@@ -15,10 +16,15 @@ const countryOptions = countryCodes.map(c => ({
   label: `${c.flag} ${c.code} ${c.country}`,
 }))
 
-const cityOptions = zimbabweCities.map(c => ({
+const categoryOptions = categories.map(c => ({
   value: c.name,
-  label: c.name,
+  label: `${c.icon} ${c.name}`,
 }))
+
+const cityOptions = [
+  { value: '*', label: '🇿🇼 Whole country' },
+  ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
+]
 
 function generateSlug(name: string): string {
   return name
@@ -43,6 +49,7 @@ export default function ListBusinessForm() {
     name: '',
     countryCode: '+263',
     phone: '',
+    category: '',
     description: '',
     bio: '',
     city: '',
@@ -56,10 +63,12 @@ export default function ListBusinessForm() {
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
   const phoneError = form.phone ? validatePhone(form.countryCode, form.phone) : null
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
-  const areaOptions = (selectedCity?.areas || []).map(a => ({ value: a, label: a }))
-  const hasLocation = form.city || form.area
+  const areaOptions = form.city && form.city !== '*'
+    ? [{ value: '', label: '📍 All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
+    : []
+  const hasLocation = form.city === '*' || !!form.city || !!form.area
   const isValidStep1 = form.name.trim() && form.phone.trim() && !phoneError
-  const isValidStep2 = form.description.trim() && !!hasLocation
+  const isValidStep2 = form.description.trim() && !!form.category && hasLocation
 
   async function handleGenerateBio() {
     if (!form.description.trim()) return
@@ -106,7 +115,9 @@ export default function ListBusinessForm() {
       const slug = generateSlug(form.name)
       const fullPhone = (form.countryCode + form.phone).replace(/[^0-9]/g, '')
       const whatsappLink = `https://wa.me/${fullPhone}?text=${WA_MSG}`
-      const location = [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')
+      const location = form.city === '*'
+        ? 'Zimbabwe'
+        : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')
 
       const { data, error } = await getClient()
         .from('businesses')
@@ -114,11 +125,11 @@ export default function ListBusinessForm() {
           name: form.name.trim(),
           slug,
           bio: form.bio || `Professional ${form.description} services.`,
-          category: [form.description.trim()],
+          category: [form.category],
           location,
           country_code: form.countryCode,
-          city: form.city,
-          area: form.area,
+          city: form.city === '*' ? '' : form.city,
+          area: form.city === '*' ? '' : form.area,
           phone: fullPhone,
           whatsapp_link: whatsappLink,
           catalog_link: form.catalog_link.trim() || null,
@@ -252,6 +263,22 @@ export default function ListBusinessForm() {
       {step === 2 && (
         <div className="space-y-4 animate-fade-in">
           <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Category <span className="text-text-secondary font-normal">— type what you sell</span>
+            </label>
+            <SearchSelect
+              options={categoryOptions}
+              value={form.category}
+              onChange={v => setForm(f => ({ ...f, category: v }))}
+              placeholder="e.g. cakes, food, magetsi..."
+            />
+            {form.category && (
+              <p className="text-xs text-whatsapp-600 mt-1">
+                {categories.find(c => c.name === form.category)?.icon} Selected: {form.category}
+              </p>
+            )}
+          </div>
+          <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">What do you sell?</label>
             <textarea
               value={form.description}
@@ -266,17 +293,19 @@ export default function ListBusinessForm() {
             <SearchSelect
               options={cityOptions}
               value={form.city}
-              onChange={v => setForm(f => ({ ...f, city: v, area: '' }))}
+              onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
               placeholder="Select city"
               label="City"
             />
-            <SearchSelect
-              options={areaOptions}
-              value={form.area}
-              onChange={v => setForm(f => ({ ...f, area: v }))}
-              placeholder="Select area"
-              label="Area"
-            />
+            {form.city && form.city !== '*' && (
+              <SearchSelect
+                options={areaOptions}
+                value={form.area}
+                onChange={v => setForm(f => ({ ...f, area: v }))}
+                placeholder="Select area"
+                label="Area"
+              />
+            )}
           </div>
           {!hasLocation && (
             <p className="text-xs text-danger">Select a city or area</p>
@@ -298,12 +327,32 @@ export default function ListBusinessForm() {
           {form.bio && (
             <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 animate-slide-up">
               <p className="text-sm text-text-primary">{form.bio}</p>
-              <button
-                onClick={() => setForm(f => ({ ...f, bio: '' }))}
-                className="text-xs text-text-secondary mt-2 hover:text-text-primary transition-colors"
-              >
-                Clear
-              </button>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => setForm(f => ({ ...f, description: f.bio, bio: '' }))}
+                  className="flex-1 bg-whatsapp-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-600 active:scale-[0.95] transition-all"
+                >
+                  Update
+                </button>
+                <button
+                  onClick={handleGenerateBio}
+                  disabled={bioLoading}
+                  className="flex-1 border border-whatsapp-500 text-whatsapp-600 py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-50 active:scale-[0.95] transition-all"
+                >
+                  {bioLoading ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <div className="w-3 h-3 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+                      ...
+                    </span>
+                  ) : 'Retry'}
+                </button>
+                <button
+                  onClick={() => setForm(f => ({ ...f, bio: '' }))}
+                  className="px-3 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           )}
           <div className="flex gap-2 pt-2">
@@ -427,11 +476,15 @@ export default function ListBusinessForm() {
               <span className="font-medium text-text-primary">Name:</span> {form.name}
             </p>
             <p className="text-sm text-text-secondary">
+              <span className="font-medium text-text-primary">Category:</span>{' '}
+              {form.category ? `${categories.find(c => c.name === form.category)?.icon || ''} ${form.category}` : 'Not set'}
+            </p>
+            <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Phone:</span> {form.countryCode} {form.phone}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Location:</span>{' '}
-              {[form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
+              {form.city === '*' ? 'Zimbabwe' : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Price:</span> {form.price_range || 'Not set'}

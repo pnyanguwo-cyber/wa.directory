@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import BusinessCard from '@/components/business-card'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
+import { matchCategory } from '@/data/categories'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,12 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
   }
 
   if (q) {
-    query = query.or(`name.ilike.%${q}%,bio.ilike.%${q}%`)
+    const conditions = [`name.ilike.%${q}%`, `bio.ilike.%${q}%`]
+    const matchedCat = matchCategory(q)
+    if (matchedCat !== 'Other') {
+      conditions.push(`category.cs.{${matchedCat}}`)
+    }
+    query = query.or(conditions.join(','))
   }
 
   if (sort === 'newest') {
