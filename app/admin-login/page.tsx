@@ -26,6 +26,8 @@ export default function AdminLoginPage() {
     if (data.success) {
       localStorage.setItem('admin_auth', 'true')
       router.push('/admin')
+    } else if (data.error === 'Server misconfigured') {
+      setError('Admin password not set on server — check .env.local or Vercel env vars')
     } else {
       setError('Wrong password')
     }
