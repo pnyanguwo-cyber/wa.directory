@@ -30,10 +30,6 @@ export default function FeaturedScroll({ businesses }: { businesses: Business[] 
   useEffect(() => {
     if (businesses.length < 2 || !isPlaying) return
 
-    // Respect reduced motion settings
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (mediaQuery.matches) return
-
     function advance() {
       if (isHoveringOrFocused.current) return
       const el = scrollRef.current
