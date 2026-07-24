@@ -1,35 +1,56 @@
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
 import { getSupabase } from '@/lib/supabase-server'
 import BusinessCard from '@/components/business-card'
+import FilterBar from '@/components/filter-bar'
+import SkeletonCard from '@/components/skeleton-card'
 
 export const dynamic = 'force-dynamic'
 
-export default async function SearchPage({
-  searchParams,
-}: {
-  searchParams: { q?: string }
-}) {
+export async function generateMetadata({ searchParams }: { searchParams: { q?: string } }): Promise<Metadata> {
   const q = searchParams.q || ''
+  return {
+    title: q ? `Search: ${q} in Zimbabwe | WA Directory` : 'Browse Businesses | WA Directory',
+    description: q ? `Find ${q} services on WhatsApp in Zimbabwe.` : 'Browse all businesses listed on WA Directory.',
+  }
+}
 
-  const { data: businesses } = await getSupabase()
+async function SearchResults({ q, verified, sort }: { q: string; verified: boolean; sort: string }) {
+  let query = getSupabase()
     .from('businesses')
     .select('*')
-    .or(`name.ilike.%${q}%,bio.ilike.%${q}%`)
-    .order('rating', { ascending: false })
 
+  if (verified) {
+    query = query.eq('verified', true)
+  }
+
+  if (q) {
+    query = query.or(`name.ilike.%${q}%,bio.ilike.%${q}%`)
+  }
+
+  if (sort === 'newest') {
+    query = query.order('created_at', { ascending: false })
+  } else {
+    query = query.order('rating', { ascending: false })
+  }
+
+  const { data: businesses } = await query
   const count = businesses?.length || 0
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1">
-        Results for &ldquo;{q}&rdquo;
-      </h1>
-      <p className="text-gray-500 mb-6">
-        {count} business{count !== 1 ? 'es' : ''} found
-      </p>
+    <>
+      <FilterBar total={count} query={q} />
       {count === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-4xl mb-4">🔍</div>
-          <p className="text-gray-500">No businesses found. Try a different search term.</p>
+        <div className="text-center py-16">
+          <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-text-primary mb-1">No results found</h2>
+          <p className="text-text-secondary text-sm">
+            Try &ldquo;hardware near me&rdquo; or check your spelling
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -38,6 +59,43 @@ export default async function SearchPage({
           ))}
         </div>
       )}
+    </>
+  )
+}
+
+function SearchSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="skeleton h-5 w-48 rounded" />
+        <div className="flex gap-2">
+          <div className="skeleton h-8 w-20 rounded-full" />
+          <div className="skeleton h-8 w-20 rounded-full" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map(i => (
+          <SkeletonCard key={i} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export default async function SearchPage({
+  searchParams,
+}: {
+  searchParams: { q?: string; verified?: string; sort?: string }
+}) {
+  const q = searchParams.q || ''
+  const verified = searchParams.verified === 'true'
+  const sort = searchParams.sort || 'rating'
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Suspense fallback={<SearchSkeleton />}>
+        <SearchResults q={q} verified={verified} sort={sort} />
+      </Suspense>
     </div>
   )
 }

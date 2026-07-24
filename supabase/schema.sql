@@ -1,4 +1,4 @@
--- Run this in your Supabase SQL editor
+﻿-- Run this in your Supabase SQL editor
 -- Safe to re-run (all IF NOT EXISTS)
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -10,12 +10,18 @@ CREATE TABLE IF NOT EXISTS businesses (
   bio TEXT DEFAULT '',
   category TEXT[] DEFAULT '{}',
   location TEXT DEFAULT '',
+  country_code TEXT DEFAULT '+263',
+  city TEXT DEFAULT '',
+  area TEXT DEFAULT '',
+  slug TEXT,
   phone TEXT DEFAULT '',
   whatsapp_link TEXT DEFAULT '',
   verified BOOLEAN DEFAULT FALSE,
   rating FLOAT DEFAULT 0,
   review_count INT DEFAULT 0,
   catalog_link TEXT DEFAULT '',
+  logo_url TEXT DEFAULT '',
+  price_range TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -24,16 +30,24 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS category TEXT[] DEFAULT '{}';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS location TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS country_code TEXT DEFAULT '+263';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS city TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS area TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS slug TEXT;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_link TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS rating FLOAT DEFAULT 0;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS review_count INT DEFAULT 0;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS catalog_link TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS price_range TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+  UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_slug ON businesses (slug);
 CREATE INDEX IF NOT EXISTS idx_businesses_name_trgm ON businesses USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_businesses_bio_trgm ON businesses USING gin (bio gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses USING gin (category);
@@ -46,3 +60,11 @@ DROP POLICY IF EXISTS "Public read access" ON businesses;
 DROP POLICY IF EXISTS "Public insert access" ON businesses;
 CREATE POLICY "Public read access" ON businesses FOR SELECT USING (true);
 CREATE POLICY "Public insert access" ON businesses FOR INSERT WITH CHECK (true);
+
+-- Storage bucket for logos
+INSERT INTO storage.buckets (id, name, public) VALUES ('logos', 'logos', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Logos public read" ON storage.objects;
+CREATE POLICY "Logos public read" ON storage.objects
+  FOR SELECT USING (bucket_id = 'logos');
