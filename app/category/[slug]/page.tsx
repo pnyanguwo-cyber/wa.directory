@@ -1,0 +1,156 @@
+import { Suspense } from 'react'
+import type { Metadata } from 'next'
+import { notFound } from 'next/navigation'
+import { getSupabase } from '@/lib/supabase-server'
+import BusinessCard from '@/components/business-card'
+import SkeletonCard from '@/components/skeleton-card'
+import { matchCategory } from '@/data/categories'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { generateSEOBlurb } from '@/lib/gemini'
+
+export const dynamic = 'force-dynamic'
+
+function parseSlug(slug: string): { category: string; location: string } | null {
+  const parts = slug.split('-')
+  if (parts.length < 2) return null
+
+  const normalizedCities = zimbabweCities.map(c => ({
+    name: c.name,
+    key: c.name.toLowerCase().replace(/\s+/g, '-'),
+  }))
+
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const candidate = parts.slice(i).join('-')
+    const match = normalizedCities.find(c => c.key === candidate)
+    if (match) {
+      const categoryRaw = parts.slice(0, i).join(' ')
+      return { category: categoryRaw, location: match.name }
+    }
+  }
+
+  return null
+}
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const parsed = parseSlug(params.slug)
+  if (!parsed) return { title: 'Category | WA Directory' }
+
+  const matched = matchCategory(parsed.category)
+
+  return {
+    title: `Best ${matched} in ${parsed.location} | WA Directory`,
+    description: `Find the best ${matched} businesses in ${parsed.location}, Zimbabwe. Browse verified services and start a WhatsApp conversation instantly.`,
+  }
+}
+
+function CategorySkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="skeleton h-8 w-72 rounded mb-2" />
+      <div className="skeleton h-20 w-full rounded mb-6" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {[1, 2, 3, 4].map(i => (
+          <SkeletonCard key={i} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+async function CategoryResults({ slug }: { slug: string }) {
+  const parsed = parseSlug(slug)
+  if (!parsed) notFound()
+
+  const matchedCategory = matchCategory(parsed.category)
+
+  const query = getSupabase()
+    .from('businesses')
+    .select('*')
+    .contains('category', [matchedCategory])
+
+  const filtered = query.or(
+    `city.ilike.%${parsed.location}%,location.ilike.%${parsed.location}%`
+  )
+
+  const { data: businesses } = await filtered.order('rating', { ascending: false })
+
+  const count = businesses?.length || 0
+  const seoText = await generateSEOBlurb(matchedCategory, parsed.location)
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: `Best ${matchedCategory} in ${parsed.location}`,
+    description: `Find the best ${matchedCategory} services in ${parsed.location}, Zimbabwe.`,
+    about: {
+      '@type': 'Thing',
+      name: `${matchedCategory} in ${parsed.location}`,
+    },
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: (businesses || []).map((b, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        item: {
+          '@type': 'LocalBusiness',
+          name: b.name,
+          url: `https://wadirectory.vercel.app/business/${b.slug || b.id}`,
+        },
+      })),
+    },
+  }
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      <div className="mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-text-primary mb-3">
+          Best {matchedCategory} in {parsed.location}
+        </h1>
+        <p className="text-text-secondary text-sm leading-relaxed">
+          {seoText}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-sm text-text-secondary font-medium">
+          {count} business{count !== 1 ? 'es' : ''} found
+        </span>
+      </div>
+
+      {count === 0 ? (
+        <div className="text-center py-16">
+          <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <h2 className="text-lg font-semibold text-text-primary mb-1">No businesses listed yet</h2>
+          <p className="text-text-secondary text-sm">
+            Be the first to list a {matchedCategory.toLowerCase()} business in {parsed.location}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {businesses!.map(b => (
+            <BusinessCard key={b.id} business={b} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+export default function CategoryPage({ params }: { params: { slug: string } }) {
+  return (
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Suspense fallback={<CategorySkeleton />}>
+        <CategoryResults slug={params.slug} />
+      </Suspense>
+    </div>
+  )
+}
