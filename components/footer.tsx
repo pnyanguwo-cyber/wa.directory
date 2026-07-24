@@ -30,6 +30,11 @@ export default function Footer() {
                   List Your Business
                 </Link>
               </li>
+              <li>
+                <Link href="/admin-login" className="text-text-secondary hover:text-text-primary transition-colors">
+                  Admin
+                </Link>
+              </li>
             </ul>
           </div>
           <div>
