@@ -9,7 +9,7 @@
   }
 
   body {
-    @apply text-text-primary antialiased;
+    @apply text-text-primary bg-surface/50 antialiased selection:bg-whatsapp-100 selection:text-whatsapp-900;
   }
 }
 
@@ -35,45 +35,47 @@
   }
 
   .badge-verified {
-    @apply inline-flex items-center gap-1 bg-whatsapp-100 text-whatsapp-700 text-xs font-medium px-2 py-0.5 rounded-full;
+    @apply inline-flex items-center gap-1 bg-whatsapp-100/80 text-whatsapp-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-whatsapp-200/60 shadow-sm backdrop-blur-sm;
   }
 
   .btn-primary {
-    @apply bg-whatsapp-500 text-white text-center font-medium rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-whatsapp-500 text-white font-semibold rounded-2xl transition-all duration-200 shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
   }
   .btn-primary:not(:disabled) {
-    @apply hover:bg-whatsapp-600 hover:scale-[1.02] active:scale-[0.95] active:brightness-90;
+    @apply hover:bg-whatsapp-600 hover:shadow-[0_6px_20px_rgba(18,140,126,0.35)] active:scale-[0.97] active:brightness-95;
   }
 
   .btn-secondary {
-    @apply border border-gray-300 text-text-primary font-medium rounded-xl transition-all duration-150;
+    @apply border border-gray-200/80 bg-white/80 backdrop-blur-md text-text-primary font-medium rounded-2xl shadow-sm transition-all duration-200;
   }
   .btn-secondary:not(:disabled) {
-    @apply hover:bg-gray-50 hover:scale-[1.02] active:scale-[0.95] active:brightness-90;
+    @apply hover:bg-white hover:border-gray-300 hover:shadow-card active:scale-[0.97];
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-card hover:shadow-card-hover transition-shadow duration-200;
+    @apply bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-card transition-all duration-200;
+  }
+
+  .neo-card {
+    @apply bg-white/95 rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(18,140,126,0.12)] transition-all duration-200;
   }
 
   .input-field {
-    @apply w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-whatsapp-500 outline-none transition-colors duration-150 bg-white;
+    @apply w-full px-4 py-3.5 border border-gray-200/80 rounded-2xl focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 bg-white/90 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.04)];
   }
 
   .chip {
-    @apply bg-surface text-text-secondary text-sm px-3 py-1.5 rounded-full hover:bg-gray-200 transition-colors duration-150;
+    @apply bg-white/90 border border-gray-200/60 text-text-secondary text-xs font-medium px-3 py-1.5 rounded-full hover:bg-whatsapp-50 hover:text-whatsapp-700 hover:border-whatsapp-200 transition-all duration-150 shadow-sm cursor-pointer;
   }
 
   .chip-active {
-    @apply bg-whatsapp-100 text-whatsapp-700 font-medium;
+    @apply bg-whatsapp-100 text-whatsapp-800 border-whatsapp-300 font-semibold shadow-sm;
   }
-
-
 }
 
 @layer utilities {
   .animate-slide-up {
-    animation: slide-up 400ms ease-out;
+    animation: slide-up 400ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .animate-fade-in {
@@ -84,7 +86,7 @@
 @keyframes slide-up {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(20px);
   }
   to {
     opacity: 1;
@@ -95,24 +97,6 @@
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes check-draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  20%  { transform: translateX(-8px); }
-  40%  { transform: translateX(8px); }
-  60%  { transform: translateX(-4px); }
-  80%  { transform: translateX(4px); }
-}
-
-.animate-shake {
-  animation: shake 0.4s ease-out;
 }
 
 .animate-delay-100 { animation-delay: 100ms; }
