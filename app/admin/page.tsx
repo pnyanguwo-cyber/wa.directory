@@ -11,8 +11,8 @@ const PAGE_SIZE = 15
 
 function SkeletonRow() {
   return (
-    <div className="card p-4 flex items-center gap-4">
-      <div className="skeleton h-10 w-10 rounded-full shrink-0" />
+    <div className="neo-card p-4 flex items-center gap-4">
+      <div className="skeleton h-10 w-10 rounded-2xl shrink-0" />
       <div className="flex-1 space-y-2">
         <div className="skeleton h-4 w-48 rounded" />
         <div className="skeleton h-3 w-32 rounded" />
@@ -25,22 +25,22 @@ function SkeletonRow() {
 
 function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4 animate-slide-up">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
-            <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-sm w-full p-6 space-y-4 animate-slide-up border border-white">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
             </svg>
           </div>
-          <p className="text-sm text-text-primary font-medium">{message}</p>
+          <p className="text-sm text-text-primary font-medium leading-snug">{message}</p>
         </div>
-        <div className="flex gap-2 justify-end">
-          <button onClick={onCancel} className="h-9 px-4 border border-gray-200 rounded-xl text-sm font-medium text-text-primary hover:bg-gray-50 transition-all">
+        <div className="flex gap-2.5 justify-end pt-2">
+          <button onClick={onCancel} className="btn-secondary h-9 px-4 text-xs font-semibold">
             Cancel
           </button>
-          <button onClick={onConfirm} className="h-9 px-4 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-xl transition-all active:scale-[0.97]">
-            Delete
+          <button onClick={onConfirm} className="h-9 px-4 bg-red-500 hover:bg-red-600 active:scale-95 text-white text-xs font-semibold rounded-2xl transition-all shadow-md">
+            Confirm Delete
           </button>
         </div>
       </div>
@@ -184,39 +184,39 @@ export default function AdminPage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8 space-y-6">
       {confirmDelete && (
         <ConfirmDialog
-          message={`Delete "${businesses.find(b => b.id === confirmDelete)?.name || 'this business'}"? This cannot be undone.`}
+          message={`Delete "${businesses.find(b => b.id === confirmDelete)?.name || 'this business'}"? This action cannot be undone.`}
           onConfirm={() => handleDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
         />
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 bg-black/40 animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-5 animate-slide-up my-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-text-primary">Add Business</h2>
-              <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-text-secondary transition-all">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 bg-black/40 backdrop-blur-sm animate-fade-in overflow-y-auto">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-slide-up my-auto border border-white">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-text-primary">Add New Business</h2>
+              <button onClick={() => setShowAddModal(false)} className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-surface text-text-secondary transition-all">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
             <form onSubmit={handleAddBusiness} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">Name *</label>
-                  <input type="text" required value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} className="input-field text-sm" placeholder="Business name" />
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Business Name *</label>
+                  <input type="text" required value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))} className="input-field text-sm" placeholder="e.g. Harare Solar Solutions" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">Phone *</label>
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Phone *</label>
                   <input type="text" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} className="input-field text-sm" placeholder="+263 77 123 4567" />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">Category *</label>
-                  <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-2 border border-gray-200 rounded-xl">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Categories *</label>
+                  <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-2 border border-gray-200/80 rounded-2xl bg-surface/50">
                     {categories.filter(c => c.name !== 'Other').map(cat => {
                       const selected = addForm.category.includes(cat.name)
                       return (
@@ -224,7 +224,7 @@ export default function AdminPage() {
                           ...f,
                           category: selected ? f.category.filter(c => c !== cat.name) : [...f.category, cat.name],
                         }))}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg transition-all ${selected ? 'bg-whatsapp-500 text-white' : 'bg-gray-100 text-text-secondary hover:bg-gray-200'}`}
+                          className={`chip text-xs ${selected ? 'chip-active' : ''}`}
                         >
                           {cat.icon} {cat.name}
                         </button>
@@ -247,27 +247,23 @@ export default function AdminPage() {
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">Bio</label>
-                  <textarea rows={2} value={addForm.bio} onChange={e => setAddForm(f => ({ ...f, bio: e.target.value }))} className="input-field text-sm resize-none" placeholder="Brief description..." />
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Short Bio</label>
+                  <textarea rows={2} value={addForm.bio} onChange={e => setAddForm(f => ({ ...f, bio: e.target.value }))} className="input-field text-sm resize-none" placeholder="Brief business summary..." />
                 </div>
                 <div>
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Price Range</label>
-                  <input type="text" value={addForm.price_range} onChange={e => setAddForm(f => ({ ...f, price_range: e.target.value }))} className="input-field text-sm" placeholder="$10-$50" />
+                  <input type="text" value={addForm.price_range} onChange={e => setAddForm(f => ({ ...f, price_range: e.target.value }))} className="input-field text-sm" placeholder="e.g. $10-$50" />
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Link</label>
-                  <input type="text" value={addForm.whatsapp_link} onChange={e => setAddForm(f => ({ ...f, whatsapp_link: e.target.value }))} className="input-field text-sm" placeholder="https://wa.me/..." />
-                </div>
-                <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Logo URL</label>
                   <input type="text" value={addForm.logo_url} onChange={e => setAddForm(f => ({ ...f, logo_url: e.target.value }))} className="input-field text-sm" placeholder="https://..." />
                 </div>
               </div>
-              {addError && <p className="text-red-500 text-sm">{addError}</p>}
-              <div className="flex gap-2 justify-end pt-2 border-t border-gray-100">
-                <button type="button" onClick={() => setShowAddModal(false)} className="h-10 px-5 border border-gray-200 rounded-xl text-sm font-medium text-text-primary hover:bg-gray-50 transition-all">Cancel</button>
-                <button type="submit" disabled={adding || addForm.category.length === 0} className="h-10 px-5 bg-whatsapp-500 hover:bg-whatsapp-600 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-all active:scale-[0.97]">
-                  {adding ? 'Adding...' : 'Add Business'}
+              {addError && <p className="text-red-500 text-xs font-medium">{addError}</p>}
+              <div className="flex gap-2.5 justify-end pt-3 border-t border-gray-100">
+                <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary h-10 px-4 text-xs font-semibold">Cancel</button>
+                <button type="submit" disabled={adding || addForm.category.length === 0} className="btn-primary h-10 px-5 text-xs font-semibold">
+                  {adding ? 'Adding Business...' : 'Add Business'}
                 </button>
               </div>
             </form>
@@ -275,17 +271,21 @@ export default function AdminPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-text-primary">Admin Dashboard</h1>
-        <div className="flex items-center gap-2">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">Directory Administration</span>
+          <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Admin Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => setShowAddModal(true)}
-            className="h-10 px-4 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-sm font-medium rounded-xl flex items-center gap-1.5 transition-all hover:shadow-lg hover:shadow-whatsapp-500/25 active:scale-[0.97]"
+            className="btn-primary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-            Add Business
+            <span>Add Business</span>
           </button>
           <button
             onClick={() => {
@@ -293,48 +293,51 @@ export default function AdminPage() {
               sessionStorage.removeItem('admin_password')
               router.push('/admin-login')
             }}
-            className="h-10 px-5 border border-gray-300 rounded-xl flex items-center gap-1.5 text-sm font-medium text-text-primary hover:bg-gray-50 active:bg-gray-100 transition-all"
+            className="btn-secondary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
             </svg>
-            Logout
+            <span>Logout</span>
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: stats.total, color: 'text-text-primary', bg: 'bg-gray-50', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
-          { label: 'Verified', value: stats.verified, color: 'text-whatsapp-700', bg: 'bg-whatsapp-50', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-          { label: 'Pending', value: stats.pending, color: 'text-amber-700', bg: 'bg-amber-50', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-          { label: 'New / Week', value: stats.newThisWeek, color: 'text-blue-700', bg: 'bg-blue-50', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
+          { label: 'Total Listings', value: stats.total, color: 'text-text-primary', bg: 'bg-white/90', icon: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25zM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6z' },
+          { label: 'Verified', value: stats.verified, color: 'text-whatsapp-700', bg: 'bg-whatsapp-50/70', icon: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+          { label: 'Pending Approval', value: stats.pending, color: 'text-amber-700', bg: 'bg-amber-50/70', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0z' },
+          { label: 'New This Week', value: stats.newThisWeek, color: 'text-blue-700', bg: 'bg-blue-50/70', icon: 'M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 0 5.814-5.518l2.74-1.22m0 0-3.75-.625m3.75.625v3.75' },
         ].map(stat => (
-          <div key={stat.label} className={`${stat.bg} rounded-xl p-4`}>
+          <div key={stat.label} className={`neo-card p-4 ${stat.bg}`}>
             <div className="flex items-center gap-3">
-              <svg className={`w-5 h-5 ${stat.color}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={stat.icon} />
+              <svg className={`w-5 h-5 ${stat.color}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d={stat.icon} />
               </svg>
               <div>
-                <p className={`text-2xl font-bold ${stat.color}`}>{stat.value}</p>
-                <p className="text-xs text-text-secondary">{stat.label}</p>
+                <p className={`text-2xl font-extrabold ${stat.color}`}>{stat.value}</p>
+                <p className="text-xs font-medium text-text-secondary">{stat.label}</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <svg className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
           </svg>
           <input
             type="text"
-            placeholder="Search by name, category, or city..."
+            placeholder="Search listings by name, category, or city..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/10 outline-none transition-all"
+            className="input-field pl-10 text-sm py-2.5"
           />
         </div>
         <div className="flex gap-1.5">
@@ -342,58 +345,61 @@ export default function AdminPage() {
             <button
               key={status}
               onClick={() => setFilterStatus(status)}
-              className={`h-10 px-4 rounded-xl text-sm font-medium transition-all ${
+              className={`h-11 px-4 rounded-2xl text-xs font-semibold transition-all ${
                 filterStatus === status
-                  ? 'bg-whatsapp-500 text-white shadow-sm'
-                  : 'bg-white border border-gray-200 text-text-secondary hover:bg-gray-50'
+                  ? 'bg-whatsapp-500 text-white shadow-md'
+                  : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
               }`}
             >
-              {status === 'all' ? 'All' : status === 'verified' ? 'Verified' : 'Pending'}
+              {status === 'all' ? 'All Businesses' : status === 'verified' ? 'Verified Only' : 'Pending Approval'}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Business List Rows */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="text-center py-16">
-          <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        <div className="neo-card p-12 text-center">
+          <div className="bg-whatsapp-50 w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 text-whatsapp-600">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
             </svg>
           </div>
-          <h2 className="text-lg font-semibold text-text-primary mb-1">No businesses found</h2>
-          <p className="text-text-secondary text-sm">
-            {search || filterStatus !== 'all' ? 'Try adjusting your search or filters' : 'Businesses will appear here once they are submitted'}
+          <h2 className="text-base font-bold text-text-primary mb-1">No matching listings</h2>
+          <p className="text-text-secondary text-xs max-w-sm mx-auto">
+            {search || filterStatus !== 'all' ? 'Try refining your search query or status filter.' : 'Business listings will appear here when submitted.'}
           </p>
         </div>
       ) : (
         <>
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-text-secondary">
-              Showing {(page - 1) * PAGE_SIZE + 1}&ndash;{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length}
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs font-medium text-text-secondary">
+              Showing {(page - 1) * PAGE_SIZE + 1}&ndash;{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} listings
             </p>
           </div>
-          <div className="space-y-2">
+
+          <div className="space-y-2.5">
             {paginated.map(b => (
-              <div key={b.id} className="card p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0 flex-1 flex items-center gap-3">
+              <div key={b.id} className="neo-card p-4 flex items-center justify-between gap-4">
+                <div className="min-w-0 flex-1 flex items-center gap-3.5">
                   {b.logo_url ? (
-                    <img src={b.logo_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
+                    <img src={b.logo_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 ring-1 ring-gray-100" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-bold text-gray-400">{b.name.charAt(0)}</span>
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0 border border-whatsapp-300/40">
+                      <span className="text-xs font-bold text-whatsapp-800">{b.name.charAt(0)}</span>
                     </div>
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-semibold text-text-primary text-sm truncate">{b.name}</h3>
+                      <h3 className="font-bold text-text-primary text-sm truncate">{b.name}</h3>
                       {b.verified && (
-                        <span className="badge-verified text-[11px] px-2 py-0.5 shrink-0">
-                          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <span className="badge-verified text-[10px] px-2 py-0.5 shrink-0">
+                          <svg className="w-3 h-3 text-whatsapp-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                           </svg>
                           Verified
@@ -402,18 +408,19 @@ export default function AdminPage() {
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-text-secondary">
                       <span>{b.category?.slice(0, 2).join(', ')}</span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
                       <span>{b.city || b.location}</span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+
+                <div className="flex items-center gap-2 shrink-0">
                   {b.verified ? (
                     <button
                       onClick={() => handleToggleVerify(b.id, true)}
                       disabled={togglingId === b.id}
-                      className="h-8 px-3 text-xs font-medium text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-lg transition-all disabled:opacity-50"
-                      title="Unverify"
+                      className="h-8 px-3 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50"
+                      title="Unverify business"
                     >
                       {togglingId === b.id ? '...' : 'Unverify'}
                     </button>
@@ -421,8 +428,8 @@ export default function AdminPage() {
                     <button
                       onClick={() => handleToggleVerify(b.id, false)}
                       disabled={togglingId === b.id}
-                      className="h-8 px-3 text-xs font-medium text-whatsapp-700 bg-whatsapp-50 hover:bg-whatsapp-100 rounded-lg transition-all disabled:opacity-50"
-                      title="Approve"
+                      className="h-8 px-3 text-xs font-medium text-whatsapp-800 bg-whatsapp-100 hover:bg-whatsapp-200 rounded-xl transition-all disabled:opacity-50"
+                      title="Approve business"
                     >
                       {togglingId === b.id ? '...' : 'Approve'}
                     </button>
@@ -430,17 +437,17 @@ export default function AdminPage() {
                   <button
                     onClick={() => setConfirmDelete(b.id)}
                     disabled={deletingId === b.id}
-                    className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all disabled:opacity-50"
-                    title="Delete"
+                    className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                    title="Delete listing"
                   >
                     {deletingId === b.id ? (
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
                       </svg>
                     )}
                   </button>
@@ -454,20 +461,20 @@ export default function AdminPage() {
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                 </svg>
               </button>
               {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
                 <button
                   key={p}
                   onClick={() => setPage(p)}
-                  className={`h-9 w-9 rounded-xl text-sm font-medium transition-all ${
+                  className={`h-9 w-9 rounded-xl text-xs font-semibold transition-all ${
                     p === page
-                      ? 'bg-whatsapp-500 text-white'
-                      : 'border border-gray-200 text-text-secondary hover:bg-gray-50'
+                      ? 'bg-whatsapp-500 text-white shadow-sm'
+                      : 'border border-gray-200 text-text-secondary hover:bg-surface'
                   }`}
                 >
                   {p}
@@ -476,10 +483,10 @@ export default function AdminPage() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
               </button>
             </div>

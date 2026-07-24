@@ -32,21 +32,19 @@ export default async function HomePage() {
   return (
     <>
       <main className="min-h-[calc(100vh-3.5rem)]">
-        {/* Meta / WhatsApp Glass Mesh Hero */}
-        <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface py-12 sm:py-20 border-b border-gray-200/50">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
+        {/* Glass Mesh Hero */}
+        <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface py-8 sm:py-10 border-b border-gray-200/50">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 border border-whatsapp-200/80 text-whatsapp-800 text-xs font-semibold mb-6 shadow-sm backdrop-blur-md">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/90 border border-whatsapp-200/80 text-whatsapp-800 text-xs font-semibold mb-3 shadow-sm backdrop-blur-md">
               <span className="w-2 h-2 rounded-full bg-whatsapp-500 animate-pulse" aria-hidden="true" />
-              <span>Official WhatsApp Directory AI</span>
-              <span className="text-gray-300">|</span>
-              <span className="text-text-secondary font-medium">Meta Verified</span>
+              <span>AI-Powered Business Directory</span>
             </div>
 
             <TypingHeadline />
 
-            <p className="text-text-secondary text-base sm:text-lg max-w-xl mx-auto mb-8 leading-relaxed font-normal">
+            <p className="text-text-secondary text-sm sm:text-base max-w-xl mx-auto mb-4 leading-relaxed font-normal">
               Instant AI search for verified local shops, trusted services, and real-time catalog prices in your city.
             </p>
 
@@ -55,7 +53,7 @@ export default async function HomePage() {
             </div>
 
             {/* Quick Category Chips */}
-            <div className="flex items-center justify-center gap-2 flex-wrap mt-5 max-w-2xl mx-auto">
+            <div className="flex items-center justify-center gap-1.5 flex-wrap mt-3.5 max-w-2xl mx-auto">
               <span className="text-xs text-text-secondary font-medium mr-1">Popular:</span>
               {CATEGORY_CHIPS.map((cat, i) => (
                 <Link
@@ -69,7 +67,7 @@ export default async function HomePage() {
             </div>
 
             {count !== null && (
-              <p className="mt-6 text-xs sm:text-sm text-text-secondary flex items-center justify-center gap-2">
+              <p className="mt-3 text-xs text-text-secondary flex items-center justify-center gap-1.5">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-whatsapp-500" aria-hidden="true" />
                 <span>Over <strong className="font-semibold text-whatsapp-800">{count.toLocaleString()}</strong> verified businesses ready to chat</span>
               </p>
@@ -78,7 +76,7 @@ export default async function HomePage() {
         </section>
 
         {/* Content Container */}
-        <div className="max-w-5xl mx-auto px-4 py-8 space-y-10">
+        <div className="max-w-5xl mx-auto px-4 py-4 space-y-6">
           <section aria-label="Recent listings">
             <FeaturedScroll businesses={scrollBusinesses || []} />
           </section>

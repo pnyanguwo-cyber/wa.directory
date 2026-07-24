@@ -43,11 +43,14 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS price_range TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS edit_token TEXT;
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
+  UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_slug ON businesses (slug);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_edit_token ON businesses (edit_token);
 CREATE INDEX IF NOT EXISTS idx_businesses_name_trgm ON businesses USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_businesses_bio_trgm ON businesses USING gin (bio gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses USING gin (category);

@@ -17,4 +17,5 @@
   logo_url: string
   price_range: string
   created_at: string
+  edit_token?: string
 }

@@ -22,7 +22,7 @@ const categoryOptions = categories.map(c => ({
 }))
 
 const cityOptions = [
-  { value: '*', label: '🇿🇼 Whole country' },
+  { value: '*', label: 'Whole country' },
   ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
 ]
 
@@ -41,6 +41,7 @@ export default function ListBusinessForm() {
   const [loading, setLoading] = useState(false)
   const [bioLoading, setBioLoading] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
+  const [editToken, setEditToken] = useState('')
   const [logoMode, setLogoMode] = useState<LogoMode>('url')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -64,7 +65,7 @@ export default function ListBusinessForm() {
   const phoneError = form.phone ? validatePhone(form.countryCode, form.phone) : null
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
   const areaOptions = form.city && form.city !== '*'
-    ? [{ value: '', label: '📍 All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
+    ? [{ value: '', label: 'All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
     : []
   const hasLocation = form.city === '*' || !!form.city || !!form.area
   const isValidStep1 = form.name.trim() && form.phone.trim() && !phoneError
@@ -119,6 +120,8 @@ export default function ListBusinessForm() {
         ? 'Zimbabwe'
         : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')
 
+      const token = crypto.randomUUID()
+
       const { data, error } = await getClient()
         .from('businesses')
         .insert({
@@ -135,6 +138,7 @@ export default function ListBusinessForm() {
           catalog_link: form.catalog_link.trim() || null,
           logo_url: logoUrl || null,
           price_range: form.price_range.trim() || null,
+          edit_token: token,
           verified: false,
           rating: 0,
           review_count: 0,
@@ -143,6 +147,7 @@ export default function ListBusinessForm() {
         .single()
 
       if (error) throw error
+      setEditToken(token)
       setSubmittedId(data.slug || data.id)
     } catch (err) {
       alert('Something went wrong. Please try again.')
@@ -169,6 +174,13 @@ export default function ListBusinessForm() {
         <h2 className="text-2xl font-bold text-text-primary mb-1">You&apos;re Live!</h2>
         <p className="text-text-secondary mb-2">{form.name} is now on WA Directory.</p>
         <p className="text-sm text-text-secondary mb-6">Customers can find you instantly on WhatsApp.</p>
+        <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 mb-6 text-left">
+          <p className="text-xs font-semibold text-whatsapp-800 mb-1">Save this link to edit your listing later:</p>
+          <p className="text-sm text-whatsapp-700 break-all font-mono bg-white rounded-lg p-2 border border-whatsapp-100 select-all">
+            {typeof window !== 'undefined' ? `${window.location.origin}/edit?token=${editToken}` : ''}
+          </p>
+          <p className="text-xs text-text-secondary mt-2">If you lose this link, contact us to get a new one.</p>
+        </div>
         <div className="flex flex-col gap-3">
           <Link href={`/`} className="btn-primary py-3 text-[16px]">
             Back to Home
@@ -264,7 +276,7 @@ export default function ListBusinessForm() {
         <div className="space-y-4 animate-fade-in">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Category <span className="text-text-secondary font-normal">— type what you sell</span>
+              Category <span className="text-text-secondary font-normal">type what you sell</span>
             </label>
             <SearchSelect
               options={categoryOptions}
@@ -321,7 +333,7 @@ export default function ListBusinessForm() {
                 Generating...
               </span>
             ) : (
-              '✨ Generate AI Bio'
+              'Generate AI Bio'
             )}
           </button>
           {form.bio && (
@@ -428,7 +440,7 @@ export default function ListBusinessForm() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
                       <span className="text-sm text-text-secondary">Click to upload logo</span>
-                      <span className="text-xs text-text-secondary">PNG, JPG or WebP · max 2MB</span>
+                      <span className="text-xs text-text-secondary">PNG, JPG or WebP max 2MB</span>
                     </div>
                   )}
                 </button>
@@ -454,7 +466,7 @@ export default function ListBusinessForm() {
                 How to get your WhatsApp catalog link
               </summary>
               <p className="text-xs text-text-secondary mt-1 leading-relaxed">
-                Open <strong>WhatsApp Business</strong> → Settings → Business Tools → Catalog → Share → Copy Link
+                Open <strong>WhatsApp Business</strong> Settings Business Tools Catalog Share Copy Link
               </p>
             </details>
           </div>

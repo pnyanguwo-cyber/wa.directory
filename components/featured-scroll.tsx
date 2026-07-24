@@ -66,13 +66,13 @@ export default function FeaturedScroll({ businesses }: { businesses: Business[] 
 
   return (
     <div
-      className="relative my-6"
+      className="relative my-2"
       onMouseEnter={() => { isHoveringOrFocused.current = true }}
       onMouseLeave={() => { isHoveringOrFocused.current = false }}
       onFocus={() => { isHoveringOrFocused.current = true }}
       onBlur={() => { isHoveringOrFocused.current = false }}
     >
-      <div className="flex items-center justify-between mb-4 px-1">
+      <div className="flex items-center justify-between mb-2.5 px-1">
         <div className="flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-whatsapp-500 animate-pulse" aria-hidden="true" />
           <span className="text-xs font-bold text-text-primary tracking-wider uppercase">
