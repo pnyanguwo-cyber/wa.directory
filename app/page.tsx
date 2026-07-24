@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import SearchBar from '@/components/search-bar'
 import FeaturedScroll from '@/components/featured-scroll'
 import FeaturedBusinesses from '@/components/featured-businesses'
+import ShowMoreSection from '@/components/show-more-section'
 import TypingHeadline from '@/components/typing-headline'
 import Footer from '@/components/footer'
 import Link from 'next/link'
@@ -24,6 +25,12 @@ export default async function HomePage() {
     .eq('verified', true)
     .order('rating', { ascending: false })
     .limit(3)
+
+  const { data: allVerified } = await getSupabase()
+    .from('businesses')
+    .select('*')
+    .eq('verified', true)
+    .order('rating', { ascending: false })
 
   const { count } = await getSupabase()
     .from('businesses')
@@ -82,6 +89,8 @@ export default async function HomePage() {
           </section>
 
           <FeaturedBusinesses businesses={featured || []} />
+
+          <ShowMoreSection businesses={allVerified || []} />
         </div>
       </main>
 
