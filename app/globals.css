@@ -88,22 +88,25 @@
     content: '';
     position: absolute;
     top: 0;
-    left: -35%;
+    left: -40%;
     width: 30%;
     height: 100%;
     background: linear-gradient(
       135deg,
-      transparent 30%,
-      rgba(37, 211, 102, 0.7) 42%,
-      #25D366 48%,
-      #25D366 52%,
-      rgba(37, 211, 102, 0.7) 58%,
-      transparent 70%
+      transparent 25%,
+      rgba(37, 211, 102, 0.15) 35%,
+      rgba(37, 211, 102, 0.35) 45%,
+      rgba(170, 255, 200, 0.5) 48%,
+      rgba(170, 255, 200, 0.5) 52%,
+      rgba(37, 211, 102, 0.35) 55%,
+      rgba(37, 211, 102, 0.15) 65%,
+      transparent 75%
     );
     transform: skewX(-18deg);
     pointer-events: none;
-    animation: sweep-line 2.5s ease-in-out infinite;
-    box-shadow: 0 0 20px rgba(37, 211, 102, 0.4);
+    animation: sweep-line 5s ease-in-out infinite;
+    box-shadow: 0 0 30px rgba(37, 211, 102, 0.2);
+    mix-blend-mode: screen;
   }
 }
 
@@ -145,6 +148,8 @@
 }
 
 @keyframes sweep-line {
-  0% { left: -35%; }
+  0%   { left: -40%; }
+  12%  { left: -40%; }
+  40%  { left: 110%; }
   100% { left: 110%; }
 }
