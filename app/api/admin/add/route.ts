@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { name, category, phone, city, area, bio, price_range, whatsapp_link, catalog_link, logo_url, verified } = body
+    const { name, category, phone, whatsapp_username, city, area, bio, price_range, whatsapp_link, catalog_link, logo_url, verified } = body
 
     if (!name || !category || !phone) {
       return NextResponse.json({ error: 'Name, category, and phone are required' }, { status: 400 })
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       .insert({
         name,
         slug,
+        whatsapp_username: whatsapp_username || null,
         category: typeof category === 'string' ? [category] : category,
         phone,
         city: city || null,

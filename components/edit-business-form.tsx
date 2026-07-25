@@ -22,6 +22,7 @@ export default function EditBusinessForm({ business }: { business: Business }) {
     name: business.name,
     phone: business.phone,
     country_code: business.country_code || '+263',
+    whatsapp_username: business.whatsapp_username || '',
     category: business.category[0] || '',
     bio: business.bio || '',
     city: business.city || '',
@@ -41,8 +42,8 @@ export default function EditBusinessForm({ business }: { business: Business }) {
     : []
 
   async function handleSave() {
-    if (!form.name.trim() || !form.phone.trim()) {
-      setError('Name and phone are required')
+    if (!form.name.trim() || !form.whatsapp_username.trim() || !form.phone.trim()) {
+      setError('Name, WhatsApp username, and phone are required')
       return
     }
     setSaving(true)
@@ -54,6 +55,7 @@ export default function EditBusinessForm({ business }: { business: Business }) {
         body: JSON.stringify({
           edit_token: business.edit_token,
           name: form.name.trim(),
+          whatsapp_username: form.whatsapp_username.trim(),
           phone: form.phone,
           country_code: form.country_code,
           bio: form.bio,
@@ -117,6 +119,20 @@ export default function EditBusinessForm({ business }: { business: Business }) {
         </div>
 
         <div>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">Business Username on WhatsApp</label>
+          <input
+            type="text"
+            value={form.whatsapp_username}
+            onChange={e => setForm(f => ({ ...f, whatsapp_username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') }))}
+            placeholder="e.g. johnsplumbing"
+            className="input-field"
+          />
+          {form.whatsapp_username && (
+            <p className="text-xs text-whatsapp-600 mt-1">@{form.whatsapp_username}</p>
+          )}
+        </div>
+
+        <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Category</label>
           <SearchSelect
             options={categoryOptions}
@@ -141,8 +157,8 @@ export default function EditBusinessForm({ business }: { business: Business }) {
             options={cityOptions}
             value={form.city}
             onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
-            placeholder="City"
-            label="City"
+            placeholder="Select city"
+            label="Select the town/city you are based in"
           />
           {form.city && form.city !== '*' && (
             <SearchSelect

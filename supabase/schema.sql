@@ -44,6 +44,7 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS price_range TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS edit_token TEXT;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_username TEXT DEFAULT '';
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;

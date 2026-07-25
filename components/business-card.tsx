@@ -72,6 +72,10 @@ export default function BusinessCard({ business }: { business: Business }) {
                 </span>
               )}
             </div>
+            <p className="text-xs text-whatsapp-600 font-medium flex items-center gap-1 mt-0.5">
+              @{business.whatsapp_username}
+              <span className="text-text-secondary text-[10px] font-normal">Business Username on WhatsApp</span>
+            </p>
             <div className="flex items-center gap-1.5 mt-1.5">
               <div className="flex items-center gap-0.5" aria-label={`Rated ${business.rating} out of 5 stars`}>
                 {[1, 2, 3, 4, 5].map(i => (

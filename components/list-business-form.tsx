@@ -50,6 +50,7 @@ export default function ListBusinessForm() {
     name: '',
     countryCode: '+263',
     phone: '',
+    whatsapp_username: '',
     category: '',
     description: '',
     bio: '',
@@ -68,7 +69,7 @@ export default function ListBusinessForm() {
     ? [{ value: '', label: 'All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
     : []
   const hasLocation = form.city === '*' || !!form.city || !!form.area
-  const isValidStep1 = form.name.trim() && form.phone.trim() && !phoneError
+  const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
   const isValidStep2 = form.description.trim() && !!form.category && hasLocation
 
   async function handleGenerateBio() {
@@ -127,6 +128,7 @@ export default function ListBusinessForm() {
         .insert({
           name: form.name.trim(),
           slug,
+          whatsapp_username: form.whatsapp_username.trim(),
           bio: form.bio || `Professional ${form.description} services.`,
           category: [form.category],
           location,
@@ -232,6 +234,19 @@ export default function ListBusinessForm() {
               autoFocus
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">Business Username on WhatsApp</label>
+            <input
+              type="text"
+              value={form.whatsapp_username}
+              onChange={e => setForm(f => ({ ...f, whatsapp_username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') }))}
+              placeholder="e.g. johnsplumbing"
+              className="input-field"
+            />
+            {form.whatsapp_username && (
+              <p className="text-xs text-whatsapp-600 mt-1">@{form.whatsapp_username}</p>
+            )}
+          </div>
           <div className="flex gap-3">
             <div className="w-40 shrink-0">
               <SearchSelect
@@ -307,7 +322,7 @@ export default function ListBusinessForm() {
               value={form.city}
               onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
               placeholder="Select city"
-              label="City"
+              label="Select the town/city you are based in"
             />
             {form.city && form.city !== '*' && (
               <SearchSelect
@@ -486,6 +501,9 @@ export default function ListBusinessForm() {
             <h3 className="font-semibold text-text-primary mb-2">Preview</h3>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Name:</span> {form.name}
+            </p>
+            <p className="text-sm text-text-secondary">
+              <span className="font-medium text-text-primary">WhatsApp Username:</span> @{form.whatsapp_username}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Category:</span>{' '}

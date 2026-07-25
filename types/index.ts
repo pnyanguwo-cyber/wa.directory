@@ -9,6 +9,7 @@
   city: string
   area: string
   phone: string
+  whatsapp_username: string
   whatsapp_link: string
   verified: boolean
   rating: number
