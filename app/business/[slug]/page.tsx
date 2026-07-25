@@ -143,7 +143,8 @@ async function BusinessContent({ slug }: { slug: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-4">
+        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4">
           <Link
             href="/"
             className="inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary text-sm transition-colors"
@@ -175,6 +176,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                 </span>
               )}
             </div>
+            <p className="text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-2">
+              @{business.whatsapp_username}
+              <span className="text-text-secondary text-xs font-normal">Business Username on WhatsApp</span>
+            </p>
 
             <div className="flex items-center gap-2 mb-4">
               <Stars rating={business.rating} />
@@ -246,6 +251,7 @@ async function BusinessContent({ slug }: { slug: string }) {
 
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 sm:hidden z-40">
           <WhatsAppButton phone={business.phone} />
+        </div>
         </div>
       </div>
     </>

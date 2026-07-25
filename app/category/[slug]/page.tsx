@@ -148,9 +148,11 @@ async function CategoryResults({ slug }: { slug: string }) {
 export default function CategoryPage({ params }: { params: { slug: string } }) {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <Suspense fallback={<CategorySkeleton />}>
-        <CategoryResults slug={params.slug} />
-      </Suspense>
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
+        <Suspense fallback={<CategorySkeleton />}>
+          <CategoryResults slug={params.slug} />
+        </Suspense>
+      </div>
     </div>
   )
 }

@@ -110,18 +110,20 @@ export default async function SearchPage({
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-whatsapp-700 mb-4 transition-colors"
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-        </svg>
-        Back to Home
-      </Link>
-      <Suspense fallback={<SearchSkeleton />}>
-        <SearchResults q={q} verified={verified} sort={sort} />
-      </Suspense>
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-whatsapp-700 mb-4 transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+          </svg>
+          Back to Home
+        </Link>
+        <Suspense fallback={<SearchSkeleton />}>
+          <SearchResults q={q} verified={verified} sort={sort} />
+        </Suspense>
+      </div>
     </div>
   )
 }

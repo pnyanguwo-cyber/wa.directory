@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import Navbar from '@/components/navbar'
+import PWARegistration from '@/components/pwa-registration'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://wadirectory.vercel.app'),
@@ -36,7 +37,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-screen bg-white">
         <Navbar />
-        <main className="pb-16 md:pb-0">{children}</main>
+        <PWARegistration />
+        <img
+          src="/wadbody.png"
+          alt=""
+          aria-hidden="true"
+          className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10"
+        />
+        <main className="relative pb-16 md:pb-0">{children}</main>
       </body>
     </html>
   )

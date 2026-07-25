@@ -42,6 +42,19 @@ export default async function HomePage() {
         {/* Glass Mesh Hero */}
         <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface py-8 sm:py-10 border-b border-gray-200/50">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
+
+          <img
+            src="/wad1.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute left-0 top-0 h-full w-1/2 object-cover object-left pointer-events-none select-none"
+          />
+          <img
+            src="/wad2.png"
+            alt=""
+            aria-hidden="true"
+            className="absolute right-0 top-0 h-full w-1/2 object-cover object-right pointer-events-none select-none"
+          />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/90 border border-whatsapp-200/80 text-whatsapp-800 text-xs font-semibold mb-3 shadow-sm backdrop-blur-md">
@@ -83,14 +96,16 @@ export default async function HomePage() {
         </section>
 
         {/* Content Container */}
-        <div className="max-w-5xl mx-auto px-4 py-4 space-y-6">
-          <section aria-label="Recent listings">
-            <FeaturedScroll businesses={scrollBusinesses || []} />
-          </section>
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6 space-y-6">
+            <section aria-label="Recent listings">
+              <FeaturedScroll businesses={scrollBusinesses || []} />
+            </section>
 
-          <FeaturedBusinesses businesses={featured || []} />
+            <FeaturedBusinesses businesses={featured || []} />
 
-          <ShowMoreSection businesses={allVerified || []} />
+            <ShowMoreSection businesses={allVerified || []} />
+          </div>
         </div>
       </main>
 

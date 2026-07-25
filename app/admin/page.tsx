@@ -62,7 +62,7 @@ export default function AdminPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addForm, setAddForm] = useState({
-    name: '', category: [] as string[], phone: '', city: '', area: '',
+    name: '', category: [] as string[], phone: '', whatsapp_username: '', city: '', area: '',
     bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '',
   })
   const [adding, setAdding] = useState(false)
@@ -171,7 +171,7 @@ export default function AdminPage() {
     setAdding(false)
     if (res.ok) {
       setShowAddModal(false)
-      setAddForm({ name: '', category: [], phone: '', city: '', area: '', bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '' })
+      setAddForm({ name: '', category: [], phone: '', whatsapp_username: '', city: '', area: '', bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '' })
       getClient().from('businesses').select('*').order('created_at', { ascending: false }).then(({ data }) => {
         if (data) setBusinesses(data as Business[])
       })
@@ -184,7 +184,8 @@ export default function AdminPage() {
   if (!isAuthenticated) return null
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 space-y-6">
       {confirmDelete && (
         <ConfirmDialog
           message={`Delete "${businesses.find(b => b.id === confirmDelete)?.name || 'this business'}"? This action cannot be undone.`}
@@ -213,6 +214,10 @@ export default function AdminPage() {
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Phone *</label>
                   <input type="text" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} className="input-field text-sm" placeholder="+263 77 123 4567" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Username *</label>
+                  <input type="text" required value={addForm.whatsapp_username} onChange={e => setAddForm(f => ({ ...f, whatsapp_username: e.target.value }))} className="input-field text-sm" placeholder="e.g. johnsplumbing" />
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Categories *</label>
@@ -493,6 +498,7 @@ export default function AdminPage() {
           )}
         </>
       )}
+      </div>
     </div>
   )
 }
