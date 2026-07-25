@@ -47,13 +47,13 @@ export default async function HomePage() {
             src="/wad1.png"
             alt=""
             aria-hidden="true"
-            className="absolute left-0 top-0 h-full w-1/2 object-cover object-left pointer-events-none select-none"
+            className="absolute left-0 top-0 h-full w-1/2 object-cover object-left pointer-events-none select-none hidden sm:block"
           />
           <img
             src="/wad2.png"
             alt=""
             aria-hidden="true"
-            className="absolute right-0 top-0 h-full w-1/2 object-cover object-right pointer-events-none select-none"
+            className="absolute right-0 top-0 h-full w-1/2 object-cover object-right pointer-events-none select-none hidden sm:block"
           />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">
