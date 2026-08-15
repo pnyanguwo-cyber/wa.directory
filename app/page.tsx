@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase-server'
+import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import SearchBar from '@/components/search-bar'
 import FeaturedScroll from '@/components/featured-scroll'
 import FeaturedBusinesses from '@/components/featured-businesses'
@@ -7,34 +8,34 @@ import TypingHeadline from '@/components/typing-headline'
 import Footer from '@/components/footer'
 import Link from 'next/link'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 300
 
 const CATEGORY_CHIPS = ['Plumbing', 'Solar & Power', 'Catering', 'Auto Repairs', 'Salons & Spas', 'Tech & Phones']
+const ALL_BUSINESSES_INITIAL = 24
 
 export default async function HomePage() {
-  const { data: scrollBusinesses } = await getSupabase()
+  const supabase = getSupabase()
+
+  const { data: scrollBusinesses } = await supabase
     .from('businesses')
-    .select('*')
+    .select(BUSINESS_CARD_COLUMNS)
     .eq('verified', true)
     .order('created_at', { ascending: false })
     .limit(12)
 
-  const { data: featured } = await getSupabase()
+  const { data: topRated } = await supabase
     .from('businesses')
-    .select('*')
+    .select(BUSINESS_CARD_COLUMNS)
     .eq('verified', true)
     .order('rating', { ascending: false })
-    .limit(3)
+    .limit(ALL_BUSINESSES_INITIAL + 3)
 
-  const { data: allVerified } = await getSupabase()
+  const { count } = await supabase
     .from('businesses')
-    .select('*')
-    .eq('verified', true)
-    .order('rating', { ascending: false })
+    .select('id', { count: 'exact', head: true })
 
-  const { count } = await getSupabase()
-    .from('businesses')
-    .select('*', { count: 'exact', head: true })
+  const featured = (topRated || []).slice(0, 3)
+  const allVerified = (topRated || []).slice(3)
 
   return (
     <>
@@ -44,15 +45,17 @@ export default async function HomePage() {
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
 
           <img
-            src="/wad1.png"
+            src="/wad1.webp"
             alt=""
             aria-hidden="true"
+            decoding="async"
             className="absolute left-0 top-0 h-full w-1/2 object-cover object-left pointer-events-none select-none hidden sm:block"
           />
           <img
-            src="/wad2.png"
+            src="/wad2.webp"
             alt=""
             aria-hidden="true"
+            decoding="async"
             className="absolute right-0 top-0 h-full w-1/2 object-cover object-right pointer-events-none select-none hidden sm:block"
           />
           

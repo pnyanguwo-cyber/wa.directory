@@ -2,13 +2,36 @@ import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase-server'
+import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
 import SkeletonCard from '@/components/skeleton-card'
 import { matchCategory } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { generateSEOBlurb } from '@/lib/gemini'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600
+export const dynamicParams = true
+
+const POPULAR_CATEGORIES = [
+  'Plumber',
+  'Electrician',
+  'Food & Restaurant',
+  'Hair & Beauty',
+  'Automotive',
+  'Health & Medical',
+]
+
+export async function generateStaticParams() {
+  const params: { slug: string }[] = []
+  for (const cat of POPULAR_CATEGORIES) {
+    const catKey = cat.toLowerCase().replace(/\s+/g, '-')
+    for (const city of zimbabweCities) {
+      const cityKey = city.name.toLowerCase().replace(/\s+/g, '-')
+      params.push({ slug: `${catKey}-${cityKey}` })
+    }
+  }
+  return params
+}
 
 function parseSlug(slug: string): { category: string; location: string } | null {
   const parts = slug.split('-')
@@ -57,34 +80,33 @@ function CategorySkeleton() {
   )
 }
 
-async function CategoryResults({ slug }: { slug: string }) {
-  const parsed = parseSlug(slug)
-  if (!parsed) notFound()
-
-  const matchedCategory = matchCategory(parsed.category)
+async function CategoryResults({ category, location }: { category: string; location: string }) {
+  const matchedCategory = matchCategory(category)
 
   const query = getSupabase()
     .from('businesses')
-    .select('*')
+    .select(BUSINESS_CARD_COLUMNS)
     .contains('category', [matchedCategory])
 
   const filtered = query.or(
-    `city.ilike.%${parsed.location}%,location.ilike.%${parsed.location}%`
+    `city.ilike.%${location}%,location.ilike.%${location}%`
   )
 
-  const { data: businesses } = await filtered.order('rating', { ascending: false })
+  const { data: businesses } = await filtered
+    .order('rating', { ascending: false })
+    .limit(100)
 
   const count = businesses?.length || 0
-  const seoText = await generateSEOBlurb(matchedCategory, parsed.location)
+  const seoText = await generateSEOBlurb(matchedCategory, location)
 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: `Best ${matchedCategory} in ${parsed.location}`,
-    description: `Find the best ${matchedCategory} services in ${parsed.location}, Zimbabwe.`,
+    name: `Best ${matchedCategory} in ${location}`,
+    description: `Find the best ${matchedCategory} services in ${location}, Zimbabwe.`,
     about: {
       '@type': 'Thing',
-      name: `${matchedCategory} in ${parsed.location}`,
+      name: `${matchedCategory} in ${location}`,
     },
     mainEntity: {
       '@type': 'ItemList',
@@ -109,7 +131,7 @@ async function CategoryResults({ slug }: { slug: string }) {
 
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary mb-3">
-          Best {matchedCategory} in {parsed.location}
+          Best {matchedCategory} in {location}
         </h1>
         <p className="text-text-secondary text-sm leading-relaxed">
           {seoText}
@@ -131,7 +153,7 @@ async function CategoryResults({ slug }: { slug: string }) {
           </div>
           <h2 className="text-lg font-semibold text-text-primary mb-1">No businesses listed yet</h2>
           <p className="text-text-secondary text-sm">
-            Be the first to list a {matchedCategory.toLowerCase()} business in {parsed.location}
+            Be the first to list a {matchedCategory.toLowerCase()} business in {location}
           </p>
         </div>
       ) : (
@@ -146,11 +168,14 @@ async function CategoryResults({ slug }: { slug: string }) {
 }
 
 export default function CategoryPage({ params }: { params: { slug: string } }) {
+  const parsed = parseSlug(params.slug)
+  if (!parsed) notFound()
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
         <Suspense fallback={<CategorySkeleton />}>
-          <CategoryResults slug={params.slug} />
+          <CategoryResults category={parsed.category} location={parsed.location} />
         </Suspense>
       </div>
     </div>

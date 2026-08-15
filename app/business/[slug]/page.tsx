@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase-server'
+import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
@@ -8,7 +9,16 @@ import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
 
-export const dynamic = 'force-dynamic'
+export const revalidate = 3600
+export const dynamicParams = true
+
+export async function generateStaticParams() {
+  const { data } = await getSupabase()
+    .from('businesses')
+    .select('slug, id')
+
+  return (data || []).map(b => ({ slug: b.slug || b.id }))
+}
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const { data } = await getSupabase()
@@ -100,14 +110,14 @@ function CatalogItems({ catalogLink }: { catalogLink: string }) {
 async function BusinessContent({ slug }: { slug: string }) {
   let { data: business } = await getSupabase()
     .from('businesses')
-    .select('*')
+    .select(BUSINESS_PROFILE_COLUMNS)
     .eq('slug', slug)
     .single() as { data: Business | null }
 
   if (!business) {
     const { data: fallback } = await getSupabase()
       .from('businesses')
-      .select('*')
+      .select(BUSINESS_PROFILE_COLUMNS)
       .eq('id', slug)
       .single() as { data: Business | null }
     business = fallback
@@ -176,10 +186,12 @@ async function BusinessContent({ slug }: { slug: string }) {
                 </span>
               )}
             </div>
-            <p className="text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-2">
-              @{business.whatsapp_username}
-              <span className="text-text-secondary text-xs font-normal">Business Username on WhatsApp</span>
-            </p>
+            {business.whatsapp_username && (
+              <p className="text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-2">
+                @{business.whatsapp_username}
+                <span className="text-text-secondary text-xs font-normal">Business Username on WhatsApp</span>
+              </p>
+            )}
 
             <div className="flex items-center gap-2 mb-4">
               <Stars rating={business.rating} />

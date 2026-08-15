@@ -27,11 +27,12 @@ const cityOptions = [
 ]
 
 function generateSlug(name: string): string {
-  return name
+  const base = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)/g, '')
-    .slice(0, 60)
+    .slice(0, 50) || 'business'
+  return `${base}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 type LogoMode = 'url' | 'upload'
@@ -151,8 +152,16 @@ export default function ListBusinessForm() {
       if (error) throw error
       setEditToken(token)
       setSubmittedId(data.slug || data.id)
+      fetch('/api/admin/notify-new-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business: { name: form.name, category: form.category, city: form.city, phone: fullPhone, id: data.id } }),
+      }).catch(() => {})
     } catch (err) {
-      alert('Something went wrong. Please try again.')
+      const msg =
+        (err as { message?: string })?.message ||
+        (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      alert(msg)
     } finally {
       setLoading(false)
     }
@@ -173,9 +182,9 @@ export default function ListBusinessForm() {
             />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-text-primary mb-1">You&apos;re Live!</h2>
-        <p className="text-text-secondary mb-2">{form.name} is now on WA Directory.</p>
-        <p className="text-sm text-text-secondary mb-6">Customers can find you instantly on WhatsApp.</p>
+        <h2 className="text-2xl font-bold text-text-primary mb-1">Submitted for Approval!</h2>
+        <p className="text-text-secondary mb-2">{form.name} is pending approval.</p>
+        <p className="text-sm text-text-secondary mb-6">Once approved, customers will find you on WA Directory.</p>
         <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 mb-6 text-left">
           <p className="text-xs font-semibold text-whatsapp-800 mb-1">Save this link to edit your listing later:</p>
           <p className="text-sm text-whatsapp-700 break-all font-mono bg-white rounded-lg p-2 border border-whatsapp-100 select-all">

@@ -1,7 +1,14 @@
 import type { Metadata, Viewport } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/navbar'
 import PWARegistration from '@/components/pwa-registration'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://wadirectory.vercel.app'),
@@ -27,21 +34,14 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
-      <body className="min-h-screen bg-white">
+      <body className={`${inter.variable} min-h-screen bg-white font-sans`}>
         <Navbar />
         <PWARegistration />
         <img
-          src="/wadbody.png"
+          src="/wadbody.webp"
           alt=""
           aria-hidden="true"
+          decoding="async"
           className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10"
         />
         <main className="relative pb-16 md:pb-0">{children}</main>

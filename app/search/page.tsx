@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase-server'
+import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
@@ -9,6 +10,8 @@ import { matchCategory } from '@/data/categories'
 import { expandSearchQuery } from '@/lib/gemini'
 
 export const dynamic = 'force-dynamic'
+
+const RESULT_LIMIT = 100
 
 export async function generateMetadata({ searchParams }: { searchParams: { q?: string } }): Promise<Metadata> {
   const q = searchParams.q || ''
@@ -19,16 +22,11 @@ export async function generateMetadata({ searchParams }: { searchParams: { q?: s
 }
 
 async function SearchResults({ q, verified, sort }: { q: string; verified: boolean; sort: string }) {
-  let query = getSupabase()
-    .from('businesses')
-    .select('*')
-
-  if (verified) {
-    query = query.eq('verified', true)
-  }
+  const supabase = getSupabase()
+  const conditions: string[] = []
 
   if (q) {
-    const conditions = [`name.ilike.%${q}%`, `bio.ilike.%${q}%`]
+    conditions.push(`name.ilike.%${q}%`, `bio.ilike.%${q}%`)
     const matchedCat = matchCategory(q)
     if (matchedCat !== 'Other') conditions.push(`category.cs.{${matchedCat}}`)
 
@@ -41,23 +39,35 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
     Array.from(relatedCats).forEach(cat => {
       conditions.push(`category.cs.{${cat}}`)
     })
+  }
 
-    query = query.or(conditions.join(','))
+  let dataQuery = supabase.from('businesses').select(BUSINESS_CARD_COLUMNS)
+  let countQuery = supabase.from('businesses').select('id', { count: 'exact', head: true })
+
+  if (verified) {
+    dataQuery = dataQuery.eq('verified', true)
+    countQuery = countQuery.eq('verified', true)
+  }
+  if (conditions.length > 0) {
+    const orFilter = conditions.join(',')
+    dataQuery = dataQuery.or(orFilter)
+    countQuery = countQuery.or(orFilter)
   }
 
   if (sort === 'newest') {
-    query = query.order('created_at', { ascending: false })
+    dataQuery = dataQuery.order('created_at', { ascending: false })
   } else {
-    query = query.order('rating', { ascending: false })
+    dataQuery = dataQuery.order('rating', { ascending: false })
   }
+  dataQuery = dataQuery.limit(RESULT_LIMIT)
 
-  const { data: businesses } = await query
-  const count = businesses?.length || 0
+  const [{ data: businesses }, { count }] = await Promise.all([dataQuery, countQuery])
+  const total = count ?? businesses?.length ?? 0
 
   return (
     <>
-      <FilterBar total={count} query={q} />
-      {count === 0 ? (
+      <FilterBar total={total} query={q} />
+      {total === 0 ? (
         <div className="text-center py-16">
           <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -31,8 +31,6 @@ export default function AdminLoginPage() {
     setSubmitting(false)
 
     if (data.success) {
-      localStorage.setItem('admin_auth', 'true')
-      sessionStorage.setItem('admin_password', password)
       router.push('/admin')
     } else if (data.error === 'Server misconfigured') {
       setError('Admin password not set on server')

@@ -50,14 +50,12 @@ function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onCo
 
 export default function AdminPage() {
   const router = useRouter()
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'pending'>('all')
   const [page, setPage] = useState(1)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-  const [adminPassword, setAdminPassword] = useState('')
+  const [dataLoading, setDataLoading] = useState(true)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -69,25 +67,16 @@ export default function AdminPage() {
   const [addError, setAddError] = useState('')
 
   useEffect(() => {
-    const auth = localStorage.getItem('admin_auth') === 'true'
-    const pwd = sessionStorage.getItem('admin_password') || ''
-    setIsAuthenticated(auth)
-    setAdminPassword(pwd)
-    setLoading(false)
-    if (!auth) router.push('/admin-login')
-  }, [router])
-
-  useEffect(() => {
-    if (!isAuthenticated) return
     getClient()
       .from('businesses')
       .select('*')
       .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (error) console.error('Failed to load businesses', error)
+      .limit(500)
+      .then(({ data }) => {
         if (data) setBusinesses(data as Business[])
+        setDataLoading(false)
       })
-  }, [isAuthenticated])
+  }, [])
 
   const stats = useMemo(() => {
     const total = businesses.length
@@ -123,48 +112,43 @@ export default function AdminPage() {
   }, [search, filterStatus])
 
   const handleToggleVerify = async (id: string, current: boolean) => {
-    if (!adminPassword) {
-      router.push('/admin-login')
-      return
-    }
     setTogglingId(id)
     const res = await fetch('/api/admin/verify', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, verified: !current }),
     })
     setTogglingId(null)
     if (res.ok) {
       setBusinesses(prev => prev.map(b => b.id === id ? { ...b, verified: !current } : b))
+    } else if (res.status === 401) {
+      router.push('/admin-login')
     }
   }
 
   const handleDelete = async (id: string) => {
-    if (!adminPassword) {
-      router.push('/admin-login')
-      return
-    }
     setConfirmDelete(null)
     setDeletingId(id)
     const res = await fetch('/api/admin/delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
     setDeletingId(null)
     if (res.ok) {
       setBusinesses(prev => prev.filter(b => b.id !== id))
+    } else if (res.status === 401) {
+      router.push('/admin-login')
     }
   }
 
   const handleAddBusiness = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!adminPassword) { router.push('/admin-login'); return }
     setAddError('')
     setAdding(true)
     const res = await fetch('/api/admin/add', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': adminPassword },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...addForm, verified: true }),
     })
     const data = await res.json()
@@ -172,16 +156,15 @@ export default function AdminPage() {
     if (res.ok) {
       setShowAddModal(false)
       setAddForm({ name: '', category: [], phone: '', whatsapp_username: '', city: '', area: '', bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '' })
-      getClient().from('businesses').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      getClient().from('businesses').select('*').order('created_at', { ascending: false }).limit(500).then(({ data }) => {
         if (data) setBusinesses(data as Business[])
       })
+    } else if (res.status === 401) {
+      router.push('/admin-login')
     } else {
       setAddError(data.error || 'Failed to add business')
     }
   }
-
-  if (loading) return null
-  if (!isAuthenticated) return null
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
@@ -282,7 +265,11 @@ export default function AdminPage() {
           <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">Directory Administration</span>
           <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Admin Dashboard</h1>
         </div>
-        <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5">
+          <span className="flex items-center gap-1.5 text-xs text-whatsapp-700 font-medium">
+            <span className="w-2 h-2 rounded-full bg-whatsapp-500" />
+            Logged in
+          </span>
           <button
             onClick={() => setShowAddModal(true)}
             className="btn-primary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
@@ -293,9 +280,8 @@ export default function AdminPage() {
             <span>Add Business</span>
           </button>
           <button
-            onClick={() => {
-              localStorage.removeItem('admin_auth')
-              sessionStorage.removeItem('admin_password')
+            onClick={async () => {
+              await fetch('/api/admin/logout', { method: 'POST' })
               router.push('/admin-login')
             }}
             className="btn-secondary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
@@ -363,7 +349,7 @@ export default function AdminPage() {
       </div>
 
       {/* Business List Rows */}
-      {loading ? (
+      {dataLoading ? (
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)}
         </div>

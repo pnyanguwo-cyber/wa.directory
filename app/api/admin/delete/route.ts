@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(request: Request) {
   try {
-    const password = request.headers.get('x-admin-password')
-    if (password !== process.env.ADMIN_PASSWORD) {
+    const cookieStore = cookies()
+    const token = cookieStore.get('admin_token')
+    if (!token || token.value !== 'true') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

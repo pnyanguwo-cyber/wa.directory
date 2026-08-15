@@ -65,6 +65,21 @@ DROP POLICY IF EXISTS "Public insert access" ON businesses;
 CREATE POLICY "Public read access" ON businesses FOR SELECT USING (true);
 CREATE POLICY "Public insert access" ON businesses FOR INSERT WITH CHECK (true);
 
+-- Cache for AI-generated results (Gemini search expansions, SEO blurbs)
+CREATE TABLE IF NOT EXISTS ai_cache (
+  cache_key TEXT PRIMARY KEY,
+  result JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- WhatsApp chatbot conversation state
+CREATE TABLE IF NOT EXISTS chat_sessions (
+  phone TEXT PRIMARY KEY,
+  step TEXT NOT NULL DEFAULT '',
+  data JSONB NOT NULL DEFAULT '{}',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Storage bucket for logos
 INSERT INTO storage.buckets (id, name, public) VALUES ('logos', 'logos', true)
 ON CONFLICT (id) DO NOTHING;

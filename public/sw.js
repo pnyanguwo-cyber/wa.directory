@@ -1,7 +1,9 @@
-const CACHE = 'wa-directory-v1'
-const API = '/api/'
+const CACHE = 'wa-directory-v2'
 
 self.addEventListener('install', (e) => {
+  e.waitUntil(
+    caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest'])).catch(() => {})
+  )
   e.waitUntil(self.skipWaiting())
 })
 
@@ -17,15 +19,38 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url)
 
-  if (url.pathname.startsWith(API)) return
+  if (url.origin !== self.location.origin) return
+  if (e.request.method !== 'GET') return
+  if (url.pathname.startsWith('/api/')) return
 
+  if (e.request.mode === 'navigate') {
+    // Network-first for pages so users get fresh listings
+    e.respondWith(
+      fetch(e.request)
+        .then((r) => {
+          const clone = r.clone()
+          caches.open(CACHE).then((c) => c.put(e.request, clone))
+          return r
+        })
+        .catch(() =>
+          caches.match(e.request).then((r) => r || caches.match('/'))
+        )
+    )
+    return
+  }
+
+  // Cache-first for hashed assets (JS/CSS/images) and other static files
   e.respondWith(
-    fetch(e.request)
-      .then((r) => {
-        const clone = r.clone()
-        caches.open(CACHE).then((c) => c.put(e.request, clone))
-        return r
-      })
-      .catch(() => caches.match(e.request))
+    caches.match(e.request).then(
+      (cached) =>
+        cached ||
+        fetch(e.request).then((r) => {
+          if (r.ok) {
+            const clone = r.clone()
+            caches.open(CACHE).then((c) => c.put(e.request, clone))
+          }
+          return r
+        })
+    )
   )
 })

@@ -1,6 +1,12 @@
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${process.env.GEMINI_API_KEY}`
+import { getCached, setCached } from './ai-cache'
+
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
 
 export async function generateSEOBlurb(category: string, location: string): Promise<string> {
+  const cacheKey = `seo_blurb:${category.toLowerCase()}:${location.toLowerCase()}`
+  const cached = await getCached<string>(cacheKey)
+  if (cached) return cached
+
   if (!process.env.GEMINI_API_KEY) {
     return `Find the best ${category} services in ${location}, Zimbabwe. Browse verified businesses, check ratings, read reviews, and start a WhatsApp conversation instantly. WA Directory connects you with trusted local businesses for all your ${category.toLowerCase()} needs.`
   }
@@ -20,7 +26,9 @@ export async function generateSEOBlurb(category: string, location: string): Prom
 
     const data = await res.json()
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-    return text || `Find the best ${category} services in ${location}, Zimbabwe. WA Directory connects you with trusted local businesses via WhatsApp.`
+    const result = text || `Find the best ${category} services in ${location}, Zimbabwe. WA Directory connects you with trusted local businesses via WhatsApp.`
+    await setCached(cacheKey, result)
+    return result
   } catch {
     return `Find the best ${category} services in ${location}, Zimbabwe. WA Directory connects you with trusted local businesses via WhatsApp.`
   }
@@ -28,6 +36,10 @@ export async function generateSEOBlurb(category: string, location: string): Prom
 
 export async function expandSearchQuery(query: string): Promise<string[]> {
   if (!process.env.GEMINI_API_KEY || !query.trim()) return []
+
+  const cacheKey = `search_expand:${query.trim().toLowerCase()}`
+  const cached = await getCached<string[]>(cacheKey)
+  if (cached) return cached
 
   try {
     const res = await fetch(GEMINI_URL, {
@@ -47,7 +59,11 @@ export async function expandSearchQuery(query: string): Promise<string[]> {
     if (!text) return []
 
     const match = text.match(/\[[\s\S]*?\]/)
-    if (match) return JSON.parse(match[0])
+    if (match) {
+      const result = JSON.parse(match[0]) as string[]
+      await setCached(cacheKey, result)
+      return result
+    }
     return []
   } catch {
     return []

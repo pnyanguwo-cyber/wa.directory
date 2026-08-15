@@ -12,7 +12,15 @@ export async function POST(request: Request) {
     }
 
     if (password === process.env.ADMIN_PASSWORD) {
-      return NextResponse.json({ success: true })
+      const response = NextResponse.json({ success: true })
+      response.cookies.set('admin_token', 'true', {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 24,
+      })
+      return response
     }
 
     return NextResponse.json({ success: false })

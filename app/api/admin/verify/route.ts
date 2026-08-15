@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { sendWhatsAppTemplate } from '@/lib/whatsapp'
+
+const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 export async function POST(request: Request) {
   try {
-    const password = request.headers.get('x-admin-password')
-    if (password !== process.env.ADMIN_PASSWORD) {
+    const cookieStore = cookies()
+    const token = cookieStore.get('admin_token')
+    if (!token || token.value !== 'true') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -15,6 +20,12 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('phone, name, slug')
+      .eq('id', id)
+      .single()
+
     const { error } = await supabase
       .from('businesses')
       .update({ verified })
@@ -22,6 +33,16 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (verified && business?.phone) {
+      const to = '+' + business.phone.replace(/\D/g, '')
+      const link = `${SITE_URL}/business/${business.slug || id}`
+      sendWhatsAppTemplate(
+        to,
+        process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
+        [business.name, link]
+      ).catch(err => console.error('[verify] notification failed:', err))
     }
 
     return NextResponse.json({ success: true })

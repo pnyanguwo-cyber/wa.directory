@@ -1,6 +1,359 @@
 import { NextResponse } from 'next/server'
+import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
+import { getSupabase } from '@/lib/supabase-server'
+import { matchCategory, categories } from '@/data/categories'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { validatePhone } from '@/data/countries'
+import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'wa-directory-verify-2024'
+const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
+const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP
+const COUNTRY_CODE = '+263'
+
+const STOPWORDS = new Set([
+  'i', 'am', 'im', 'looking', 'for', 'a', 'an', 'the', 'find', 'in', 'at', 'near',
+  'me', 'please', 'help', 'need', 'want', 'to', 'and', 'or', 'is', 'are', 'with',
+  'some', 'get', 'any', 'have', 'just', 'like', 'of', 'on', 'my', 'your',
+])
+
+const HELP_TEXT = [
+  '*WA Directory Bot* 🤖',
+  'Find any business on WhatsApp or list your own.',
+  '',
+  '*Search:* type what you need + town',
+  'e.g. "phone harare", "plumber in bulawayo", "i am looking for a salon"',
+  '',
+  '*List your business:* send *register*',
+  '*Cancel:* send *cancel*  |  *Help:* send *help*',
+  '',
+  `Website: ${SITE_URL}`,
+].join('\n')
+
+function generateSlug(name: string): string {
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .slice(0, 50) || 'business'
+  )
+}
+
+function cleanQuery(text: string, cityName?: string): string {
+  let t = text.toLowerCase()
+  if (cityName) t = t.replace(new RegExp(cityName.toLowerCase(), 'g'), ' ')
+  const words = t.split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOPWORDS.has(w))
+  return words.join(' ')
+}
+
+function findCity(text: string): string | null {
+  const lower = text.toLowerCase()
+  for (const c of zimbabweCities) {
+    if (lower.includes(c.name.toLowerCase())) return c.name
+  }
+  return null
+}
+
+function findArea(city: string, text: string): string | null {
+  const cityObj = zimbabweCities.find(c => c.name === city)
+  if (!cityObj) return null
+  const lower = text.toLowerCase()
+  for (const a of cityObj.areas) {
+    if (lower.includes(a.toLowerCase())) return a
+  }
+  return null
+}
+
+async function sendSearchResults(from: string, text: string) {
+  const city = findCity(text)
+  const query = cleanQuery(text, city || undefined)
+  const category = matchCategory(query || text)
+
+  const orFilters: string[] = []
+  if (query) {
+    orFilters.push(`name.ilike.%${query}%`)
+    orFilters.push(`bio.ilike.%${query}%`)
+  }
+  if (category !== 'Other') orFilters.push(`category.cs.{${category}}`)
+  if (city) {
+    orFilters.push(`city.ilike.%${city}%`)
+    orFilters.push(`location.ilike.%${city}%`)
+    orFilters.push(`area.ilike.%${city}%`)
+  }
+
+  const supabase = getSupabase()
+  let req = supabase.from('businesses').select(BUSINESS_CARD_COLUMNS).eq('verified', true)
+  if (orFilters.length > 0) req = req.or(orFilters.join(','))
+  req = req.order('rating', { ascending: false }).limit(5)
+
+  const { data: businesses } = await req
+
+  if (!businesses || businesses.length === 0) {
+    await sendWhatsAppMessage(
+      from,
+      [
+        `No results found for *"${text}"*.`,
+        '',
+        'Try: "find plumber in bulawayo", "phone harare", or "catering in chitungwiza".',
+        'Send *help* for tips.',
+      ].join('\n')
+    )
+    return
+  }
+
+  const lines: string[] = []
+  lines.push(
+    `Top ${businesses.length} result${businesses.length > 1 ? 's' : ''} for *${query || category}*${city ? ` in *${city}*` : ''}:`
+  )
+  businesses.forEach((b, i) => {
+    const area = [b.area, b.city].filter(Boolean).join(', ') || b.location || 'Zimbabwe'
+    lines.push(
+      [
+        `${i + 1}. *${b.name}*`,
+        `📍 ${area}`,
+        b.price_range ? `💰 ${b.price_range}` : '',
+        b.rating > 0 ? `⭐ ${b.rating.toFixed(1)} (${b.review_count || 0})` : '',
+        `👉 Chat: https://wa.me/${b.phone}`,
+        `🔗 ${SITE_URL}/business/${b.slug || b.id}`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    )
+  })
+  lines.push('', 'Send *help* for more options.')
+
+  await sendWhatsAppMessage(from, lines.join('\n\n'))
+}
+
+async function publishBusiness(from: string, session: ChatSession) {
+  const data = session.data
+  const name = data.name?.trim() || ''
+  const username = data.whatsapp_username?.trim() || ''
+  const category = data.category || 'Other'
+  const description = data.description?.trim() || ''
+  const city = data.city || ''
+  const area = data.area || ''
+  const countryCode = data.country_code || COUNTRY_CODE
+  const phone = (data.phone || '').replace(/[^0-9]/g, '')
+  const fullPhone = (countryCode + phone).replace(/[^0-9]/g, '')
+  const token = crypto.randomUUID()
+  const slug = `${generateSlug(name)}-${Math.random().toString(36).slice(2, 8)}`
+  const location = city ? [area, city, 'Zimbabwe'].filter(Boolean).join(', ') : 'Zimbabwe'
+
+  const { error } = await getSupabase().from('businesses').insert({
+    name,
+    slug,
+    whatsapp_username: username,
+    bio: `Professional ${description} services.`,
+    category: [category],
+    location,
+    country_code: countryCode,
+    city: city || '',
+    area: city ? area : '',
+    phone: fullPhone,
+    whatsapp_link: `https://wa.me/${fullPhone}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`,
+    catalog_link: null,
+    logo_url: null,
+    price_range: null,
+    edit_token: token,
+    verified: false,
+    rating: 0,
+    review_count: 0,
+  })
+
+  if (error) {
+    console.error('[webhook] register insert failed:', error.message)
+    await sendWhatsAppMessage(from, 'Sorry, something went wrong saving your listing. Please try again later.')
+    return
+  }
+
+  await sendWhatsAppMessage(
+    from,
+    [
+      '🎉 *Submitted for Approval!*',
+      '',
+      `Your business "${name}" is now pending review.`,
+      'Once an admin approves it you will get a confirmation here.',
+      '',
+      `✏️ Save this link to edit your listing later:`,
+      `${SITE_URL}/edit?token=${token}`,
+      '',
+      'Reply *help* anytime.',
+    ].join('\n')
+  )
+
+  if (ADMIN_WHATSAPP) {
+    sendWhatsAppMessage(
+      ADMIN_WHATSAPP,
+      [
+        '🆕 NEW BUSINESS PENDING VERIFICATION',
+        '',
+        `Name: ${name}`,
+        `Category: ${category}`,
+        `Location: ${location}`,
+        `Phone: ${fullPhone}`,
+        `Approve: ${SITE_URL}/admin`,
+      ].join('\n')
+    ).catch(() => {})
+  }
+}
+
+async function continueRegistration(from: string, session: ChatSession, text: string) {
+  const data = session.data
+  const t = text.trim()
+
+  switch (session.step) {
+    case 'name':
+      await saveSession(from, 'username', { ...data, name: t })
+      await sendWhatsAppMessage(
+        from,
+        'Nice! Now your *WhatsApp username* (the one shown on your WhatsApp Business profile).'
+      )
+      break
+
+    case 'username':
+      if (!/^[a-zA-Z0-9_]{3,}$/.test(t)) {
+        await sendWhatsAppMessage(from, 'Username must be letters, numbers or underscores (min 3). Try again:')
+        break
+      }
+      await saveSession(from, 'phone', { ...data, whatsapp_username: t })
+      await sendWhatsAppMessage(
+        from,
+        `Got it *@${t}*. Now your *phone number* (e.g. 712345678) — customers will use it to WhatsApp you.`
+      )
+      break
+
+    case 'phone': {
+      const digits = t.replace(/[^0-9]/g, '')
+      const err = validatePhone(COUNTRY_CODE, digits)
+      if (err) {
+        await sendWhatsAppMessage(from, `${err}. Try again (e.g. 712345678):`)
+        break
+      }
+      await saveSession(from, 'category', { ...data, phone: digits, country_code: COUNTRY_CODE })
+      await sendWhatsAppMessage(
+        from,
+        'What do you sell? e.g. *phones, plumbing, catering, magetsi, salon*...'
+      )
+      break
+    }
+
+    case 'category': {
+      const category = matchCategory(t)
+      if (category === 'Other') {
+        const list = categories
+          .filter(c => c.name !== 'Other')
+          .slice(0, 12)
+          .map(c => `${c.icon} ${c.name}`)
+          .join('\n')
+        await sendWhatsAppMessage(from, `I couldn't place that category. Choose one:\n\n${list}\n\nType the category name:`)
+        break
+      }
+      await saveSession(from, 'description', { ...data, category })
+      await sendWhatsAppMessage(from, `*${category}* — great! Now describe your business in 1-2 sentences (what you offer):`)
+      break
+    }
+
+    case 'description':
+      if (t.length < 10) {
+        await sendWhatsAppMessage(from, 'Please give a slightly longer description of what you offer:')
+        break
+      }
+      await saveSession(from, 'city', { ...data, description: t })
+      {
+        const cities = zimbabweCities.slice(0, 8).map(c => c.name).join(', ')
+        await sendWhatsAppMessage(
+          from,
+          `Which town or city are you based in?\n\n${cities}...\n\nOr type *whole country*`
+        )
+      }
+      break
+
+    case 'city': {
+      if (/(whole country|anywhere|zimbabwe|everywhere)/.test(t.toLowerCase()) || t === '*') {
+        const merged: ChatSessionData = { ...data, city: '', area: '' }
+        await saveSession(from, 'confirm', merged)
+        await sendConfirmation(from, merged)
+        break
+      }
+      const city = findCity(t)
+      if (!city) {
+        const cities = zimbabweCities.slice(0, 8).map(c => c.name).join(', ')
+        await sendWhatsAppMessage(from, `I couldn't find that town. Pick one:\n\n${cities}...\n\nOr type *whole country*`)
+        break
+      }
+      const cityObj = zimbabweCities.find(c => c.name === city)
+      if (cityObj && cityObj.areas.length > 0) {
+        await saveSession(from, 'area', { ...data, city })
+        const areas = cityObj.areas.slice(0, 12).join(', ')
+        await sendWhatsAppMessage(
+          from,
+          `*${city}* — which area?\n\n${areas}...\n\nOr type *skip* for the whole city.`
+        )
+      } else {
+        const merged: ChatSessionData = { ...data, city, area: '' }
+        await saveSession(from, 'confirm', merged)
+        await sendConfirmation(from, merged)
+      }
+      break
+    }
+
+    case 'area': {
+      const city = data.city || ''
+      if (/(skip|none|whole country|anywhere)/.test(t.toLowerCase())) {
+        const merged: ChatSessionData = { ...data, area: '' }
+        await saveSession(from, 'confirm', merged)
+        await sendConfirmation(from, merged)
+        break
+      }
+      const area = findArea(city, t)
+      if (!area) {
+        await sendWhatsAppMessage(from, `I couldn't match that area in *${city}*. Type one of the areas listed, or *skip*.`)
+        break
+      }
+      const merged: ChatSessionData = { ...data, area }
+      await saveSession(from, 'confirm', merged)
+      await sendConfirmation(from, merged)
+      break
+    }
+
+    case 'confirm': {
+      if (/^(yes|y|publish|confirm|go)/i.test(t)) {
+        await publishBusiness(from, session)
+        await clearSession(from)
+      } else if (/^(no|n|cancel)/i.test(t)) {
+        await clearSession(from)
+        await sendWhatsAppMessage(from, 'Registration cancelled. Send *register* to start again, or *help*.')
+      } else {
+        await sendConfirmation(from, data)
+      }
+      break
+    }
+
+    default:
+      await clearSession(from)
+      await sendWhatsAppMessage(from, HELP_TEXT)
+  }
+}
+
+async function sendConfirmation(from: string, data: ChatSessionData) {
+  const location = data.city ? [data.area, data.city, 'Zimbabwe'].filter(Boolean).join(', ') : 'Zimbabwe'
+  const lines = [
+    '*Please confirm your details:*',
+    '',
+    `🏢 *${data.name}*`,
+    `📱 @${data.whatsapp_username}`,
+    `☎️ ${data.country_code || COUNTRY_CODE} ${data.phone}`,
+    `🏷️ ${data.category}`,
+    `📍 ${location}`,
+    `📝 ${data.description}`,
+    '',
+    'Reply *YES* to publish (pending approval), or *CANCEL* to start over.',
+  ]
+  await sendWhatsAppMessage(from, lines.join('\n'))
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -25,65 +378,57 @@ export async function POST(request: Request) {
     const changes = entry?.changes?.[0]
     const value = changes?.value
 
-    if (value?.messages) {
-      for (const message of value.messages) {
-        const from = message.from
-        const text = message.text?.body?.toLowerCase() || ''
-
-        console.log(`WhatsApp message from ${from}: ${text}`)
-
-        if (text.includes('list me')) {
-          await sendWhatsAppMessage(
-            from,
-            'To list your business on WA Directory, visit https://wadirectory.vercel.app/list or reply with your business name.'
-          )
-        } else if (text.includes('hello') || text.includes('hi')) {
-          await sendWhatsAppMessage(
-            from,
-            'Hello! Welcome to WA Directory. Find any business on WhatsApp. Reply "LIST ME" to list your business.'
-          )
-        }
-      }
+    if (!value?.messages) {
+      return NextResponse.json({ status: 'ok' }, { status: 200 })
     }
 
-    if (value?.catalog_update) {
-      console.log('Catalog update received:', JSON.stringify(value.catalog_update))
+    for (const message of value.messages) {
+      const from = message.from
+      const text = message.text?.body?.trim() || ''
+
+      if (!text) continue
+
+      console.log(`WhatsApp message from ${from}: ${text}`)
+
+      const session = await getSession(from)
+      const lower = text.toLowerCase()
+
+      if (session?.step && lower !== 'cancel' && lower !== 'help') {
+        await continueRegistration(from, session, text)
+        continue
+      }
+
+      if (session?.step && (lower === 'cancel' || lower === 'help')) {
+        await clearSession(from)
+        await sendWhatsAppMessage(from, HELP_TEXT)
+        continue
+      }
+
+      if (/^(register|list me|list|sign me up|add my business)/.test(lower)) {
+        await saveSession(from, 'name', {})
+        await sendWhatsAppMessage(
+          from,
+          [
+            'Great, let\'s list your business on WA Directory! 🎉',
+            '',
+            'First, what is your *business name*?',
+            'Send *cancel* anytime to stop.',
+          ].join('\n')
+        )
+        continue
+      }
+
+      if (lower === 'help' || lower === 'hi' || lower === 'hello') {
+        await sendWhatsAppMessage(from, HELP_TEXT)
+        continue
+      }
+
+      await sendSearchResults(from, text)
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   } catch (err) {
     console.error('Webhook error:', err)
     return NextResponse.json({ status: 'error' }, { status: 500 })
-  }
-}
-
-async function sendWhatsAppMessage(to: string, text: string) {
-  const phoneNumberId = process.env.WA_PHONE_NUMBER_ID
-  const token = process.env.WA_ACCESS_TOKEN
-
-  if (!phoneNumberId || !token) {
-    console.warn('WA_PHONE_NUMBER_ID or WA_ACCESS_TOKEN not set')
-    return
-  }
-
-  try {
-    await fetch(
-      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to,
-          type: 'text',
-          text: { body: text },
-        }),
-      }
-    )
-  } catch (err) {
-    console.error('Failed to send WhatsApp message:', err)
   }
 }
