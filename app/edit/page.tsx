@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import EditBusinessForm from '@/components/edit-business-form'
 import Navbar from '@/components/navbar'
-import Footer from '@/components/footer'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +39,6 @@ export default async function EditPage({
           <EditBusinessForm business={business} />
         </div>
       </main>
-      <Footer />
     </>
   )
 }

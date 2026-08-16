@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
 import ShareButton from '@/components/share-button'
+import QrCard from '@/components/qr-card'
 import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
@@ -212,9 +213,22 @@ async function BusinessContent({ slug }: { slug: string }) {
               )}
               {business.price_range && (
                 <span className="bg-surface text-text-secondary text-sm px-2.5 py-0.5 rounded flex items-center gap-1">
-                  <span>??</span>
+                  <span>{business.price_range.startsWith('$') ? '' : '$'}</span>
                   {business.price_range}
                 </span>
+              )}
+              {business.website && (
+                <a
+                  href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-whatsapp-700 text-sm flex items-center gap-1 hover:underline"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-4 4a4 4 0 01-5.656-5.656l1.707-1.707M10.172 13.828a4 4 0 010-5.656l4-4a4 4 0 015.656 5.656l-1.707 1.707" />
+                  </svg>
+                  {business.website.replace(/^https?:\/\//, '')}
+                </a>
               )}
 
             </div>
@@ -236,6 +250,18 @@ async function BusinessContent({ slug }: { slug: string }) {
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {business.whatsapp_link && (
+              <div className="mb-6">
+                <h2 className="text-[16px] font-semibold text-text-primary mb-3">Scan to chat</h2>
+                <QrCard
+                  value={business.whatsapp_link}
+                  title="Chat with us on WhatsApp"
+                  subtitle="Scan with your phone camera to start a chat"
+                  downloadName={`${business.slug || 'business'}-whatsapp-qr.png`}
+                />
               </div>
             )}
 

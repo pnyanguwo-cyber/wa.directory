@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Business } from '@/types'
 import { categories } from '@/data/categories'
@@ -17,6 +17,8 @@ const cityOptions = [
   ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
 ]
 
+type LogoMode = 'url' | 'upload'
+
 export default function EditBusinessForm({ business }: { business: Business }) {
   const [form, setForm] = useState({
     name: business.name,
@@ -30,16 +32,32 @@ export default function EditBusinessForm({ business }: { business: Business }) {
     price_range: business.price_range || '',
     catalog_link: business.catalog_link || '',
     logo_url: business.logo_url || '',
+    website: (business as { website?: string }).website || '',
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [logoMode, setLogoMode] = useState<LogoMode>(business.logo_url ? 'url' : 'upload')
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
 
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
   const areaOptions = form.city && form.city !== '*'
     ? [{ value: '', label: 'All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
     : []
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) {
+      alert('File too large (max 2MB)')
+      return
+    }
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
+  }
 
   async function handleSave() {
     if (!form.name.trim() || !form.whatsapp_username.trim() || !form.phone.trim()) {
@@ -49,6 +67,17 @@ export default function EditBusinessForm({ business }: { business: Business }) {
     setSaving(true)
     setError('')
     try {
+      let logoUrl = form.logo_url.trim()
+
+      if (logoFile) {
+        const uploadForm = new FormData()
+        uploadForm.append('file', logoFile)
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm })
+        if (!uploadRes.ok) throw new Error('Logo upload failed')
+        const { url } = await uploadRes.json()
+        logoUrl = url
+      }
+
       const res = await fetch('/api/edit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,7 +93,8 @@ export default function EditBusinessForm({ business }: { business: Business }) {
           area: form.city === '*' ? '' : form.area,
           price_range: form.price_range,
           catalog_link: form.catalog_link,
-          logo_url: form.logo_url,
+          logo_url: logoUrl,
+          website: form.website.trim(),
         }),
       })
       const data = await res.json()
@@ -158,28 +188,33 @@ export default function EditBusinessForm({ business }: { business: Business }) {
             value={form.city}
             onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
             placeholder="Select city"
-            label="Select the town/city you are based in"
+            label="Town/city your business is based in"
           />
           {form.city && form.city !== '*' && (
             <SearchSelect
               options={areaOptions}
               value={form.area}
               onChange={v => setForm(f => ({ ...f, area: v }))}
-              placeholder="Area"
-              label="Area"
+              placeholder="Select area"
+              label="Areas you cover"
             />
           )}
         </div>
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Average Price <span className="text-text-secondary font-normal">(optional)</span></label>
-          <input
-            type="text"
-            value={form.price_range}
-            onChange={e => setForm(f => ({ ...f, price_range: e.target.value }))}
-            placeholder="e.g. $10 - $50"
-            className="input-field"
-          />
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary font-medium text-sm pointer-events-none">
+              $
+            </span>
+            <input
+              type="text"
+              value={form.price_range}
+              onChange={e => setForm(f => ({ ...f, price_range: e.target.value }))}
+              placeholder="10 - 50"
+              className="input-field pl-8"
+            />
+          </div>
         </div>
 
         <div>
@@ -194,17 +229,84 @@ export default function EditBusinessForm({ business }: { business: Business }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">Logo URL <span className="text-text-secondary font-normal">(optional)</span></label>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">Website <span className="text-text-secondary font-normal">(optional)</span></label>
           <input
             type="url"
-            value={form.logo_url}
-            onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))}
-            placeholder="https://example.com/logo.jpg"
+            value={form.website}
+            onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+            placeholder="https://yourwebsite.com"
             className="input-field"
           />
-          {form.logo_url && (
-            <div className="mt-2 animate-fade-in">
-              <img src={form.logo_url} alt="preview" className="w-12 h-12 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          <p className="text-xs text-whatsapp-600 mt-1">Your website or online store link</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
+          <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
+            <button
+              type="button"
+              onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview('') }}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
+                logoMode === 'url' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              URL
+            </button>
+            <button
+              type="button"
+              onClick={() => setLogoMode('upload')}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
+                logoMode === 'upload' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Upload
+            </button>
+          </div>
+          {logoMode === 'url' ? (
+            <div>
+              <input
+                type="url"
+                value={form.logo_url}
+                onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))}
+                placeholder="https://example.com/logo.jpg"
+                className="input-field"
+              />
+              <p className="text-xs text-whatsapp-600 mt-1">Square image works best</p>
+              {form.logo_url && (
+                <div className="mt-2 animate-fade-in">
+                  <img src={form.logo_url} alt="preview" className="w-12 h-12 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 transition-all duration-150 active:scale-[0.98]"
+              >
+                {logoPreview ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <img src={logoPreview} alt="logo preview" className="w-16 h-16 rounded-full object-cover" />
+                    <span className="text-xs text-text-secondary">{logoFile?.name}</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-1">
+                    <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span className="text-sm text-text-secondary">Click to upload logo</span>
+                    <span className="text-xs text-text-secondary">PNG, JPG or WebP max 2MB</span>
+                  </div>
+                )}
+              </button>
             </div>
           )}
         </div>

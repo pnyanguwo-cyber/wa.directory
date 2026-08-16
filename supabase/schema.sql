@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   catalog_link TEXT DEFAULT '',
   logo_url TEXT DEFAULT '',
   price_range TEXT DEFAULT '',
+  website TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -42,6 +43,7 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS catalog_link TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS price_range TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS website TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS edit_token TEXT;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_username TEXT DEFAULT '';

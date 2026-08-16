@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Navbar from '@/components/navbar'
+import Footer from '@/components/footer'
 import PWARegistration from '@/components/pwa-registration'
 
 const inter = Inter({
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10"
         />
         <main className="relative pb-16 md:pb-0">{children}</main>
+        <Footer />
       </body>
     </html>
   )

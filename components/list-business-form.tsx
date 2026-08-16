@@ -8,6 +8,7 @@ import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories, matchCategory } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
+import QrCard from '@/components/qr-card'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
@@ -47,6 +48,14 @@ export default function ListBusinessForm() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const usernameRef = useRef<HTMLInputElement>(null)
+  const phoneRef = useRef<HTMLInputElement>(null)
+  const descriptionRef = useRef<HTMLTextAreaElement>(null)
+  const areaInputRef = useRef<HTMLInputElement>(null)
+  const logoUrlRef = useRef<HTMLInputElement>(null)
+  const catalogRef = useRef<HTMLInputElement>(null)
+  const websiteRef = useRef<HTMLInputElement>(null)
+  const priceRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     name: '',
     countryCode: '+263',
@@ -60,6 +69,7 @@ export default function ListBusinessForm() {
     catalog_link: '',
     logo_url: '',
     price_range: '',
+    website: '',
   })
   const router = useRouter()
 
@@ -123,6 +133,8 @@ export default function ListBusinessForm() {
         : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')
 
       const token = crypto.randomUUID()
+      const price = form.price_range.trim()
+      const normalizedPrice = price ? (price.startsWith('$') ? price : `$${price}`) : null
 
       const { data, error } = await getClient()
         .from('businesses')
@@ -140,7 +152,8 @@ export default function ListBusinessForm() {
           whatsapp_link: whatsappLink,
           catalog_link: form.catalog_link.trim() || null,
           logo_url: logoUrl || null,
-          price_range: form.price_range.trim() || null,
+          price_range: normalizedPrice,
+          website: form.website.trim() || null,
           edit_token: token,
           verified: false,
           rating: 0,
@@ -192,6 +205,14 @@ export default function ListBusinessForm() {
           </p>
           <p className="text-xs text-text-secondary mt-2">If you lose this link, contact us to get a new one.</p>
         </div>
+        <div className="flex flex-col items-center mb-6">
+          <QrCard
+            value={typeof window !== 'undefined' ? `${window.location.origin}/edit?token=${editToken}` : ''}
+            title="Scan to save your edit link"
+            subtitle="Screenshot or print this to keep access to your listing"
+            downloadName={`${form.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edit-link.png`}
+          />
+        </div>
         <div className="flex flex-col gap-3">
           <Link href={`/`} className="btn-primary py-3 text-[16px]">
             Back to Home
@@ -238,20 +259,25 @@ export default function ListBusinessForm() {
               type="text"
               value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); usernameRef.current?.focus() } }}
               placeholder="e.g. John's Plumbing"
               className="input-field"
               autoFocus
             />
+            <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">Business Username on WhatsApp</label>
             <input
+              ref={usernameRef}
               type="text"
               value={form.whatsapp_username}
               onChange={e => setForm(f => ({ ...f, whatsapp_username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); phoneRef.current?.focus() } }}
               placeholder="e.g. johnsplumbing"
               className="input-field"
             />
+            <p className="text-xs text-whatsapp-600 mt-1">Your business username on WhatsApp (no spaces)</p>
             {form.whatsapp_username && (
               <p className="text-xs text-whatsapp-600 mt-1">@{form.whatsapp_username}</p>
             )}
@@ -269,12 +295,15 @@ export default function ListBusinessForm() {
             <div className="flex-1">
               <label className="block text-sm font-medium text-text-primary mb-1.5">Phone Number</label>
               <input
+                ref={phoneRef}
                 type="tel"
                 value={form.phone}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/[^0-9]/g, '') }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (isValidStep1) setStep(2) } }}
                 placeholder={selectedCountry ? `e.g. 71 234 5678` : 'Phone number'}
                 className="input-field"
               />
+              <p className="text-xs text-whatsapp-600 mt-1">Customers will chat with this number</p>
               {phoneError && (
                 <p className="text-xs text-danger mt-1 animate-fade-in">{phoneError}</p>
               )}
@@ -306,8 +335,10 @@ export default function ListBusinessForm() {
               options={categoryOptions}
               value={form.category}
               onChange={v => setForm(f => ({ ...f, category: v }))}
+              onEnterNext={() => descriptionRef.current?.focus()}
               placeholder="e.g. cakes, food, magetsi..."
             />
+            <p className="text-xs text-whatsapp-600 mt-1">Start typing to search (e.g. plumber, salon)</p>
             {form.category && (
               <p className="text-xs text-whatsapp-600 mt-1">
                 {categories.find(c => c.name === form.category)?.icon} Selected: {form.category}
@@ -317,6 +348,7 @@ export default function ListBusinessForm() {
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">What do you sell?</label>
             <textarea
+              ref={descriptionRef}
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
               placeholder="Describe your business, products, or services..."
@@ -324,25 +356,36 @@ export default function ListBusinessForm() {
               className="input-field resize-none"
               autoFocus
             />
+            <p className="text-xs text-whatsapp-600 mt-1">What you sell, your services, and your prices</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <SearchSelect
               options={cityOptions}
               value={form.city}
               onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
+              onEnterNext={() => (form.city && form.city !== '*' ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
               placeholder="Select city"
-              label="Select the town/city you are based in"
+              label="Town/city your business is based in"
             />
             {form.city && form.city !== '*' && (
               <SearchSelect
                 options={areaOptions}
                 value={form.area}
                 onChange={v => setForm(f => ({ ...f, area: v }))}
+                onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
+                inputRef={areaInputRef}
                 placeholder="Select area"
-                label="Area"
+                label="Areas you cover"
               />
             )}
           </div>
+          <p className="text-xs text-whatsapp-600 -mt-2">
+            {form.city && form.city !== '*'
+              ? 'Where you deliver or serve customers — or choose All areas'
+              : form.city === '*'
+                ? 'You serve the whole country'
+                : 'Pick the town/city where your business is based'}
+          </p>
           {!hasLocation && (
             <p className="text-xs text-danger">Select a city or area</p>
           )}
@@ -427,12 +470,15 @@ export default function ListBusinessForm() {
             {logoMode === 'url' ? (
               <div>
                 <input
+                  ref={logoUrlRef}
                   type="url"
                   value={form.logo_url}
                   onChange={e => setForm(f => ({ ...f, logo_url: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); catalogRef.current?.focus() } }}
                   placeholder="https://example.com/logo.jpg"
                   className="input-field"
                 />
+                <p className="text-xs text-whatsapp-600 mt-1">Square image works best (max 2MB)</p>
                 {form.logo_url && (
                   <div className="mt-2 flex items-center gap-2 animate-fade-in">
                     <img src={form.logo_url} alt="logo preview" className="w-10 h-10 rounded-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
@@ -476,12 +522,15 @@ export default function ListBusinessForm() {
               WhatsApp Catalog Link <span className="text-text-secondary">(optional)</span>
             </label>
             <input
+              ref={catalogRef}
               type="url"
               value={form.catalog_link}
               onChange={e => setForm(f => ({ ...f, catalog_link: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); websiteRef.current?.focus() } }}
               placeholder="https://wa.me/c/..."
               className="input-field"
             />
+            <p className="text-xs text-whatsapp-600 mt-1">Customers can browse your full WhatsApp catalog</p>
             <details className="mt-1 group">
               <summary className="text-xs text-whatsapp-600 cursor-pointer hover:underline list-none flex items-center gap-1">
                 <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -496,15 +545,38 @@ export default function ListBusinessForm() {
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Average Price <span className="text-text-secondary">(optional)</span>
+              Website <span className="text-text-secondary">(optional)</span>
             </label>
             <input
-              type="text"
-              value={form.price_range}
-              onChange={e => setForm(f => ({ ...f, price_range: e.target.value }))}
-              placeholder="e.g. $10 - $50"
+              ref={websiteRef}
+              type="url"
+              value={form.website}
+              onChange={e => setForm(f => ({ ...f, website: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
+              placeholder="https://yourwebsite.com"
               className="input-field"
             />
+            <p className="text-xs text-whatsapp-600 mt-1">Your website or online store link</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Average Price <span className="text-text-secondary">(optional)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary font-medium text-sm pointer-events-none">
+                $
+              </span>
+              <input
+                ref={priceRef}
+                type="text"
+                value={form.price_range}
+                onChange={e => setForm(f => ({ ...f, price_range: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (!loading) handleSubmit() } }}
+                placeholder="10 - 50"
+                className="input-field pl-8"
+              />
+            </div>
+            <p className="text-xs text-whatsapp-600 mt-1">Average price customers should expect</p>
           </div>
           <div className="bg-surface border border-gray-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-text-primary mb-2">Preview</h3>
@@ -526,8 +598,13 @@ export default function ListBusinessForm() {
               {form.city === '*' ? 'Zimbabwe' : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
             </p>
             <p className="text-sm text-text-secondary">
-              <span className="font-medium text-text-primary">Price:</span> {form.price_range || 'Not set'}
+              <span className="font-medium text-text-primary">Price:</span> {form.price_range ? (form.price_range.startsWith('$') ? form.price_range : `$${form.price_range}`) : 'Not set'}
             </p>
+            {form.website && (
+              <p className="text-sm text-text-secondary">
+                <span className="font-medium text-text-primary">Website:</span> {form.website}
+              </p>
+            )}
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Bio:</span>{' '}
               {form.bio || `Professional ${form.description} services.`}

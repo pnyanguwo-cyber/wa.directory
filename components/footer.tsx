@@ -9,15 +9,15 @@ export default function Footer() {
             <h3 className="font-semibold text-text-primary mb-2 text-sm">How it works</h3>
             <ol className="space-y-1.5 text-text-secondary text-xs sm:text-sm">
               <li className="flex items-center gap-2 justify-center sm:justify-start">
-                <span className="bg-whatsapp-600 text-white w-4.5 h-4.5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">1</span>
+                <span className="bg-whatsapp-600 text-white w-5 h-5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">1</span>
                 <span>Search for any business</span>
               </li>
               <li className="flex items-center gap-2 justify-center sm:justify-start">
-                <span className="bg-whatsapp-600 text-white w-4.5 h-4.5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">2</span>
+                <span className="bg-whatsapp-600 text-white w-5 h-5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">2</span>
                 <span>Chat on WhatsApp</span>
               </li>
               <li className="flex items-center gap-2 justify-center sm:justify-start">
-                <span className="bg-whatsapp-600 text-white w-4.5 h-4.5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">3</span>
+                <span className="bg-whatsapp-600 text-white w-5 h-5 rounded-full text-[11px] flex items-center justify-center font-medium shrink-0" aria-hidden="true">3</span>
                 <span>Buy with confidence</span>
               </li>
             </ol>
@@ -38,7 +38,14 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <h3 className="font-semibold text-text-primary mb-2 text-sm">WA Directory</h3>
+            <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+              <img
+                src="/logo-square.png"
+                alt="WA Directory logo"
+                className="w-8 h-8 object-contain rounded-lg"
+              />
+              <span className="font-bold text-text-primary">WA Directory</span>
+            </div>
             <p className="text-text-secondary text-xs sm:text-sm leading-relaxed">
               Find any business on WhatsApp. AI finds shops, services, and prices instantly.
             </p>

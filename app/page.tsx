@@ -5,7 +5,6 @@ import FeaturedScroll from '@/components/featured-scroll'
 import FeaturedBusinesses from '@/components/featured-businesses'
 import ShowMoreSection from '@/components/show-more-section'
 import TypingHeadline from '@/components/typing-headline'
-import Footer from '@/components/footer'
 import Link from 'next/link'
 
 export const revalidate = 300
@@ -111,8 +110,6 @@ export default async function HomePage() {
           </div>
         </div>
       </main>
-
-      <Footer />
     </>
   )
 }

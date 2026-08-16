@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, price_range, catalog_link, logo_url } = body
+    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, price_range, catalog_link, logo_url, website } = body
 
     if (!edit_token) {
       return NextResponse.json({ error: 'Edit token is required' }, { status: 400 })
@@ -53,6 +53,7 @@ export async function POST(request: Request) {
         price_range: price_range || null,
         catalog_link: catalog_link || null,
         logo_url: logo_url || null,
+        website: website || null,
         whatsapp_link: whatsappLink,
       })
       .eq('edit_token', edit_token)

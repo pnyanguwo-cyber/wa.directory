@@ -17,6 +17,7 @@
   catalog_link?: string
   logo_url: string
   price_range: string
+  website?: string
   created_at: string
   edit_token?: string
 }
