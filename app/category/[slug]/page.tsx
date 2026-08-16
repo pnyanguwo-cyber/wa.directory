@@ -5,9 +5,11 @@ import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
 import SkeletonCard from '@/components/skeleton-card'
+import ImpressionPing from '@/components/impression-ping'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { generateSEOBlurb } from '@/lib/gemini'
 import { getApprovedCategories, matchCategoryAgainst } from '@/lib/approved-data'
+import { orderSearchResults } from '@/lib/ranking'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -94,11 +96,12 @@ async function CategoryResults({ category, location }: { category: string; locat
     `city.ilike.%${location}%,location.ilike.%${location}%`
   )
 
-  const { data: businesses } = await filtered
+  const { data: rawBusinesses } = await filtered
     .order('rating', { ascending: false })
     .limit(100)
 
-  const count = businesses?.length || 0
+  const businesses = await orderSearchResults(rawBusinesses || [], matchedCategory, location, `${matchedCategory}-${location}`)
+  const count = businesses.length
   const seoText = await generateSEOBlurb(matchedCategory, location)
 
   const jsonLd = {
@@ -112,7 +115,7 @@ async function CategoryResults({ category, location }: { category: string; locat
     },
     mainEntity: {
       '@type': 'ItemList',
-      itemListElement: (businesses || []).map((b, i) => ({
+      itemListElement: businesses.map((b, i) => ({
         '@type': 'ListItem',
         position: i + 1,
         item: {
@@ -159,11 +162,14 @@ async function CategoryResults({ category, location }: { category: string; locat
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {businesses!.map(b => (
-            <BusinessCard key={b.id} business={b} />
-          ))}
-        </div>
+        <>
+          <ImpressionPing businesses={businesses} category={matchedCategory} city={location} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {businesses.map(b => (
+              <BusinessCard key={b.id} business={b} />
+            ))}
+          </div>
+        </>
       )}
     </>
   )

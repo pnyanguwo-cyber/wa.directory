@@ -74,6 +74,7 @@ export default function ListBusinessForm({
     logo_url: '',
     price_range: '',
     website: '',
+    password: '',
   })
   const [categories, setCategories] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
@@ -224,6 +225,13 @@ export default function ListBusinessForm({
       setEditToken(token)
       setSubmittedId(data.slug || data.id)
       submitFeatureRequests(data.id)
+      if (form.password && form.password.length >= 6) {
+        fetch('/api/account/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ business_id: data.id, phone: fullPhone, password: form.password }),
+        }).catch(() => {})
+      }
       fetch('/api/admin/notify-new-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -636,6 +644,23 @@ export default function ListBusinessForm({
               className="input-field"
             />
             <p className="text-xs text-whatsapp-600 mt-1">Your website or online store link</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Portal Password <span className="text-text-secondary">(optional)</span>
+            </label>
+            <input
+              type="password"
+              minLength={6}
+              value={form.password}
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
+              placeholder="Create a password for your portal account"
+              className="input-field"
+            />
+            <p className="text-xs text-whatsapp-600 mt-1">
+              Set a password now to unlock your statistics portal, or do it later from your edit link.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">

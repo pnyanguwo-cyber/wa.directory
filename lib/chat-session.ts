@@ -9,6 +9,7 @@ export interface ChatSessionData {
   description?: string
   city?: string
   area?: string
+  rating_pending?: string
 }
 
 export interface ChatSession {

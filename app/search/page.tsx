@@ -4,14 +4,25 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
+import ImpressionPing from '@/components/impression-ping'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
 import { matchCategory } from '@/data/categories'
 import { expandSearchQuery } from '@/lib/gemini'
+import { orderSearchResults } from '@/lib/ranking'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
 
 export const dynamic = 'force-dynamic'
 
 const RESULT_LIMIT = 100
+
+function findCityInQuery(q: string): string {
+  const lower = q.toLowerCase()
+  for (const c of zimbabweCities) {
+    if (lower.includes(c.name.toLowerCase())) return c.name
+  }
+  return ''
+}
 
 export async function generateMetadata({ searchParams }: { searchParams: { q?: string } }): Promise<Metadata> {
   const q = searchParams.q || ''
@@ -61,8 +72,13 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
   }
   dataQuery = dataQuery.limit(RESULT_LIMIT)
 
-  const [{ data: businesses }, { count }] = await Promise.all([dataQuery, countQuery])
-  const total = count ?? businesses?.length ?? 0
+  const [{ data: rawBusinesses }, { count }] = await Promise.all([dataQuery, countQuery])
+  const total = count ?? rawBusinesses?.length ?? 0
+  const matchedCategory = matchCategory(q)
+  const city = findCityInQuery(q)
+  const businesses = rawBusinesses
+    ? await orderSearchResults(rawBusinesses, matchedCategory !== 'Other' ? matchedCategory : (q || 'browse'), city, q || (sort || 'default'))
+    : []
 
   return (
     <>
@@ -80,11 +96,14 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {businesses!.map(b => (
-            <BusinessCard key={b.id} business={b} />
-          ))}
-        </div>
+        <>
+          <ImpressionPing businesses={businesses} category={matchedCategory !== 'Other' ? matchedCategory : ''} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {businesses.map(b => (
+              <BusinessCard key={b.id} business={b} />
+            ))}
+          </div>
+        </>
       )}
     </>
   )

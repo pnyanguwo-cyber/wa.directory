@@ -155,3 +155,145 @@ CREATE POLICY "Public read feature_requests" ON feature_requests FOR SELECT USIN
 
 DROP POLICY IF EXISTS "Public read banners" ON banners;
 CREATE POLICY "Public read banners" ON banners FOR SELECT USING (true);
+
+-- ============================================================
+-- Business portals: accounts, statistics, chats, subscriptions
+-- ============================================================
+
+-- Login accounts for business owners (password hashed with bcrypt)
+CREATE TABLE IF NOT EXISTS business_accounts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  password_hash TEXT NOT NULL,
+  otp_hash TEXT DEFAULT '',
+  otp_expires_at TIMESTAMPTZ,
+  disabled BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (business_id)
+);
+
+-- Append-only log of every counted action
+CREATE TABLE IF NOT EXISTS stats_events (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN (
+    'profile_view', 'click_whatsapp', 'click_call', 'click_website',
+    'impression', 'qr_scan', 'bot_search', 'bot_chat_open',
+    'share_bot', 'share_web'
+  )),
+  category TEXT DEFAULT '',
+  city TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Per-day rollups for fast portal/admin reads
+CREATE TABLE IF NOT EXISTS daily_stats (
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  type TEXT NOT NULL,
+  count BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (business_id, date, type)
+);
+
+-- Bot conversation transcripts attributed to a business
+CREATE TABLE IF NOT EXISTS chat_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID REFERENCES businesses(id) ON DELETE SET NULL,
+  customer_phone TEXT NOT NULL,
+  messages JSONB NOT NULL DEFAULT '[]',
+  found_via TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (customer_phone, business_id)
+);
+
+-- Customer ratings collected via the WhatsApp bot
+CREATE TABLE IF NOT EXISTS ratings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  customer_phone TEXT NOT NULL,
+  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  comment TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Monthly subscription status per business
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired', 'cancelled')),
+  amount NUMERIC(10, 2) DEFAULT 0,
+  started_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  admin_note TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Paid top-3 ranking placements (admin-approved, per category + city)
+CREATE TABLE IF NOT EXISTS rank_spots (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  city TEXT NOT NULL,
+  position INT NOT NULL CHECK (position IN (1, 2, 3)),
+  monthly_fee NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  period_start DATE NOT NULL,
+  period_end DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'expired')),
+  payment_confirmed_at TIMESTAMPTZ,
+  renewal_notified_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (category, city, position, period_start)
+);
+
+-- Bidding ledger (businesses bid for next month's spots)
+CREATE TABLE IF NOT EXISTS bids (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  city TEXT NOT NULL,
+  position INT NOT NULL CHECK (position IN (1, 2, 3)),
+  amount NUMERIC(10, 2) NOT NULL,
+  period DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'outbid', 'expired')),
+  admin_feedback TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_stats_events_biz_time ON stats_events (business_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_stats_events_type_time ON stats_events (type, created_at);
+CREATE INDEX IF NOT EXISTS idx_rank_spots_cat_city ON rank_spots (category, city, status);
+CREATE INDEX IF NOT EXISTS idx_rank_spots_period ON rank_spots (period_end);
+CREATE INDEX IF NOT EXISTS idx_bids_period_status ON bids (period, status);
+CREATE INDEX IF NOT EXISTS idx_bids_business ON bids (business_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status);
+CREATE INDEX IF NOT EXISTS idx_ratings_business ON ratings (business_id);
+CREATE INDEX IF NOT EXISTS idx_chat_logs_business ON chat_logs (business_id);
+
+-- Nightly rollup: stats_events -> daily_stats, then prune old events
+CREATE OR REPLACE FUNCTION rollup_stats() RETURNS INT
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE processed INT;
+BEGIN
+  INSERT INTO daily_stats (business_id, date, type, count)
+  SELECT business_id, created_at::date, type, count(*)
+  FROM stats_events
+  WHERE created_at::date <= CURRENT_DATE - 1
+  GROUP BY business_id, created_at::date, type
+  ON CONFLICT (business_id, date, type) DO UPDATE SET count = EXCLUDED.count;
+
+  GET DIAGNOSTICS processed = ROW_COUNT;
+  DELETE FROM stats_events WHERE created_at < CURRENT_DATE - 92;
+  RETURN processed;
+END $$;
+
+-- Expire rank spots and subscriptions whose period has ended
+CREATE OR REPLACE FUNCTION expire_ranks() RETURNS INT
+LANGUAGE plpgsql SECURITY DEFINER AS $$
+DECLARE n INT;
+BEGIN
+  UPDATE rank_spots SET status = 'expired' WHERE status = 'active' AND period_end < CURRENT_DATE;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  UPDATE subscriptions SET status = 'expired' WHERE status = 'active' AND expires_at < NOW();
+  RETURN n;
+END $$;

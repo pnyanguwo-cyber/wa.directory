@@ -1,11 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import { trackEvent } from '@/lib/track'
 
-export default function ShareButton({ businessSlug, businessName }: { businessSlug: string; businessName: string }) {
+export default function ShareButton({ businessSlug, businessName, businessId }: {
+  businessSlug: string
+  businessName: string
+  businessId?: string
+}) {
   const [copied, setCopied] = useState(false)
 
   async function handleShare() {
+    if (businessId) trackEvent(businessId, 'share_web')
     const url = `${window.location.origin}/business/${businessSlug}`
     const text = `Check out ${businessName} on WA Directory\n\n${url}\n\nFind any business on WhatsApp`
 

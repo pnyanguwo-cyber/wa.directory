@@ -66,6 +66,178 @@ function findArea(city: string, text: string): string | null {
   return null
 }
 
+async function recordBotEvents(businesses: { id: string }[]) {
+  try {
+    const rows = businesses.map(b => ({
+      business_id: b.id,
+      type: 'bot_search' as const,
+      category: '',
+      city: '',
+    }))
+    await getSupabase().from('stats_events').insert(rows)
+  } catch {
+    // fire-and-forget
+  }
+}
+
+async function appendTranscript(from: string, text: string, fromBot = false) {
+  try {
+    const supabase = getSupabase()
+    const cutoff = new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+    const { data: logs } = await supabase
+      .from('chat_logs')
+      .select('id, business_id, messages')
+      .eq('customer_phone', from)
+      .gte('updated_at', cutoff)
+      .order('updated_at', { ascending: false })
+      .limit(5)
+
+    const row = (logs || []).find(l => {
+      const arr = Array.isArray(l.messages) ? l.messages : []
+      const last = arr.length ? arr[arr.length - 1] : null
+      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes('opened your chat')
+    })
+
+    if (!row) return
+
+    const messages = Array.isArray(row.messages) ? row.messages : []
+    messages.push({ from: fromBot ? 'bot' : 'customer', text, at: new Date().toISOString() })
+    await supabase
+      .from('chat_logs')
+      .update({ messages, updated_at: new Date().toISOString() })
+      .eq('id', row.id)
+  } catch {
+    // best-effort transcript
+  }
+}
+
+async function refreshBusinessRating(businessId: string) {
+  try {
+    const supabase = getSupabase()
+    const { data: ratings } = await supabase
+      .from('ratings')
+      .select('rating')
+      .eq('business_id', businessId)
+    const list = ratings || []
+    if (list.length === 0) return
+    const avg = list.reduce((a, r) => a + Number(r.rating), 0) / list.length
+    await supabase
+      .from('businesses')
+      .update({ rating: Math.round(avg * 10) / 10, review_count: list.length })
+      .eq('id', businessId)
+  } catch {
+    // best-effort
+  }
+}
+
+async function handleRatingReply(from: string, session: ChatSession | null, text: string): Promise<boolean> {
+  const pendingBusinessId = session?.data?.rating_pending
+  if (!pendingBusinessId) return false
+
+  const supabase = getSupabase()
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('id, name')
+    .eq('id', pendingBusinessId)
+    .maybeSingle()
+
+  if (!business) return false
+
+  const lower = text.toLowerCase()
+  if (/^(skip|no|pass|nope)/.test(lower)) {
+    await saveSession(from, 'done', {})
+    await sendWhatsAppMessage(from, `No problem! Thanks for trying *${business.name}*. Reply *help* anytime.`)
+    return true
+  }
+
+  const match = text.trim().match(/^([1-5])\b[\s\S]*/)
+  if (!match) {
+    await sendWhatsAppMessage(
+      from,
+      `How was your experience with *${business.name}*? Reply a number *1–5* (1 = poor, 5 = excellent), or *skip*.`
+    )
+    return true
+  }
+
+  const rating = Number(match[1])
+  const comment = text.trim().slice(match[0].length).trim().replace(/^[-–—:.]\s*/, '')
+
+  await supabase.from('ratings').insert({
+    business_id: business.id,
+    customer_phone: from,
+    rating,
+    comment: comment.slice(0, 500),
+  })
+  await refreshBusinessRating(business.id)
+  await saveSession(from, 'done', {})
+
+  await sendWhatsAppMessage(
+    from,
+    [
+      `🙏 *Thank you!* You rated *${business.name}* ${rating}/5.`,
+      comment ? `Your comment: "${comment}"` : '',
+      '',
+      'Your review helps other customers. Reply *help* anytime.',
+    ].filter(Boolean).join('\n')
+  )
+  return true
+}
+
+async function promptRatingIfDue(from: string): Promise<ChatSession | null> {
+  try {
+    const supabase = getSupabase()
+    const cutoff = new Date(Date.now() - 48 * 3600 * 1000).toISOString()
+    const { data: logs } = await supabase
+      .from('chat_logs')
+      .select('business_id, messages')
+      .eq('customer_phone', from)
+      .gte('updated_at', cutoff)
+      .order('updated_at', { ascending: false })
+      .limit(3)
+
+    const opened = (logs || []).find(l => {
+      const arr = Array.isArray(l.messages) ? l.messages : []
+      const last = arr.length ? arr[arr.length - 1] : null
+      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes('opened your chat')
+    })
+
+    if (!opened?.business_id) return null
+
+    const { data: existingRating } = await supabase
+      .from('ratings')
+      .select('id')
+      .eq('business_id', opened.business_id)
+      .eq('customer_phone', from)
+      .gte('created_at', cutoff)
+      .maybeSingle()
+
+    if (existingRating) return null
+
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('name')
+      .eq('id', opened.business_id)
+      .maybeSingle()
+    if (!business) return null
+
+    const session = await getSession(from)
+    if (session?.step === 'rating') return session
+
+    await saveSession(from, 'rating', { rating_pending: opened.business_id })
+    await sendWhatsAppMessage(
+      from,
+      [
+        `Did you just chat with *${business.name}*?`,
+        '',
+        `Rate your experience 1–5 (1 = poor, 5 = excellent), add a short comment if you like, or reply *skip*.`,
+      ].join('\n')
+    )
+    return { phone: from, step: 'rating', data: { rating_pending: opened.business_id } }
+  } catch {
+    return null
+  }
+}
+
 async function sendSearchResults(from: string, text: string) {
   const city = findCity(text)
   const query = cleanQuery(text, city || undefined)
@@ -104,6 +276,8 @@ async function sendSearchResults(from: string, text: string) {
     return
   }
 
+  recordBotEvents(businesses)
+
   const lines: string[] = []
   lines.push(
     `Top ${businesses.length} result${businesses.length > 1 ? 's' : ''} for *${query || category}*${city ? ` in *${city}*` : ''}:`
@@ -116,7 +290,7 @@ async function sendSearchResults(from: string, text: string) {
         `📍 ${area}`,
         b.price_range ? `💰 ${b.price_range}` : '',
         b.rating > 0 ? `⭐ ${b.rating.toFixed(1)} (${b.review_count || 0})` : '',
-        `👉 Chat: https://wa.me/${b.phone}`,
+        `👉 Chat: ${SITE_URL}/go/${b.id}?f=${encodeURIComponent(from)}&via=${encodeURIComponent(query || category)}`,
         `🔗 ${SITE_URL}/business/${b.slug || b.id}`,
       ]
         .filter(Boolean)
@@ -125,7 +299,9 @@ async function sendSearchResults(from: string, text: string) {
   })
   lines.push('', 'Send *help* for more options.')
 
-  await sendWhatsAppMessage(from, lines.join('\n\n'))
+  const resultMessage = lines.join('\n\n')
+  await sendWhatsAppMessage(from, resultMessage)
+  appendTranscript(from, resultMessage, true)
 }
 
 async function publishBusiness(from: string, session: ChatSession) {
@@ -208,6 +384,9 @@ async function publishBusiness(from: string, session: ChatSession) {
       '',
       `✏️ Save this link to edit your listing later:`,
       `${SITE_URL}/edit?token=${token}`,
+      '',
+      `🔐 Create your portal account (stats, conversations, ranking):`,
+      `${SITE_URL}/account-setup?token=${token}`,
       '',
       'Reply *help* anytime.',
     ].join('\n')
@@ -423,6 +602,16 @@ export async function POST(request: Request) {
       const session = await getSession(from)
       const lower = text.toLowerCase()
 
+      if (session?.step === 'rating') {
+        if (lower === 'cancel' || lower === 'help') {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        await handleRatingReply(from, session, text)
+        continue
+      }
+
       if (session?.step && lower !== 'cancel' && lower !== 'help') {
         await continueRegistration(from, session, text)
         continue
@@ -450,6 +639,12 @@ export async function POST(request: Request) {
 
       if (lower === 'help' || lower === 'hi' || lower === 'hello') {
         await sendWhatsAppMessage(from, HELP_TEXT)
+        continue
+      }
+
+      appendTranscript(from, text)
+      const ratingSession = await promptRatingIfDue(from)
+      if (ratingSession?.step === 'rating') {
         continue
       }
 

@@ -1,6 +1,8 @@
 'use client'
 
-export default function WhatsAppButton({ phone }: { phone: string }) {
+import { trackEvent } from '@/lib/track'
+
+export default function WhatsAppButton({ phone, businessId }: { phone: string; businessId?: string }) {
   if (!phone) return null
 
   const cleaned = phone.replace(/[^0-9]/g, '')
@@ -10,6 +12,7 @@ export default function WhatsAppButton({ phone }: { phone: string }) {
 
   function handleClick(e: React.MouseEvent) {
     e.preventDefault()
+    if (businessId) trackEvent(businessId, 'click_whatsapp')
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
 
     if (isMobile) {
