@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import EditBusinessForm from '@/components/edit-business-form'
-import Navbar from '@/components/navbar'
+import { getApprovedCategories, getApprovedAreas } from '@/lib/approved-data'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,14 +31,27 @@ export default async function EditPage({
     redirect('/')
   }
 
+  const [approvedCategories, approvedAreas] = await Promise.all([
+    getApprovedCategories(),
+    getApprovedAreas(),
+  ])
+
+  const { data: pendingRequests } = await supabase
+    .from('feature_requests')
+    .select('type, name, city')
+    .eq('business_id', business.id)
+    .eq('status', 'pending')
+
   return (
-    <>
-      <Navbar />
-      <main className="min-h-screen py-8 px-4">
-        <div className="max-w-2xl mx-auto bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
-          <EditBusinessForm business={business} />
-        </div>
-      </main>
-    </>
+    <main className="min-h-screen py-8 px-4">
+      <div className="max-w-2xl mx-auto bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
+        <EditBusinessForm
+          business={business}
+          categoryOptions={approvedCategories.map(c => ({ value: c.name, label: `${c.icon} ${c.name}` }))}
+          approvedAreas={approvedAreas}
+          pendingFeatureNames={(pendingRequests || []).map(r => ({ type: r.type, name: r.name, city: r.city }))}
+        />
+      </div>
+    </main>
   )
 }

@@ -4,6 +4,8 @@ import './globals.css'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import PWARegistration from '@/components/pwa-registration'
+import BannerStrip from '@/components/banner-strip'
+import { getSupabase } from '@/lib/supabase-server'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,11 +34,25 @@ export const viewport: Viewport = {
   themeColor: '#25D366',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { data: banners } = await getSupabase()
+    .from('banners')
+    .select('id, text, link, link_label')
+    .eq('active', true)
+    .order('created_at', { ascending: false })
+
   return (
     <html lang="en">
       <body className={`${inter.variable} min-h-screen bg-white font-sans`}>
         <Navbar />
+        <BannerStrip
+          banners={(banners || []).map(b => ({
+            id: b.id,
+            text: b.text,
+            link: b.link || '',
+            link_label: b.link_label || 'Learn more',
+          }))}
+        />
         <PWARegistration />
         <img
           src="/wadbody.webp"

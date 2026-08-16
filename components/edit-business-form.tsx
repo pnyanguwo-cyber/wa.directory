@@ -3,14 +3,10 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Business } from '@/types'
-import { categories } from '@/data/categories'
+import { categories as staticCategories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import SearchSelect from '@/components/search-select'
-
-const categoryOptions = categories.map(c => ({
-  value: c.name,
-  label: `${c.icon} ${c.name}`,
-}))
+import MultiSearchSelect from '@/components/multi-search-select'
 
 const cityOptions = [
   { value: '*', label: 'Whole country' },
@@ -18,22 +14,36 @@ const cityOptions = [
 ]
 
 type LogoMode = 'url' | 'upload'
+type FeatureRequest = { type: 'category' | 'area'; name: string; city?: string }
 
-export default function EditBusinessForm({ business }: { business: Business }) {
+export default function EditBusinessForm({
+  business,
+  categoryOptions,
+  approvedAreas,
+  pendingFeatureNames,
+}: {
+  business: Business
+  categoryOptions: { value: string; label: string }[]
+  approvedAreas: { city: string; name: string }[]
+  pendingFeatureNames: { type: string; name: string; city?: string }[]
+}) {
   const [form, setForm] = useState({
     name: business.name,
     phone: business.phone,
     country_code: business.country_code || '+263',
     whatsapp_username: business.whatsapp_username || '',
-    category: business.category[0] || '',
     bio: business.bio || '',
     city: business.city || '',
-    area: business.area || '',
     price_range: business.price_range || '',
     catalog_link: business.catalog_link || '',
     logo_url: business.logo_url || '',
     website: (business as { website?: string }).website || '',
   })
+  const [categories, setCategories] = useState<string[]>(business.category || [])
+  const [areas, setAreas] = useState<string[]>(business.areas?.length ? business.areas : (business.area ? [business.area] : []))
+  const [requests, setRequests] = useState<FeatureRequest[]>(
+    pendingFeatureNames.map(p => ({ type: p.type as 'category' | 'area', name: p.name, city: p.city }))
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
@@ -44,9 +54,30 @@ export default function EditBusinessForm({ business }: { business: Business }) {
   const router = useRouter()
 
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
+
+  const allCategoryOptions = (() => {
+    const merged = new Map<string, string>()
+    for (const c of staticCategories) merged.set(c.name, c.icon)
+    for (const c of categoryOptions) merged.set(c.value, c.label.replace(/^\S+\s/, ''))
+    const list: { value: string; label: string }[] = []
+    merged.forEach((icon, name) => {
+      list.push({ value: name, label: `${icon} ${name}` })
+    })
+    return list.sort((a, b) => a.label.localeCompare(b.label))
+  })()
+
   const areaOptions = form.city && form.city !== '*'
-    ? [{ value: '', label: 'All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
+    ? [
+        ...(selectedCity?.areas || []).map(a => ({ value: a, label: a })),
+        ...approvedAreas
+          .filter(a => a.city === form.city)
+          .filter(a => !(selectedCity?.areas || []).some(s => s.toLowerCase() === a.name.toLowerCase()))
+          .map(a => ({ value: a.name, label: a.name })),
+      ]
     : []
+
+  const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
+  const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -57,6 +88,24 @@ export default function EditBusinessForm({ business }: { business: Business }) {
     }
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
+  }
+
+  function handleRequestCategory(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    if (allCategoryOptions.some(o => o.value.toLowerCase() === trimmed.toLowerCase())) return
+    if (categories.includes(trimmed)) return
+    setCategories(c => [...c, trimmed])
+    setRequests(r => [...r, { type: 'category', name: trimmed }])
+  }
+
+  function handleRequestArea(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || !form.city || form.city === '*') return
+    if (areaOptions.some(o => o.value.toLowerCase() === trimmed.toLowerCase())) return
+    if (areas.includes(trimmed)) return
+    setAreas(a => [...a, trimmed])
+    setRequests(r => [...r, { type: 'area', name: trimmed, city: form.city }])
   }
 
   async function handleSave() {
@@ -88,9 +137,10 @@ export default function EditBusinessForm({ business }: { business: Business }) {
           phone: form.phone,
           country_code: form.country_code,
           bio: form.bio,
-          category: form.category,
+          category: categories,
           city: form.city === '*' ? '' : form.city,
-          area: form.city === '*' ? '' : form.area,
+          area: form.city === '*' ? '' : (areas[0] || ''),
+          areas: form.city === '*' ? [] : areas,
           price_range: form.price_range,
           catalog_link: form.catalog_link,
           logo_url: logoUrl,
@@ -99,6 +149,15 @@ export default function EditBusinessForm({ business }: { business: Business }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to save')
+
+      for (const r of requests) {
+        fetch('/api/feature-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: r.type, name: r.name, city: r.city || '', business_id: business.id }),
+        }).catch(() => {})
+      }
+
       setSaved(true)
       setTimeout(() => router.push(`/business/${business.slug || business.id}`), 1500)
     } catch (err) {
@@ -163,13 +222,23 @@ export default function EditBusinessForm({ business }: { business: Business }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-text-primary mb-1.5">Category</label>
-          <SearchSelect
-            options={categoryOptions}
-            value={form.category}
-            onChange={v => setForm(f => ({ ...f, category: v }))}
-            placeholder="Select category"
+          <label className="block text-sm font-medium text-text-primary mb-1.5">
+            Categories <span className="text-text-secondary font-normal">pick all that apply</span>
+          </label>
+          <MultiSearchSelect
+            options={allCategoryOptions}
+            values={categories}
+            onChange={setCategories}
+            pending={pendingCategoryNames}
+            onRequestName={handleRequestCategory}
+            placeholder="Select categories"
           />
+          <p className="text-xs text-whatsapp-600 mt-1">Can't find yours? Type it and press Enter to request it.</p>
+          {pendingCategoryNames.length > 0 && (
+            <p className="text-xs text-amber-600 mt-1">
+              Requested: {pendingCategoryNames.join(', ')} (pending admin approval)
+            </p>
+          )}
         </div>
 
         <div>
@@ -182,24 +251,41 @@ export default function EditBusinessForm({ business }: { business: Business }) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SearchSelect
             options={cityOptions}
             value={form.city}
-            onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
+            onChange={v => setForm(f => ({ ...f, city: v }))}
             placeholder="Select city"
             label="Town/city your business is based in"
           />
-          {form.city && form.city !== '*' && (
-            <SearchSelect
-              options={areaOptions}
-              value={form.area}
-              onChange={v => setForm(f => ({ ...f, area: v }))}
-              placeholder="Select area"
-              label="Areas you cover"
-            />
+          {form.city && form.city !== '*' ? (
+            <div>
+              <MultiSearchSelect
+                options={areaOptions}
+                values={areas}
+                onChange={setAreas}
+                primary
+                pending={pendingAreaNames}
+                onRequestName={handleRequestArea}
+                placeholder="Select areas"
+                label="Areas you cover"
+                hint={
+                  areas.length === 0
+                    ? undefined
+                    : areas.length === 1
+                      ? 'Your primary location is marked orange. Customers will see it highlighted.'
+                      : 'First area (orange) is your primary location. Add more if you cover them.'
+                }
+              />
+            </div>
+          ) : (
+            <div />
           )}
         </div>
+        {form.city === '*' && (
+          <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country</p>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Average Price <span className="text-text-secondary font-normal">(optional)</span></label>

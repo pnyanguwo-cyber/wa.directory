@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
-import { matchCategory, categories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
+import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'wa-directory-verify-2024'
 const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
@@ -69,7 +69,8 @@ function findArea(city: string, text: string): string | null {
 async function sendSearchResults(from: string, text: string) {
   const city = findCity(text)
   const query = cleanQuery(text, city || undefined)
-  const category = matchCategory(query || text)
+  const approved = await getApprovedCategories()
+  const category = matchCategoryAgainst(query || text, approved)
 
   const orFilters: string[] = []
   if (query) {
@@ -142,7 +143,7 @@ async function publishBusiness(from: string, session: ChatSession) {
   const slug = `${generateSlug(name)}-${Math.random().toString(36).slice(2, 8)}`
   const location = city ? [area, city, 'Zimbabwe'].filter(Boolean).join(', ') : 'Zimbabwe'
 
-  const { error } = await getSupabase().from('businesses').insert({
+  const { data: inserted, error } = await getSupabase().from('businesses').insert({
     name,
     slug,
     whatsapp_username: username,
@@ -152,6 +153,7 @@ async function publishBusiness(from: string, session: ChatSession) {
     country_code: countryCode,
     city: city || '',
     area: city ? area : '',
+    areas: city ? [area].filter(Boolean) : [],
     phone: fullPhone,
     whatsapp_link: `https://wa.me/${fullPhone}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`,
     catalog_link: null,
@@ -161,12 +163,39 @@ async function publishBusiness(from: string, session: ChatSession) {
     verified: false,
     rating: 0,
     review_count: 0,
-  })
+  }).select('id')
 
   if (error) {
     console.error('[webhook] register insert failed:', error.message)
     await sendWhatsAppMessage(from, 'Sorry, something went wrong saving your listing. Please try again later.')
     return
+  }
+
+  // Auto-request unapproved category / area so admins can review them
+  const businessId = inserted?.[0]?.id
+  if (businessId) {
+    const [approvedCats, approvedAreas] = await Promise.all([
+      getApprovedCategories(),
+      getApprovedAreas(),
+    ])
+    const approvedCatNames = new Set(approvedCats.map(c => c.name))
+    if (!approvedCatNames.has(category)) {
+      try {
+        await getSupabase().from('feature_requests').insert({
+          type: 'category', name: category, city: '', business_id: businessId, status: 'pending',
+        })
+      } catch {}
+    }
+    if (area && city) {
+      const approvedAreaNames = new Set(approvedAreas.filter(a => a.city === city).map(a => a.name))
+      if (!approvedAreaNames.has(area)) {
+        try {
+          await getSupabase().from('feature_requests').insert({
+            type: 'area', name: area, city, business_id: businessId, status: 'pending',
+          })
+        } catch {}
+      }
+    }
   }
 
   await sendWhatsAppMessage(
@@ -221,7 +250,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
       await saveSession(from, 'phone', { ...data, whatsapp_username: t })
       await sendWhatsAppMessage(
         from,
-        `Got it *@${t}*. Now your *phone number* (e.g. 712345678) — customers will use it to WhatsApp you.`
+        `Got it *@${t}*. Now your *phone number* (e.g. 712345678). Customers will use it to WhatsApp you.`
       )
       break
 
@@ -241,9 +270,10 @@ async function continueRegistration(from: string, session: ChatSession, text: st
     }
 
     case 'category': {
-      const category = matchCategory(t)
+      const approved = await getApprovedCategories()
+      const category = matchCategoryAgainst(t, approved)
       if (category === 'Other') {
-        const list = categories
+        const list = approved
           .filter(c => c.name !== 'Other')
           .slice(0, 12)
           .map(c => `${c.icon} ${c.name}`)
@@ -252,7 +282,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
         break
       }
       await saveSession(from, 'description', { ...data, category })
-      await sendWhatsAppMessage(from, `*${category}* — great! Now describe your business in 1-2 sentences (what you offer):`)
+      await sendWhatsAppMessage(from, `*${category}*! Great, now describe your business in 1-2 sentences (what you offer):`)
       break
     }
 
@@ -290,7 +320,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
         const areas = cityObj.areas.slice(0, 12).join(', ')
         await sendWhatsAppMessage(
           from,
-          `*${city}* — which area?\n\n${areas}...\n\nOr type *skip* for the whole city.`
+          `*${city}*: which area?\n\n${areas}...\n\nOr type *skip* for the whole city.`
         )
       } else {
         const merged: ChatSessionData = { ...data, city, area: '' }

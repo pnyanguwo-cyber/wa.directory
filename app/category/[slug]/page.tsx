@@ -5,9 +5,9 @@ import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
 import SkeletonCard from '@/components/skeleton-card'
-import { matchCategory } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { generateSEOBlurb } from '@/lib/gemini'
+import { getApprovedCategories, matchCategoryAgainst } from '@/lib/approved-data'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -58,7 +58,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const parsed = parseSlug(params.slug)
   if (!parsed) return { title: 'Category | WA Directory' }
 
-  const matched = matchCategory(parsed.category)
+  const approved = await getApprovedCategories()
+  const matched = matchCategoryAgainst(parsed.category, approved)
 
   return {
     title: `Best ${matched} in ${parsed.location} | WA Directory`,
@@ -81,7 +82,8 @@ function CategorySkeleton() {
 }
 
 async function CategoryResults({ category, location }: { category: string; location: string }) {
-  const matchedCategory = matchCategory(category)
+  const approved = await getApprovedCategories()
+  const matchedCategory = matchCategoryAgainst(category, approved)
 
   const query = getSupabase()
     .from('businesses')

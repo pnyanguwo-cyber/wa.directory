@@ -47,6 +47,7 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS edit_token TEXT;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_username TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS areas TEXT[] DEFAULT '{}';
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
@@ -89,3 +90,68 @@ ON CONFLICT (id) DO NOTHING;
 DROP POLICY IF EXISTS "Logos public read" ON storage.objects;
 CREATE POLICY "Logos public read" ON storage.objects
   FOR SELECT USING (bucket_id = 'logos');
+
+-- Admin-managed categories (approved categories live here)
+CREATE TABLE IF NOT EXISTS categories (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL UNIQUE,
+  icon TEXT DEFAULT '📋',
+  keywords TEXT[] DEFAULT '{}',
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Admin-managed service areas per city
+CREATE TABLE IF NOT EXISTS areas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  city TEXT NOT NULL,
+  name TEXT NOT NULL,
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (city, name)
+);
+
+-- Public requests for new categories / areas (pending admin approval)
+CREATE TABLE IF NOT EXISTS feature_requests (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  type TEXT NOT NULL CHECK (type IN ('category', 'area')),
+  name TEXT NOT NULL,
+  city TEXT DEFAULT '',
+  business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  corrected_name TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (business_id, type, name)
+);
+
+-- Site-wide notification banners
+CREATE TABLE IF NOT EXISTS banners (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  text TEXT NOT NULL,
+  link TEXT DEFAULT '',
+  link_label TEXT DEFAULT 'Learn more',
+  active BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_categories_active ON categories (active);
+CREATE INDEX IF NOT EXISTS idx_areas_city ON areas (city);
+CREATE INDEX IF NOT EXISTS idx_feature_requests_status ON feature_requests (status);
+CREATE INDEX IF NOT EXISTS idx_banners_active ON banners (active);
+
+ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE areas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE feature_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE banners ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read categories" ON categories;
+CREATE POLICY "Public read categories" ON categories FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public read areas" ON areas;
+CREATE POLICY "Public read areas" ON areas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public read feature_requests" ON feature_requests;
+CREATE POLICY "Public read feature_requests" ON feature_requests FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public read banners" ON banners;
+CREATE POLICY "Public read banners" ON banners FOR SELECT USING (true);

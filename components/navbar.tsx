@@ -8,7 +8,7 @@ export default function Navbar() {
           <img
             src="/logo-square.png"
             alt="WA Directory logo"
-            className="w-8 h-8 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
+            className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
           />
           <span className="text-lg font-extrabold text-text-primary tracking-tight group-hover:text-whatsapp-700 transition-colors leading-tight">
             WA Directory

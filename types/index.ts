@@ -8,6 +8,7 @@
   country_code?: string
   city: string
   area: string
+  areas?: string[]
   phone: string
   whatsapp_username?: string
   whatsapp_link?: string

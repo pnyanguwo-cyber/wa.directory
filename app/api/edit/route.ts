@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, price_range, catalog_link, logo_url, website } = body
+    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website } = body
 
     if (!edit_token) {
       return NextResponse.json({ error: 'Edit token is required' }, { status: 400 })
@@ -37,6 +37,9 @@ export async function POST(request: Request) {
     const fullPhone = phone.replace(/[^0-9]/g, '')
     const whatsappLink = `https://wa.me/${fullPhone}?text=Hi%2C%20I%20found%20you%20on%20WA%20Directory`
 
+    const areaList = Array.isArray(areas) ? areas.filter(Boolean) : []
+    const primaryArea = areaList[0] || area || ''
+
     const { error: updateError } = await supabase
       .from('businesses')
       .update({
@@ -48,8 +51,9 @@ export async function POST(request: Request) {
         phone: fullPhone,
         country_code: country_code || null,
         city: city || null,
-        area: area || null,
-        location: [area, city, 'Zimbabwe'].filter(Boolean).join(', ') || '',
+        area: primaryArea || null,
+        areas: areaList,
+        location: [areaList.join(', '), city, 'Zimbabwe'].filter(Boolean).join(', ') || '',
         price_range: price_range || null,
         catalog_link: catalog_link || null,
         logo_url: logo_url || null,

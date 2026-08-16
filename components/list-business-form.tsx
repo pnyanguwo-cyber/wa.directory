@@ -6,20 +6,19 @@ import Link from 'next/link'
 import { getClient } from '@/lib/supabase-client'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
-import { categories, matchCategory } from '@/data/categories'
+import { categories as staticCategories } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
+import MultiSearchSelect from '@/components/multi-search-select'
 import QrCard from '@/components/qr-card'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
+interface ApprovedCategory { name: string; icon: string }
+interface ApprovedArea { city: string; name: string }
+
 const countryOptions = countryCodes.map(c => ({
   value: c.code,
   label: `${c.flag} ${c.code} ${c.country}`,
-}))
-
-const categoryOptions = categories.map(c => ({
-  value: c.name,
-  label: `${c.icon} ${c.name}`,
 }))
 
 const cityOptions = [
@@ -37,8 +36,15 @@ function generateSlug(name: string): string {
 }
 
 type LogoMode = 'url' | 'upload'
+type FeatureRequest = { type: 'category' | 'area'; name: string; city?: string }
 
-export default function ListBusinessForm() {
+export default function ListBusinessForm({
+  categoryOptions,
+  approvedAreas,
+}: {
+  categoryOptions: { value: string; label: string }[]
+  approvedAreas: ApprovedArea[]
+}) {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [bioLoading, setBioLoading] = useState(false)
@@ -61,27 +67,50 @@ export default function ListBusinessForm() {
     countryCode: '+263',
     phone: '',
     whatsapp_username: '',
-    category: '',
     description: '',
     bio: '',
     city: '',
-    area: '',
     catalog_link: '',
     logo_url: '',
     price_range: '',
     website: '',
   })
+  const [categories, setCategories] = useState<string[]>([])
+  const [areas, setAreas] = useState<string[]>([])
+  const [requests, setRequests] = useState<FeatureRequest[]>([])
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
   const phoneError = form.phone ? validatePhone(form.countryCode, form.phone) : null
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
+
+  const allCategoryOptions = (() => {
+    const merged = new Map<string, string>()
+    for (const c of staticCategories) merged.set(c.name, c.icon)
+    for (const c of categoryOptions) merged.set(c.value, c.label.replace(/^\S+\s/, ''))
+    const list: { value: string; label: string }[] = []
+    merged.forEach((icon, name) => {
+      list.push({ value: name, label: `${icon} ${name}` })
+    })
+    return list.sort((a, b) => a.label.localeCompare(b.label))
+  })()
+
   const areaOptions = form.city && form.city !== '*'
-    ? [{ value: '', label: 'All areas' }, ...(selectedCity?.areas || []).map(a => ({ value: a, label: a }))]
+    ? [
+        ...(selectedCity?.areas || []).map(a => ({ value: a, label: a })),
+        ...approvedAreas
+          .filter(a => a.city === form.city)
+          .filter(a => !(selectedCity?.areas || []).some(s => s.toLowerCase() === a.name.toLowerCase()))
+          .map(a => ({ value: a.name, label: a.name })),
+      ]
     : []
-  const hasLocation = form.city === '*' || !!form.city || !!form.area
+
+  const hasLocation = form.city === '*' || !!form.city || areas.length > 0
   const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
-  const isValidStep2 = form.description.trim() && !!form.category && hasLocation
+  const isValidStep2 = form.description.trim() && categories.length > 0 && hasLocation
+
+  const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
+  const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
 
   async function handleGenerateBio() {
     if (!form.description.trim()) return
@@ -111,6 +140,34 @@ export default function ListBusinessForm() {
     setLogoPreview(URL.createObjectURL(file))
   }
 
+  async function submitFeatureRequests(businessId: string) {
+    for (const r of requests) {
+      fetch('/api/feature-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: r.type, name: r.name, city: r.city || '', business_id: businessId }),
+      }).catch(() => {})
+    }
+  }
+
+  function handleRequestCategory(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    if (allCategoryOptions.some(o => o.value.toLowerCase() === trimmed.toLowerCase())) return
+    if (categories.includes(trimmed)) return
+    setCategories(c => [...c, trimmed])
+    setRequests(r => [...r, { type: 'category', name: trimmed }])
+  }
+
+  function handleRequestArea(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || !form.city || form.city === '*') return
+    if (areaOptions.some(o => o.value.toLowerCase() === trimmed.toLowerCase())) return
+    if (areas.includes(trimmed)) return
+    setAreas(a => [...a, trimmed])
+    setRequests(r => [...r, { type: 'area', name: trimmed, city: form.city }])
+  }
+
   async function handleSubmit() {
     setLoading(true)
     try {
@@ -130,7 +187,7 @@ export default function ListBusinessForm() {
       const whatsappLink = `https://wa.me/${fullPhone}?text=${WA_MSG}`
       const location = form.city === '*'
         ? 'Zimbabwe'
-        : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')
+        : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')
 
       const token = crypto.randomUUID()
       const price = form.price_range.trim()
@@ -143,11 +200,12 @@ export default function ListBusinessForm() {
           slug,
           whatsapp_username: form.whatsapp_username.trim(),
           bio: form.bio || `Professional ${form.description} services.`,
-          category: [form.category],
+          category: categories,
           location,
           country_code: form.countryCode,
           city: form.city === '*' ? '' : form.city,
-          area: form.city === '*' ? '' : form.area,
+          area: form.city === '*' ? '' : (areas[0] || ''),
+          areas: form.city === '*' ? [] : areas,
           phone: fullPhone,
           whatsapp_link: whatsappLink,
           catalog_link: form.catalog_link.trim() || null,
@@ -165,10 +223,11 @@ export default function ListBusinessForm() {
       if (error) throw error
       setEditToken(token)
       setSubmittedId(data.slug || data.id)
+      submitFeatureRequests(data.id)
       fetch('/api/admin/notify-new-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business: { name: form.name, category: form.category, city: form.city, phone: fullPhone, id: data.id } }),
+        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.city, phone: fullPhone, id: data.id } }),
       }).catch(() => {})
     } catch (err) {
       const msg =
@@ -198,6 +257,14 @@ export default function ListBusinessForm() {
         <h2 className="text-2xl font-bold text-text-primary mb-1">Submitted for Approval!</h2>
         <p className="text-text-secondary mb-2">{form.name} is pending approval.</p>
         <p className="text-sm text-text-secondary mb-6">Once approved, customers will find you on WA Directory.</p>
+        {requests.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
+            <p className="text-xs font-semibold text-amber-800 mb-1">Your requests are in review:</p>
+            <p className="text-sm text-amber-800">
+              {requests.map(r => `"${r.name}"`).join(', ')} will appear once an admin approves {requests.length > 1 ? 'them' : 'it'}.
+            </p>
+          </div>
+        )}
         <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 mb-6 text-left">
           <p className="text-xs font-semibold text-whatsapp-800 mb-1">Save this link to edit your listing later:</p>
           <p className="text-sm text-whatsapp-700 break-all font-mono bg-white rounded-lg p-2 border border-whatsapp-100 select-all">
@@ -329,19 +396,21 @@ export default function ListBusinessForm() {
         <div className="space-y-4 animate-fade-in">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Category <span className="text-text-secondary font-normal">type what you sell</span>
+              Categories <span className="text-text-secondary font-normal">pick all that apply</span>
             </label>
-            <SearchSelect
-              options={categoryOptions}
-              value={form.category}
-              onChange={v => setForm(f => ({ ...f, category: v }))}
+            <MultiSearchSelect
+              options={allCategoryOptions}
+              values={categories}
+              onChange={setCategories}
+              pending={pendingCategoryNames}
+              onRequestName={handleRequestCategory}
               onEnterNext={() => descriptionRef.current?.focus()}
               placeholder="e.g. cakes, food, magetsi..."
             />
-            <p className="text-xs text-whatsapp-600 mt-1">Start typing to search (e.g. plumber, salon)</p>
-            {form.category && (
-              <p className="text-xs text-whatsapp-600 mt-1">
-                {categories.find(c => c.name === form.category)?.icon} Selected: {form.category}
+            <p className="text-xs text-whatsapp-600 mt-1">Start typing to search (e.g. plumber, salon). Can't find yours? Type it and press Enter to request it.</p>
+            {pendingCategoryNames.length > 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                Requested: {pendingCategoryNames.join(', ')} (pending admin approval)
               </p>
             )}
           </div>
@@ -358,34 +427,44 @@ export default function ListBusinessForm() {
             />
             <p className="text-xs text-whatsapp-600 mt-1">What you sell, your services, and your prices</p>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SearchSelect
               options={cityOptions}
               value={form.city}
-              onChange={v => setForm(f => ({ ...f, city: v, area: v === '*' ? '' : f.area }))}
+              onChange={v => setForm(f => ({ ...f, city: v }))}
               onEnterNext={() => (form.city && form.city !== '*' ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
               placeholder="Select city"
               label="Town/city your business is based in"
             />
-            {form.city && form.city !== '*' && (
-              <SearchSelect
-                options={areaOptions}
-                value={form.area}
-                onChange={v => setForm(f => ({ ...f, area: v }))}
-                onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
-                inputRef={areaInputRef}
-                placeholder="Select area"
-                label="Areas you cover"
-              />
+            {form.city && form.city !== '*' ? (
+              <div>
+                <MultiSearchSelect
+                  options={areaOptions}
+                  values={areas}
+                  onChange={setAreas}
+                  primary
+                  pending={pendingAreaNames}
+                  onRequestName={handleRequestArea}
+                  onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
+                  inputRef={areaInputRef}
+                  placeholder="Select areas"
+                  label="Areas you cover"
+                  hint={
+                    areas.length === 0
+                      ? undefined
+                      : areas.length === 1
+                        ? 'Your primary location is marked orange. Customers will see it highlighted.'
+                        : 'First area (orange) is your primary location. Add more if you cover them.'
+                  }
+                />
+              </div>
+            ) : (
+              <div />
             )}
           </div>
-          <p className="text-xs text-whatsapp-600 -mt-2">
-            {form.city && form.city !== '*'
-              ? 'Where you deliver or serve customers — or choose All areas'
-              : form.city === '*'
-                ? 'You serve the whole country'
-                : 'Pick the town/city where your business is based'}
-          </p>
+          {form.city === '*' && (
+            <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country</p>
+          )}
           {!hasLocation && (
             <p className="text-xs text-danger">Select a city or area</p>
           )}
@@ -587,15 +666,17 @@ export default function ListBusinessForm() {
               <span className="font-medium text-text-primary">WhatsApp Username:</span> @{form.whatsapp_username}
             </p>
             <p className="text-sm text-text-secondary">
-              <span className="font-medium text-text-primary">Category:</span>{' '}
-              {form.category ? `${categories.find(c => c.name === form.category)?.icon || ''} ${form.category}` : 'Not set'}
+              <span className="font-medium text-text-primary">Categories:</span>{' '}
+              {categories.length > 0
+                ? categories.map(c => `${allCategoryOptions.find(o => o.value === c)?.label.split(' ')[0] || '📋'} ${c}`).join(', ')
+                : 'Not set'}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Phone:</span> {form.countryCode} {form.phone}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Location:</span>{' '}
-              {form.city === '*' ? 'Zimbabwe' : [form.area, form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
+              {form.city === '*' ? 'Zimbabwe' : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Price:</span> {form.price_range ? (form.price_range.startsWith('$') ? form.price_range : `$${form.price_range}`) : 'Not set'}

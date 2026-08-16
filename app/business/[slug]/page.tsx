@@ -9,6 +9,7 @@ import QrCard from '@/components/qr-card'
 import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
+import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -126,6 +127,17 @@ async function BusinessContent({ slug }: { slug: string }) {
 
   if (!business) notFound()
 
+  const [approvedCategoryNames, approvedAreaNames] = await Promise.all([
+    getApprovedCategoryNames(),
+    getApprovedAreaNames(business.city || ''),
+  ])
+
+  const businessAreas = business.areas?.length
+    ? business.areas
+    : business.area
+      ? [business.area]
+      : []
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'LocalBusiness',
@@ -202,13 +214,47 @@ async function BusinessContent({ slug }: { slug: string }) {
             </div>
 
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              {(business.city || business.area || business.location) && (
+              {businessAreas.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <svg className="w-4 h-4 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  {businessAreas.map((a, i) => {
+                    const isPending = !approvedAreaNames.has(a)
+                    return (
+                      <span
+                        key={a}
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium border ${
+                          i === 0
+                            ? 'bg-orange-50 text-orange-800 border-orange-300'
+                            : isPending
+                              ? 'bg-gray-100 text-gray-500 border-gray-200'
+                              : 'bg-surface text-text-secondary border-gray-200'
+                        }`}
+                      >
+                        {i === 0 && (
+                          <>
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500" aria-hidden="true" />
+                            <span className="font-semibold">Primary</span>
+                          </>
+                        )}
+                        {a}
+                        {isPending && <span className="text-[10px] font-semibold uppercase tracking-wide">Pending</span>}
+                      </span>
+                    )
+                  })}
+                  {business.city && (
+                    <span className="text-text-secondary text-sm">{business.city}</span>
+                  )}
+                </div>
+              ) : (
                 <p className="text-text-secondary text-sm flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  {[business.area, business.city, 'Zimbabwe'].filter(Boolean).join(', ') || business.location}
+                  {[business.city, 'Zimbabwe'].filter(Boolean).join(', ') || business.location}
                 </p>
               )}
               {business.price_range && (
@@ -244,12 +290,30 @@ async function BusinessContent({ slug }: { slug: string }) {
               <div className="mb-6">
                 <h2 className="text-[16px] font-semibold text-text-primary mb-2">Categories</h2>
                 <div className="flex flex-wrap gap-2">
-                  {business.category.map((cat, i) => (
-                    <span key={i} className="chip">
-                      {cat}
-                    </span>
-                  ))}
+                  {business.category.map((cat, i) => {
+                    const isPending = !approvedCategoryNames.has(cat)
+                    return (
+                      <span
+                        key={i}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm border ${
+                          isPending
+                            ? 'bg-gray-100 text-gray-500 border-gray-200'
+                            : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
+                        }`}
+                      >
+                        {cat}
+                        {isPending && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Pending</span>
+                        )}
+                      </span>
+                    )
+                  })}
                 </div>
+                {business.category.some(c => !approvedCategoryNames.has(c)) && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    Greyed categories are awaiting admin approval and will appear in search once approved.
+                  </p>
+                )}
               </div>
             )}
 

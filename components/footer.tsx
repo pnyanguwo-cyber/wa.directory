@@ -38,11 +38,11 @@ export default function Footer() {
             </ul>
           </div>
           <div>
-            <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+            <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
               <img
-                src="/logo-square.png"
+                src="/favicon.png"
                 alt="WA Directory logo"
-                className="w-8 h-8 object-contain rounded-lg"
+                className="h-11 w-auto object-contain"
               />
               <span className="font-bold text-text-primary">WA Directory</span>
             </div>
