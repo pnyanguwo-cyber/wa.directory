@@ -81,6 +81,15 @@
   .animate-fade-in {
     animation: fade-in 250ms ease-out;
   }
+
+  .animate-bounce-slow {
+    animation: bounce-slow 1.6s ease-in-out infinite;
+  }
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
 @keyframes slide-up {

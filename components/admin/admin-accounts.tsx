@@ -64,14 +64,23 @@ export default function AdminAccounts() {
             </p>
             <form onSubmit={e => { e.preventDefault(); act('reset', { account_id: resetting.id, new_password: newPassword }) }} className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-text-secondary mb-1 block">New password (min 6 characters)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-medium text-text-secondary block">New password (min 6 characters)</label>
+                  <button
+                    type="button"
+                    onClick={() => setNewPassword('wd-' + Math.random().toString(36).slice(2, 10))}
+                    className="text-[11px] font-semibold text-whatsapp-600 hover:underline"
+                  >
+                    Generate random
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
                   minLength={6}
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  className="input-field text-sm"
+                  className="input-field text-sm font-mono"
                   placeholder="temp-pass-2026"
                   autoFocus
                 />

@@ -105,6 +105,106 @@ export const categories: Category[] = [
     keywords: ['vet', 'pet', 'grooming', 'dog', 'imbwa', 'katsi', 'mhuka', 'pet shop', 'animal', 'veterinary', 'pet food', 'puppy', 'cat'],
     icon: '🐾',
   },
+  {
+    name: 'Mining',
+    keywords: ['mining', 'coal', 'metal ore', 'gold', 'iron', 'copper', 'chrome', 'extraction', 'mine', 'mineral', 'quarry', 'smelting'],
+    icon: '⛏️',
+  },
+  {
+    name: 'Utilities',
+    keywords: ['electricity', 'power generation', 'water supply', 'water treatment', 'utility', 'energy', 'distribution', 'power line', 'borehole'],
+    icon: '💧',
+  },
+  {
+    name: 'Manufacturing',
+    keywords: ['manufacturing', 'factory', 'production', 'processing', 'packaging', 'textile', 'fabric', 'furniture production', 'food processing', 'plant', 'assembly'],
+    icon: '🏭',
+  },
+  {
+    name: 'Wholesale',
+    keywords: ['wholesale', 'bulk', 'distributor', 'wholesale food', 'wholesale electronics', 'bulk supply', 'trade', 'wholesaler'],
+    icon: '📦',
+  },
+  {
+    name: 'Security Services',
+    keywords: ['security', 'guards', 'surveillance', 'protection', 'armed response', 'cctv', 'security company', 'bodyguard', 'alarm', 'kuchengetedza'],
+    icon: '🛡️',
+  },
+  {
+    name: 'Funeral Services',
+    keywords: ['funeral', 'burial', 'memorial', 'coffin', 'hearse', 'funeral services', 'burial services', 'cremation', 'kufirwa', 'rassure'],
+    icon: '⚰️',
+  },
+  {
+    name: 'Fitness & Gym',
+    keywords: ['gym', 'fitness', 'workout', 'exercise', 'trainer', 'bodybuilding', 'crossfit', 'aerobics', 'yoga', 'pilates', 'wellness', 'personal trainer'],
+    icon: '🏋️',
+  },
+  {
+    name: 'Printing',
+    keywords: ['printing', 'print shop', 'publishing', 'banner', 'flyers', 'brochures', 'business cards', 't-shirt printing', 'branding', 'print', 'posters'],
+    icon: '🖨️',
+  },
+  {
+    name: 'Jewelry',
+    keywords: ['jewelry', 'jewellery', 'rings', 'watches', 'gold', 'silver', 'ornaments', 'beads', 'custom jewelry', 'earrings', 'necklace', 'wedding rings'],
+    icon: '💍',
+  },
+  {
+    name: 'Entertainment',
+    keywords: ['entertainment', 'movies', 'music', 'events', 'concerts', 'cinema', 'theatre', 'dj', 'party', 'amusement', 'event planning', 'weddings', 'corporate events', 'fairs', 'games'],
+    icon: '🎬',
+  },
+  {
+    name: 'Hotel & Lodging',
+    keywords: ['hotel', 'lodge', 'accommodation', 'lodging', 'guest house', 'motel', 'inn', 'bed and breakfast', 'backpackers', 'hostel', 'resort', 'airbnb'],
+    icon: '🏨',
+  },
+  {
+    name: 'Travel & Tourism',
+    keywords: ['travel', 'tourism', 'tour', 'safari', 'booking', 'flight', 'visa', 'holiday', 'adventure', 'excursions', 'travel agency', 'tours'],
+    icon: '✈️',
+  },
+  {
+    name: 'Brewery',
+    keywords: ['brewery', 'beer', 'brewing', 'beverages', 'cider', 'stout', 'lager', 'malt', 'craft beer'],
+    icon: '🍺',
+  },
+  {
+    name: 'Professional Services',
+    keywords: ['consulting', 'business consulting', 'hr', 'recruiting', 'recruitment', 'staffing', 'architecture', 'engineering', 'strategy', 'management consulting', 'public relations', 'communications', 'audit'],
+    icon: '👔',
+  },
+  {
+    name: 'Music Studio',
+    keywords: ['music studio', 'recording', 'mixing', 'mastering', 'production', 'sound', 'audio', 'music production', 'studio'],
+    icon: '🎵',
+  },
+  {
+    name: 'Translation',
+    keywords: ['translation', 'translator', 'interpreting', 'interpretation', 'language services', 'document translation', 'shona', 'ndebele'],
+    icon: '🌐',
+  },
+  {
+    name: 'Nonprofit',
+    keywords: ['nonprofit', 'charity', 'ngo', 'community', 'donations', 'fundraising', 'volunteer', 'welfare', 'trust', 'foundation'],
+    icon: '🤝',
+  },
+  {
+    name: 'Daycare',
+    keywords: ['daycare', 'childcare', 'creche', 'nursery', 'babysitting', 'after school care', 'kindergarten', 'kids care'],
+    icon: '👶',
+  },
+  {
+    name: 'Coworking Space',
+    keywords: ['coworking', 'shared office', 'office space', 'meeting rooms', 'workspace', 'hot desk', 'serviced office'],
+    icon: '🏢',
+  },
+  {
+    name: 'Landscaping',
+    keywords: ['landscaping', 'garden design', 'lawn care', 'grounds maintenance', 'gardening', 'irrigation', 'turf', 'landscaper', 'garden service'],
+    icon: '🌳',
+  },
   { name: 'Other', keywords: [], icon: '📋' },
 ]
 

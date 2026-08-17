@@ -5,6 +5,7 @@ import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import PWARegistration from '@/components/pwa-registration'
 import BannerStrip from '@/components/banner-strip'
+import WhatsAppSupportButton from '@/components/whatsapp-support-button'
 import { getSupabase } from '@/lib/supabase-server'
 
 const inter = Inter({
@@ -54,6 +55,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }))}
         />
         <PWARegistration />
+        <WhatsAppSupportButton />
         <img
           src="/wadbody.webp"
           alt=""

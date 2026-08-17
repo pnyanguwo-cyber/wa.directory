@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getPortalBusiness, isPaidSubscriber } from '@/lib/portal'
+import { getPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import PortalRanking from '@/components/portal/ranking'
 
@@ -8,9 +8,6 @@ export const dynamic = 'force-dynamic'
 export default async function PortalRankingPage() {
   const business = await getPortalBusiness()
   if (!business) redirect('/login')
-
-  const paid = await isPaidSubscriber(business.id)
-  if (!paid) redirect('/portal/billing')
 
   const categories = (business.category || []).filter(Boolean)
   const mainCategory = categories[0] || 'Other'

@@ -288,6 +288,28 @@ export default function ListBusinessForm({
             downloadName={`${form.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edit-link.png`}
           />
         </div>
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card mb-6">
+          <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once approved)</p>
+          <p className="text-xs text-text-secondary mb-4">
+            Print these and place them on your counter, shelves and packaging — customers scan to chat with you directly.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <QrCard
+              value={typeof window !== 'undefined' ? `${window.location.origin}/qr/${submittedId}` : ''}
+              title="Customer chat QR"
+              subtitle="Opens WhatsApp chat with you — tracked"
+              size={130}
+              downloadName={`${submittedId}-customer-chat-qr.png`}
+            />
+            <QrCard
+              value={typeof window !== 'undefined' ? `${window.location.origin}/portal` : ''}
+              title="Portal QR"
+              subtitle="Opens your private portal"
+              size={130}
+              downloadName={`${submittedId}-portal-qr.png`}
+            />
+          </div>
+        </div>
         <div className="flex flex-col gap-3">
           <Link href={`/`} className="btn-primary py-3 text-[16px]">
             Back to Home

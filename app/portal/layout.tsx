@@ -41,6 +41,34 @@ export default async function PortalLayout({ children }: { children: React.React
 
         <PortalTabs />
 
+        {!business.verified && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+            <p className="text-sm font-bold text-amber-800 flex items-center gap-2">
+              <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+              </svg>
+              Your listing is pending approval
+            </p>
+            <p className="text-xs text-amber-800 leading-relaxed">
+              Customers can't find you yet. An admin will review your listing shortly — you'll be notified here once you're live.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Link
+                href={`/edit?token=${business.edit_token}`}
+                className="text-xs font-semibold bg-amber-600 text-white rounded-xl px-3.5 py-2 hover:bg-amber-700 transition-colors"
+              >
+                Edit listing
+              </Link>
+              <Link
+                href={`/my-qr/${business.slug || business.id}`}
+                className="text-xs font-semibold bg-white border border-amber-300 text-amber-800 rounded-xl px-3.5 py-2 hover:bg-amber-100 transition-colors"
+              >
+                Get your QR codes
+              </Link>
+            </div>
+          </div>
+        )}
+
         {children}
       </div>
     </div>

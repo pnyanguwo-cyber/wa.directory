@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 const TABS = [
   { href: '/portal', label: 'Overview', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z' },
@@ -13,17 +14,23 @@ const TABS = [
 
 export default function PortalTabs() {
   const pathname = usePathname()
+  const [pending, setPending] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPending(null)
+  }, [pathname])
 
   return (
     <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
       {TABS.map(t => {
-        const active = t.href === '/portal' ? pathname === '/portal' : pathname.startsWith(t.href)
+        const matched = pending === t.href || (t.href === '/portal' ? pathname === '/portal' : pathname.startsWith(t.href))
         return (
           <Link
             key={t.href}
             href={t.href}
+            onClick={() => setPending(t.href)}
             className={`h-11 px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
-              active
+              matched
                 ? 'bg-whatsapp-500 text-white shadow-md'
                 : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
             }`}

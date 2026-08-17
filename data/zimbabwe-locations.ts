@@ -8,9 +8,9 @@ export const zimbabweCities: LocationCity[] = [
     name: 'Harare',
     areas: [
       'Harare CBD', 'Mbare', 'Highfield', 'Hatfield', 'Borrowdale',
-      'Borrowdale Brooke', 'Avondale', 'Greendale', 'Budiriro',
+      'Borrowdale Brooke', 'Avondale', 'Avondale West', 'Greendale', 'Budiriro',
       'Glen View', 'Glen Norah', 'Warren Park', 'Kuwadzana',
-      'Dzivarasekwa', 'Mufakose', 'Mahvuku', 'Tafara', 'Sunningdale',
+      'Dzivarasekwa', 'Mufakose', 'Mabvuku', 'Tafara', 'Sunningdale',
       'Waterfalls', 'Newlands', 'Mount Pleasant', 'Belgravia',
       'Milton Park', 'Eastlea', 'Braeside', 'Msasa', 'Willowvale',
       'Graniteside', 'Workington', 'Southerton', 'Rugby',
@@ -18,7 +18,8 @@ export const zimbabweCities: LocationCity[] = [
       'Mandalay', 'Kingsmead', 'Ashdown Park', 'Westgate',
       'Hatcliffe', 'Southlea Park', 'Crowborough', 'Cranborne',
       'Belvedere', 'Marlborough', 'Mount Hampden', 'Domboshava',
-      'Epworth', 'Ruwa',
+      'Epworth', 'Ruwa', 'Bluff Hill', 'Damofalls Park', 'Highlands',
+      'Hopley', 'Kambuzuma', 'Mabelreign', 'Zimre Park',
     ],
   },
   {
@@ -30,7 +31,8 @@ export const zimbabweCities: LocationCity[] = [
       'Matsheumhlope', 'Hillside', 'Burnside', 'Famona', 'Ilanda',
       'Barbourfields', 'Sunninghill', 'Bradfield', 'Morningside',
       'Parklands', 'Emganwini', 'Newton', 'Riverside', 'Belmont',
-      'Thorngrove', 'Suburbs',
+      'Thorngrove', 'Suburbs', 'Makokoba', 'Emakhandeni',
+      'Gwabalanda', 'Khumalo', 'Killarney', 'Ascot',
     ],
   },
   {
@@ -143,5 +145,173 @@ export const zimbabweCities: LocationCity[] = [
   {
     name: 'Plumtree',
     areas: ['Plumtree CBD'],
+  },
+  {
+    name: 'Chipinge',
+    areas: ['Chipinge CBD'],
+  },
+  {
+    name: 'Shurugwi',
+    areas: ['Shurugwi CBD'],
+  },
+  {
+    name: 'Nyanga',
+    areas: ['Nyanga CBD'],
+  },
+  {
+    name: 'Ruwa',
+    areas: ['Ruwa CBD'],
+  },
+  {
+    name: 'Redcliff',
+    areas: ['Redcliff CBD'],
+  },
+  {
+    name: 'Buhera',
+    areas: [],
+  },
+  {
+    name: 'Chimanimani',
+    areas: [],
+  },
+  {
+    name: 'Mutasa',
+    areas: [],
+  },
+  {
+    name: 'Centenary',
+    areas: [],
+  },
+  {
+    name: 'Guruve',
+    areas: [],
+  },
+  {
+    name: 'Mazowe',
+    areas: [],
+  },
+  {
+    name: 'Mt Darwin',
+    areas: [],
+  },
+  {
+    name: 'Rushinga',
+    areas: [],
+  },
+  {
+    name: 'Shamva',
+    areas: [],
+  },
+  {
+    name: 'Chikomba',
+    areas: [],
+  },
+  {
+    name: 'Goromonzi',
+    areas: [],
+  },
+  {
+    name: 'Mudzi',
+    areas: [],
+  },
+  {
+    name: 'Murehwa',
+    areas: [],
+  },
+  {
+    name: 'Uzumba-Maramba-Pfungwe',
+    areas: [],
+  },
+  {
+    name: 'Wedza',
+    areas: [],
+  },
+  {
+    name: 'Hurungwe',
+    areas: [],
+  },
+  {
+    name: 'Makonde',
+    areas: [],
+  },
+  {
+    name: 'Zvimba',
+    areas: [],
+  },
+  {
+    name: 'Bikita',
+    areas: [],
+  },
+  {
+    name: 'Chivi',
+    areas: [],
+  },
+  {
+    name: 'Gutu',
+    areas: [],
+  },
+  {
+    name: 'Mwenezi',
+    areas: [],
+  },
+  {
+    name: 'Zaka',
+    areas: [],
+  },
+  {
+    name: 'Binga',
+    areas: [],
+  },
+  {
+    name: 'Bubi',
+    areas: [],
+  },
+  {
+    name: 'Nkayi',
+    areas: [],
+  },
+  {
+    name: 'Tsholotsho',
+    areas: [],
+  },
+  {
+    name: 'Umguza',
+    areas: [],
+  },
+  {
+    name: 'Bulilima',
+    areas: [],
+  },
+  {
+    name: 'Insiza',
+    areas: [],
+  },
+  {
+    name: 'Mangwe',
+    areas: [],
+  },
+  {
+    name: 'Matobo',
+    areas: [],
+  },
+  {
+    name: 'Umzingwane',
+    areas: [],
+  },
+  {
+    name: 'Chirumhanzu',
+    areas: [],
+  },
+  {
+    name: 'Gokwe North',
+    areas: [],
+  },
+  {
+    name: 'Gokwe South',
+    areas: [],
+  },
+  {
+    name: 'Mberengwa',
+    areas: [],
   },
 ]

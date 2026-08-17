@@ -52,11 +52,11 @@ export default function AdminLoginPage() {
         } ${shake ? 'animate-shake' : ''}`}
       >
         <div className={`text-center space-y-3 ${visible ? 'animate-slide-up animate-delay-100' : 'opacity-0'}`}>
-          <div className="mx-auto w-12 h-12 bg-gradient-to-tr from-whatsapp-600 via-whatsapp-500 to-emerald-400 rounded-2xl flex items-center justify-center text-white shadow-[0_6px_16px_rgba(37,211,102,0.35)]">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-.47-.042-.94-.092-1.408-.15A3.003 3.003 0 0 1 12 14.502V10.6c0-1.136.847-2.1 1.98-2.193 2.092-.167 4.192-.167 6.27 0ZM3.75 6.011c0-.97.616-1.813 1.5-2.097 2.078-.167 4.178-.167 6.27 0 1.133.093 1.98 1.057 1.98 2.193v3.89c0 1.136-.847 2.1-1.98 2.193-.68.055-1.36.096-2.04.122l-2.73 2.73v-2.617c-1.133-.093-1.98-1.057-1.98-2.193V6.011Z" />
-            </svg>
-          </div>
+          <img
+            src="/logo-square.png"
+            alt="WA Directory logo"
+            className="mx-auto w-14 h-14 object-contain rounded-2xl shadow-[0_6px_16px_rgba(37,211,102,0.35)]"
+          />
           <div>
             <h1 className="text-xl font-extrabold text-text-primary tracking-tight">
               WA Directory Portal

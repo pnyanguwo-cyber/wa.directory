@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { STAT_EVENT_LABELS, STAT_EVENT_COLORS, getEventLabel, csvEscape } from '@/lib/stats-format'
+import QrCard from '@/components/qr-card'
 
 type Range = '7' | '30' | '90' | 'all'
 
@@ -12,9 +14,10 @@ interface DayRow {
   total: number
 }
 
-export default function PortalOverview({ businessId, businessName, paid, rows, lifetime }: {
+export default function PortalOverview({ businessId, businessName, businessSlug, paid, rows, lifetime }: {
   businessId: string
   businessName: string
+  businessSlug: string
   paid: boolean
   rows: DayRow[]
   lifetime: Record<string, number>
@@ -109,6 +112,37 @@ export default function PortalOverview({ businessId, businessName, paid, rows, l
           </div>
         ))}
       </div>
+
+      {grandTotal === 0 && (
+        <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 shadow-card">
+          <p className="text-sm font-bold text-whatsapp-800">Get found — share your QR codes</p>
+          <p className="text-xs text-text-secondary mt-1">
+            Print these and place them on your counter, shelves and packaging. Customers scan to chat with you directly.
+          </p>
+          <div className="flex flex-wrap gap-4 mt-4">
+            <QrCard
+              value={`https://wadirectory.co.zw/qr/${businessSlug}`}
+              title="Customer chat QR"
+              subtitle="Scans open a chat with you — tracked as QR scans"
+              size={130}
+              downloadName={`${businessSlug}-customer-chat-qr.png`}
+            />
+            <QrCard
+              value={`https://wadirectory.co.zw/portal`}
+              title="Portal QR"
+              subtitle="Scans open your private portal — stats & settings"
+              size={130}
+              downloadName={`${businessSlug}-portal-qr.png`}
+            />
+            <Link
+              href={`/my-qr/${businessSlug}`}
+              className="self-center text-xs font-semibold text-whatsapp-600 hover:underline"
+            >
+              View full page →
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
         <div className="flex items-center justify-between mb-3">

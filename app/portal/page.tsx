@@ -20,5 +20,5 @@ export default async function PortalPage() {
     'impression', 'qr_scan', 'bot_search', 'bot_chat_open', 'share_bot', 'share_web',
   ])
 
-  return <PortalOverview businessId={business.id} businessName={business.name} paid={paid} rows={chart} lifetime={lifetime} />
+  return <PortalOverview businessId={business.id} businessName={business.name} businessSlug={business.slug || business.id} paid={paid} rows={chart} lifetime={lifetime} />
 }

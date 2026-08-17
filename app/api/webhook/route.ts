@@ -284,13 +284,16 @@ async function sendSearchResults(from: string, text: string) {
   )
   businesses.forEach((b, i) => {
     const area = [b.area, b.city].filter(Boolean).join(', ') || b.location || 'Zimbabwe'
+    const chatLink = b.phone
+      ? `https://wa.me/${String(b.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
+      : `${SITE_URL}/go/${b.id}`
     lines.push(
       [
         `${i + 1}. *${b.name}*`,
         `📍 ${area}`,
         b.price_range ? `💰 ${b.price_range}` : '',
         b.rating > 0 ? `⭐ ${b.rating.toFixed(1)} (${b.review_count || 0})` : '',
-        `👉 Chat: ${SITE_URL}/go/${b.id}?f=${encodeURIComponent(from)}&via=${encodeURIComponent(query || category)}`,
+        `👉 Chat: ${chatLink}`,
         `🔗 ${SITE_URL}/business/${b.slug || b.id}`,
       ]
         .filter(Boolean)
@@ -387,6 +390,9 @@ async function publishBusiness(from: string, session: ChatSession) {
       '',
       `🔐 Create your portal account (stats, conversations, ranking):`,
       `${SITE_URL}/account-setup?token=${token}`,
+      '',
+      `📱 Your QR codes (chat + portal) — print them for customers:`,
+      `${SITE_URL}/my-qr/${slug}`,
       '',
       'Reply *help* anytime.',
     ].join('\n')

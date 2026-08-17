@@ -55,6 +55,13 @@ export default function AdminRankings() {
   const [overrideCity, setOverrideCity] = useState('')
   const [overridePosition, setOverridePosition] = useState(1)
   const [overrideFee, setOverrideFee] = useState('')
+  const [overrideDays, setOverrideDays] = useState('30')
+  const [overrideMode, setOverrideMode] = useState<'days' | 'dates'>('days')
+  const [overrideStart, setOverrideStart] = useState(() => new Date().toISOString().slice(0, 10))
+  const [overrideEnd, setOverrideEnd] = useState(() => {
+    const d = new Date(Date.now() + 29 * 24 * 60 * 60 * 1000)
+    return d.toISOString().slice(0, 10)
+  })
   const [payingBid, setPayingBid] = useState<Bid | null>(null)
   const [payFee, setPayFee] = useState('')
 
@@ -116,6 +123,10 @@ export default function AdminRankings() {
             <form onSubmit={e => { e.preventDefault(); act('override', {
               business_id: overrideBiz, category: overrideCategory, city: overrideCity,
               position: overridePosition, monthly_fee: Number(overrideFee || 0),
+              period_start: overrideMode === 'dates' ? overrideStart : new Date().toISOString().slice(0, 10),
+              period_end: overrideMode === 'dates'
+                ? overrideEnd
+                : new Date(Date.now() + (Math.max(1, Number(overrideDays) || 30) - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
             }) }} className="space-y-3.5">
               <div>
                 <label className="text-xs font-medium text-text-secondary mb-1 block">Business ID</label>
@@ -144,6 +155,52 @@ export default function AdminRankings() {
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Monthly fee</label>
                   <input type="number" min="0" step="0.5" value={overrideFee} onChange={e => setOverrideFee(e.target.value)} className="input-field text-sm" placeholder="e.g. 20" />
                 </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-text-secondary mb-1 block">Period</label>
+                <div className="flex gap-1.5 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setOverrideMode('days')}
+                    className={`h-8 px-3 rounded-xl text-xs font-semibold border transition-all ${
+                      overrideMode === 'days' ? 'bg-whatsapp-500 text-white border-whatsapp-500' : 'bg-white border-gray-200/80 text-text-secondary'
+                    }`}
+                  >
+                    Duration (days)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOverrideMode('dates')}
+                    className={`h-8 px-3 rounded-xl text-xs font-semibold border transition-all ${
+                      overrideMode === 'dates' ? 'bg-whatsapp-500 text-white border-whatsapp-500' : 'bg-white border-gray-200/80 text-text-secondary'
+                    }`}
+                  >
+                    Custom dates
+                  </button>
+                </div>
+                {overrideMode === 'days' ? (
+                  <div>
+                    <input
+                      type="number"
+                      min="1"
+                      value={overrideDays}
+                      onChange={e => setOverrideDays(e.target.value)}
+                      className="input-field text-sm"
+                    />
+                    <p className="text-[11px] text-text-secondary mt-1">Days from today — default is 30.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-text-secondary mb-1 block">Start</label>
+                      <input type="date" value={overrideStart} onChange={e => setOverrideStart(e.target.value)} className="input-field text-sm" required />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-text-secondary mb-1 block">End</label>
+                      <input type="date" value={overrideEnd} onChange={e => setOverrideEnd(e.target.value)} className="input-field text-sm" required />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex gap-2.5 justify-end pt-2">
                 <button type="button" onClick={() => setShowOverride(false)} className="btn-secondary h-10 px-4 text-xs font-semibold">Cancel</button>
