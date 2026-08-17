@@ -4,6 +4,7 @@ import './globals.css'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import PWARegistration from '@/components/pwa-registration'
+import InstallPWA from '@/components/install-pwa'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
 import { getSupabase } from '@/lib/supabase-server'
@@ -18,6 +19,17 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://wadirectory.vercel.app'),
   title: 'WA Directory - Find any business on WhatsApp',
   description: 'AI finds shops, services, prices instantly',
+  manifest: '/manifest.webmanifest',
+  applicationName: 'WA Directory',
+  appleWebApp: {
+    capable: true,
+    title: 'WA Directory',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { url: '/icon-512.png', sizes: '512x512', type: 'image/png' }],
+    apple: [{ url: '/icon-192.png', sizes: '180x180', type: 'image/png' }],
+  },
   openGraph: {
     type: 'website',
     siteName: 'WA Directory',
@@ -32,6 +44,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover',
   themeColor: '#25D366',
 }
 
@@ -55,6 +68,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           }))}
         />
         <PWARegistration />
+        <InstallPWA />
         <WhatsAppSupportButton />
         <img
           src="/wadbody.webp"

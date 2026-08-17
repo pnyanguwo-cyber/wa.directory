@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 const SUPPORT_NUMBER = '263773791864'
 
 export default function WhatsAppSupportButton() {
   const [showTip, setShowTip] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => setMounted(true), [])
   useEffect(() => {
@@ -18,9 +20,10 @@ export default function WhatsAppSupportButton() {
   if (!mounted) return null
 
   const href = `https://wa.me/${SUPPORT_NUMBER}?text=${encodeURIComponent('Hi WA Directory, I need help with my business listing.')}`
+  const overStickyBar = pathname.startsWith('/business/')
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2">
+    <div className={`fixed z-50 flex flex-col items-end gap-2 transition-all duration-300 ${overStickyBar ? 'bottom-24 sm:bottom-5 right-5' : 'bottom-5 right-5'}`}>
       {showTip && (
         <div className="bg-white border border-gray-200 rounded-2xl shadow-soft-lift px-4 py-2.5 text-xs text-text-primary max-w-[220px] animate-slide-up">
           Need help? Chat with support 👋

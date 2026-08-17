@@ -213,8 +213,8 @@ export default function AdminCategories() {
       ) : rows.length === 0 ? (
         <p className="text-center text-text-secondary text-sm py-10">No categories yet.</p>
       ) : (
-        <div className="neo-card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="neo-card overflow-x-auto">
+          <table className="w-full text-sm min-w-[480px]">
             <thead>
               <tr className="text-left text-xs text-text-secondary border-b border-gray-100">
                 <th className="px-4 py-3 font-semibold">Category</th>

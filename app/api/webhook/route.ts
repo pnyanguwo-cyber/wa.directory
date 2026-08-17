@@ -26,7 +26,8 @@ const HELP_TEXT = [
   'e.g. "phone harare", "plumber in bulawayo", "i am looking for a salon"',
   '',
   '*List your business:* send *register*',
-  '*Cancel:* send *cancel*  |  *Help:* send *help*',
+  '*Cancel:* send *cancel*',
+  '*Help:* send *help*',
   '',
   `Website: ${SITE_URL}`,
 ].join('\n')
@@ -154,7 +155,7 @@ async function handleRatingReply(from: string, session: ChatSession | null, text
   if (!match) {
     await sendWhatsAppMessage(
       from,
-      `How was your experience with *${business.name}*? Reply a number *1–5* (1 = poor, 5 = excellent), or *skip*.`
+      `How was your experience with *${business.name}*? Reply a number 1 to 5 (1 = poor, 5 = excellent), or *skip*.`
     )
     return true
   }
@@ -229,7 +230,7 @@ async function promptRatingIfDue(from: string): Promise<ChatSession | null> {
       [
         `Did you just chat with *${business.name}*?`,
         '',
-        `Rate your experience 1–5 (1 = poor, 5 = excellent), add a short comment if you like, or reply *skip*.`,
+        `Rate your experience 1 to 5 (1 = poor, 5 = excellent), add a short comment if you like, or reply *skip*.`,
       ].join('\n')
     )
     return { phone: from, step: 'rating', data: { rating_pending: opened.business_id } }
@@ -467,7 +468,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
         break
       }
       await saveSession(from, 'description', { ...data, category })
-      await sendWhatsAppMessage(from, `*${category}*! Great, now describe your business in 1-2 sentences (what you offer):`)
+      await sendWhatsAppMessage(from, `*${category}*! Great, now describe your business in one or two sentences (what you offer):`)
       break
     }
 
