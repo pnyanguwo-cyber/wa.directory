@@ -1,6 +1,5 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Business } from '@/types'
 
@@ -17,38 +16,9 @@ function Stars({ rating }: { rating: number }) {
 }
 
 export default function FeaturedScroll({ businesses }: { businesses: Business[] }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const timerRef = useRef<NodeJS.Timeout>()
-  const [isPlaying, setIsPlaying] = useState(true)
-
-  useEffect(() => {
-    if (businesses.length < 2 || !isPlaying) return
-
-    function advance() {
-      const el = scrollRef.current
-      if (!el) return
-      const maxScroll = el.scrollWidth - el.clientWidth
-      const nearEnd = el.scrollLeft >= maxScroll - 20
-      if (nearEnd) {
-        el.scrollTo({ left: 0, behavior: 'smooth' })
-      } else {
-        const firstCard = el.children[0] as HTMLElement | undefined
-        const step = firstCard?.offsetWidth ? firstCard.offsetWidth + 14 : 220
-        el.scrollBy({ left: step, behavior: 'smooth' })
-      }
-    }
-
-    timerRef.current = setInterval(advance, 5000)
-    return () => clearInterval(timerRef.current)
-  }, [businesses.length, isPlaying])
-
-  function scrollDir(dir: 'left' | 'right') {
-    const el = scrollRef.current
-    if (!el) return
-    el.scrollBy({ left: dir === 'left' ? -260 : 260, behavior: 'smooth' })
-  }
-
   if (businesses.length === 0) return null
+
+  const doubled = [...businesses, ...businesses]
 
   return (
     <div className="relative">
@@ -57,54 +27,40 @@ export default function FeaturedScroll({ businesses }: { businesses: Business[] 
           <span className="w-2 h-2 rounded-full bg-whatsapp-500 animate-pulse" aria-hidden="true" />
           <span className="text-xs font-bold text-text-primary tracking-wider uppercase">Recently Added</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="text-xs font-medium text-text-secondary hover:text-whatsapp-700 px-2.5 py-1 rounded-full bg-white/80 border border-gray-200/80 shadow-sm transition-all"
-            aria-label={isPlaying ? 'Pause auto-scrolling' : 'Start auto-scrolling'}
-          >
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-          <button onClick={() => scrollDir('left')} className="w-8 h-8 rounded-full bg-white/90 border border-gray-200/80 shadow-sm flex items-center justify-center text-text-secondary hover:text-whatsapp-700 transition-all" aria-label="Scroll left">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-          </button>
-          <button onClick={() => scrollDir('right')} className="w-8 h-8 rounded-full bg-white/90 border border-gray-200/80 shadow-sm flex items-center justify-center text-text-secondary hover:text-whatsapp-700 transition-all" aria-label="Scroll right">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
-          </button>
-        </div>
       </div>
 
-      <div ref={scrollRef} className="flex gap-3.5 overflow-x-auto pb-3 pt-1 pl-3" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
-        {businesses.map(b => (
-          <Link key={b.id} href={`/business/${b.slug || b.id}`} className="shrink-0 w-52 bg-white/90 backdrop-blur-md rounded-2xl p-4 border border-white/90 shadow-card hover:shadow-card-hover hover:border-whatsapp-200 hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group">
-            <div>
-              <Stars rating={b.rating} />
-              <div className="flex items-center gap-2.5 mt-2.5 mb-1.5">
-                {b.logo_url ? (
-                  <img src={b.logo_url} alt={b.name} className="w-9 h-9 rounded-xl object-cover shrink-0 ring-1 ring-gray-100" loading="lazy" />
-                ) : (
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0 border border-whatsapp-300/40" aria-hidden="true">
-                    <span className="text-xs font-bold text-whatsapp-800">{b.name.charAt(0)}</span>
-                  </div>
-                )}
-                <span className="font-bold text-text-primary text-sm truncate leading-tight group-hover:text-whatsapp-700 transition-colors">{b.name}</span>
+      <div className="relative w-full overflow-hidden pt-1 pb-3 pl-3">
+        <div className="absolute left-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-r from-white to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-8 sm:w-16 bg-gradient-to-l from-white to-transparent z-10 pointer-events-none" />
+
+        <div className="animate-marquee animate-marquee-hover-pause flex gap-3.5">
+          {doubled.map((b, idx) => (
+            <Link key={`${b.id}-${idx}`} href={`/business/${b.slug || b.id}`} className="shrink-0 w-52 bg-white/90 backdrop-blur-md rounded-2xl p-4 border border-white/90 shadow-card hover:shadow-card-hover hover:border-whatsapp-200 hover:-translate-y-1 transition-all duration-200 flex flex-col justify-between group">
+              <div>
+                <Stars rating={b.rating} />
+                <div className="flex items-center gap-2.5 mt-2.5 mb-1.5">
+                  {b.logo_url ? (
+                    <img src={b.logo_url} alt={b.name} className="w-9 h-9 rounded-xl object-cover shrink-0 ring-1 ring-gray-100" loading="lazy" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0 border border-whatsapp-300/40" aria-hidden="true">
+                      <span className="text-xs font-bold text-whatsapp-800">{b.name.charAt(0)}</span>
+                    </div>
+                  )}
+                  <span className="font-bold text-text-primary text-sm truncate leading-tight group-hover:text-whatsapp-700 transition-colors">{b.name}</span>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-3 pt-2 border-t border-gray-100">
-              <span className="truncate font-medium">{b.category?.[0] || 'Business'}</span>
-              {(b.city || b.location) && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0" aria-hidden="true" />
-                  <span className="truncate text-gray-500">{b.city || b.location}</span>
-                </>
-              )}
-            </div>
-          </Link>
-        ))}
+              <div className="flex items-center gap-1.5 text-xs text-text-secondary mt-3 pt-2 border-t border-gray-100">
+                <span className="truncate font-medium">{b.category?.[0] || 'Business'}</span>
+                {(b.city || b.location) && (
+                  <>
+                    <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0" aria-hidden="true" />
+                    <span className="truncate text-gray-500">{b.city || b.location}</span>
+                  </>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   )
