@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
-import { getRankingData } from '@/lib/portal'
 
 function nextMonthStart(): string {
   const now = new Date()
@@ -18,7 +17,48 @@ export async function GET(request: Request) {
   const city = searchParams.get('city') || ''
   if (!category) return NextResponse.json({ error: 'Missing category' }, { status: 400 })
 
-  return NextResponse.json(await getRankingData(businessId, category, city))
+  const supabase = getSupabase()
+
+  const [spotsRes, bidsRes, activeRes] = await Promise.all([
+    supabase
+      .from('rank_spots')
+      .select('id, business_id, category, city, position, monthly_fee, period_start, period_end, status')
+      .eq('category', category)
+      .eq('city', city)
+      .eq('status', 'active')
+      .order('position', { ascending: true }),
+    supabase
+      .from('bids')
+      .select('id, position, amount, period, status, admin_feedback, created_at')
+      .eq('business_id', businessId)
+      .eq('category', category)
+      .eq('city', city)
+      .eq('period', nextMonthStart())
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('rank_spots')
+      .select('id, position, status, period_start, period_end')
+      .eq('business_id', businessId)
+      .eq('category', category)
+      .eq('city', city)
+      .eq('status', 'active')
+  ])
+
+  const byPos = new Map<number, { id: string; business_id: string; monthly_fee: number; period_start: string; period_end: string }>()
+  for (const s of spotsRes.data || []) {
+    byPos.set(s.position, s)
+  }
+
+  return NextResponse.json({
+    spots: spotsRes.data || [],
+    bids: bidsRes.data || [],
+    myActive: activeRes.data || [],
+    currentFees: {
+      one: byPos.get(1)?.monthly_fee ?? null,
+      two: byPos.get(2)?.monthly_fee ?? null,
+      three: byPos.get(3)?.monthly_fee ?? null,
+    },
+  })
 }
 
 export async function POST(request: Request) {

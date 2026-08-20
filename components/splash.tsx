@@ -1,11 +1,9 @@
 'use client'
 
-import Image from 'next/image'
-
 export default function Splash({ label }: { label?: string }) {
   return (
     <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center gap-5 animate-fade-in">
-      <Image src="/logo-square.png" alt="WA Directory" width={128} height={128} priority className="w-20 h-20 object-contain animate-bounce-slow" />
+      <img src="/logo-square.png" alt="WA Directory" className="w-20 h-20 object-contain animate-bounce-slow" />
       <div className="flex items-center gap-2.5">
         <svg className="w-5 h-5 animate-spin text-whatsapp-500" fill="none" viewBox="0 0 24 24" aria-hidden="true">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />

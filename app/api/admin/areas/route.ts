@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { revalidateTag } from 'next/cache'
 import { isAdmin } from '@/lib/admin-auth'
 
 function getSupabase() {
@@ -57,7 +56,6 @@ export async function POST(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    revalidateTag('approved-data')
     return NextResponse.json({ success: true, added: fresh.length, skipped: list.length - fresh.length })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
@@ -88,31 +86,24 @@ export async function PATCH(request: Request) {
     const { error } = await supabase.from('areas').update(patch).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Rename references in businesses' areas arrays (scoped to the old city, batched by resulting array)
+    // Rename references in businesses' areas arrays (scoped to the old city)
     if (name !== undefined && existing.name !== name.trim()) {
       const { data: businesses } = await supabase
         .from('businesses')
         .select('id, city, areas')
         .eq('city', existing.city)
 
-      const groups = new Map<string, string[]>()
       for (const b of businesses || []) {
         const arr = (b as { areas?: string[] }).areas || []
         if (arr.includes(existing.name)) {
-          const next = JSON.stringify(arr.map((a: string) => (a === existing.name ? name.trim() : a)))
-          groups.set(next, [...(groups.get(next) || []), b.id])
+          await supabase
+            .from('businesses')
+            .update({ areas: arr.map((a: string) => (a === existing.name ? name.trim() : a)) })
+            .eq('id', b.id)
         }
-      }
-      for (const [next, ids] of groups) {
-        const { error: updateError } = await supabase
-          .from('businesses')
-          .update({ areas: JSON.parse(next) })
-          .in('id', ids)
-        if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
       }
     }
 
-    revalidateTag('approved-data')
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
@@ -140,26 +131,19 @@ export async function DELETE(request: Request) {
       .select('id, city, areas')
       .eq('city', existing.city)
 
-    const groups = new Map<string, string[]>()
     for (const b of businesses || []) {
       const arr = (b as { areas?: string[] }).areas || []
       if (arr.includes(existing.name)) {
-        const next = JSON.stringify(arr.filter((a: string) => a !== existing.name))
-        groups.set(next, [...(groups.get(next) || []), b.id])
+        await supabase
+          .from('businesses')
+          .update({ areas: arr.filter((a: string) => a !== existing.name) })
+          .eq('id', b.id)
       }
-    }
-    for (const [next, ids] of groups) {
-      const { error: updateError } = await supabase
-        .from('businesses')
-        .update({ areas: JSON.parse(next) })
-        .in('id', ids)
-      if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
     const { error } = await supabase.from('areas').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    revalidateTag('approved-data')
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

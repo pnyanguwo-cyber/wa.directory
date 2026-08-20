@@ -6,9 +6,7 @@ export async function GET() {
   const { data: businesses } = await getSupabase()
     .from('businesses')
     .select('slug, id, updated_at, created_at')
-    .eq('verified', true)
     .order('created_at', { ascending: false })
-    .limit(5000)
 
   const businessUrls = (businesses || [])
     .map(

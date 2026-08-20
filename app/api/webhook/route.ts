@@ -7,7 +7,7 @@ import { validatePhone } from '@/data/countries'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
 
-const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
+const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'wa-directory-verify-2024'
 const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP
 const COUNTRY_CODE = '+263'

@@ -19,14 +19,14 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    const given = normalizePhone(phone)
-    const { data: matches } = await supabase
+    const { data: businesses } = await supabase
       .from('businesses')
       .select('id, phone, name, slug, verified')
-      .in('phone', [given, given.replace(/^\+/, '')])
-      .limit(2)
+      .order('created_at', { ascending: true })
+      .limit(1000)
 
-    const match = (matches || []).find(b => normalizePhone(b.phone || '') === given)
+    const given = normalizePhone(phone)
+    const match = (businesses || []).find(b => normalizePhone(b.phone || '') === given)
 
     if (!match) {
       return NextResponse.json({ error: 'No account found for this number. List your business first.' }, { status: 404 })

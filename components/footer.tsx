@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Image from 'next/image'
 
 export default function Footer() {
   return (
@@ -40,12 +39,9 @@ export default function Footer() {
           </div>
           <div>
             <div className="flex items-center justify-center sm:justify-start gap-3 mb-2">
-              <Image
+              <img
                 src="/favicon.png"
                 alt="WA Directory logo"
-                width={96}
-                height={64}
-                priority={false}
                 className="h-11 w-auto object-contain"
               />
               <span className="font-bold text-text-primary">WA Directory</span>

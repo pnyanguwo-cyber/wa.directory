@@ -8,8 +8,7 @@ async function verifyBusinessToken(token: string): Promise<boolean> {
     const parts = token.split('.')
     if (parts.length !== 3) return false
     const [businessId, expiry, sig] = parts
-    const secret = process.env.BUSINESS_AUTH_SECRET
-    if (!secret) return false
+    const secret = process.env.BUSINESS_AUTH_SECRET || 'wa-directory-dev-secret-change-me'
     const key = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(secret),

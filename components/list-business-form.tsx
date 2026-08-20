@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { getClient } from '@/lib/supabase-client'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories as staticCategories } from '@/data/categories'
@@ -193,10 +194,9 @@ export default function ListBusinessForm({
       const price = form.price_range.trim()
       const normalizedPrice = price ? (price.startsWith('$') ? price : `$${price}`) : null
 
-      const res = await fetch('/api/business/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data, error } = await getClient()
+        .from('businesses')
+        .insert({
           name: form.name.trim(),
           slug,
           whatsapp_username: form.whatsapp_username.trim(),
@@ -214,13 +214,15 @@ export default function ListBusinessForm({
           price_range: normalizedPrice,
           website: form.website.trim() || null,
           edit_token: token,
-        }),
-      })
+          verified: false,
+          rating: 0,
+          review_count: 0,
+        })
+        .select()
+        .single()
 
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not create listing')
-
-      setEditToken(data.edit_token || token)
+      if (error) throw error
+      setEditToken(token)
       setSubmittedId(data.slug || data.id)
       submitFeatureRequests(data.id)
       if (form.password && form.password.length >= 6) {

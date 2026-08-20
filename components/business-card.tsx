@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import type { Business } from '@/types'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
@@ -14,13 +13,11 @@ function LogoInitials({ name, url }: { name: string; url?: string }) {
 
   if (url) {
     return (
-      <div className="relative shrink-0 w-14 h-14 rounded-2xl ring-2 ring-white shadow-md overflow-hidden">
-        <Image
+      <div className="relative shrink-0">
+        <img
           src={url}
           alt={name}
-          fill
-          sizes="56px"
-          className="object-cover"
+          className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white shadow-md"
           loading="lazy"
         />
       </div>
