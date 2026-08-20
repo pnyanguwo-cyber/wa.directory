@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -52,9 +53,12 @@ export default function AdminLoginPage() {
         } ${shake ? 'animate-shake' : ''}`}
       >
         <div className={`text-center space-y-3 ${visible ? 'animate-slide-up animate-delay-100' : 'opacity-0'}`}>
-          <img
+          <Image
             src="/logo-square.png"
             alt="WA Directory logo"
+            width={128}
+            height={128}
+            priority
             className="mx-auto w-14 h-14 object-contain rounded-2xl shadow-[0_6px_16px_rgba(37,211,102,0.35)]"
           />
           <div>

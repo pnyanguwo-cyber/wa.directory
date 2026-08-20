@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { categories as staticCategories, matchCategory as staticMatch } from '@/data/categories'
 
@@ -12,13 +13,21 @@ export interface ApprovedArea {
   name: string
 }
 
+const fetchApprovedCategories = unstable_cache(
+  async () => {
+    const { data } = await getSupabase()
+      .from('categories')
+      .select('name, icon, keywords')
+      .eq('active', true)
+      .order('name', { ascending: true })
+    return (data || []) as ApprovedCategory[]
+  },
+  ['approved-categories'],
+  { revalidate: 300, tags: ['approved-data'] }
+)
+
 export async function getApprovedCategories(): Promise<ApprovedCategory[]> {
-  const { data } = await getSupabase()
-    .from('categories')
-    .select('name, icon, keywords')
-    .eq('active', true)
-    .order('name', { ascending: true })
-  return (data || []) as ApprovedCategory[]
+  return fetchApprovedCategories()
 }
 
 export async function getApprovedCategoryNames(): Promise<Set<string>> {
@@ -26,12 +35,20 @@ export async function getApprovedCategoryNames(): Promise<Set<string>> {
   return new Set(rows.map(r => r.name))
 }
 
+const fetchApprovedAreas = unstable_cache(
+  async () => {
+    const { data } = await getSupabase()
+      .from('areas')
+      .select('city, name')
+      .eq('active', true)
+    return (data || []) as ApprovedArea[]
+  },
+  ['approved-areas'],
+  { revalidate: 300, tags: ['approved-data'] }
+)
+
 export async function getApprovedAreas(): Promise<ApprovedArea[]> {
-  const { data } = await getSupabase()
-    .from('areas')
-    .select('city, name')
-    .eq('active', true)
-  return (data || []) as ApprovedArea[]
+  return fetchApprovedAreas()
 }
 
 export async function getApprovedAreaNames(city: string): Promise<Set<string>> {

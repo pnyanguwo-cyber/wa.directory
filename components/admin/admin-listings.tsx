@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { getClient } from '@/lib/supabase-client'
+import Image from 'next/image'
 import type { Business } from '@/types'
 import { categories as staticCategories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -65,30 +65,29 @@ export default function AdminListings() {
   const [editForm, setEditForm] = useState<EditForm | null>(null)
 
   useEffect(() => {
-    refresh()
-    getClient()
-      .from('categories')
-      .select('name, icon')
-      .eq('active', true)
-      .then(({ data }) => {
+    adminFetch('/api/admin/listings')
+      .then(({ ok, status, data }) => {
+        if (!ok) {
+          if (status === 401) router.push('/admin-login')
+          setDataLoading(false)
+          return
+        }
+        if (Array.isArray(data.businesses)) setBusinesses(data.businesses as Business[])
         const merged = new Map<string, string>()
         for (const c of staticCategories) merged.set(c.name, c.icon)
-        for (const c of (data || [])) merged.set(c.name, c.icon)
+        for (const c of (data.categories || [])) merged.set(c.name, c.icon)
         setCategoryOptions(
           Array.from(merged.entries()).map(([name, icon]) => ({ value: name, label: `${icon} ${name}` }))
         )
+        setDataLoading(false)
       })
   }, [])
 
   function refresh() {
-    getClient()
-      .from('businesses')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(500)
-      .then(({ data }) => {
-        if (data) setBusinesses(data as Business[])
-        setDataLoading(false)
+    adminFetch('/api/admin/listings')
+      .then(({ ok, status, data }) => {
+        if (ok && Array.isArray(data.businesses)) setBusinesses(data.businesses as Business[])
+        else if (status === 401) router.push('/admin-login')
       })
   }
 
@@ -477,7 +476,9 @@ export default function AdminListings() {
               <div key={b.id} className="neo-card p-4 flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1 flex items-center gap-3.5">
                   {b.logo_url ? (
-                    <img src={b.logo_url} alt="" className="w-10 h-10 rounded-xl object-cover shrink-0 ring-1 ring-gray-100" />
+                    <div className="w-10 h-10 rounded-xl shrink-0 ring-1 ring-gray-100 overflow-hidden relative">
+                      <Image src={b.logo_url} alt="" fill sizes="40px" className="object-cover" loading="lazy" />
+                    </div>
                   ) : (
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0 border border-whatsapp-300/40">
                       <span className="text-xs font-bold text-whatsapp-800">{b.name.charAt(0)}</span>

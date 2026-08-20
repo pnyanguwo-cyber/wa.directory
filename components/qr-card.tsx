@@ -1,7 +1,12 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { QRCodeCanvas } from 'qrcode.react'
+import dynamic from 'next/dynamic'
+
+const QRCodeCanvas = dynamic(
+  () => import('qrcode.react').then(m => m.QRCodeCanvas),
+  { ssr: false }
+)
 
 interface QrCardProps {
   value: string

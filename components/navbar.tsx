@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Splash from '@/components/splash'
@@ -32,9 +33,12 @@ export default function Navbar() {
       {loggingOut && <Splash label="Logging out..." />}
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <img
+          <Image
             src="/logo-square.png"
             alt="WA Directory logo"
+            width={128}
+            height={128}
+            priority
             className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
           />
           <span className="text-lg font-extrabold text-text-primary tracking-tight group-hover:text-whatsapp-700 transition-colors leading-tight">

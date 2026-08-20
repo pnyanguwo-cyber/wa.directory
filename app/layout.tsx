@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import { Suspense } from 'react'
+import Image from 'next/image'
 import './globals.css'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import PWARegistration from '@/components/pwa-registration'
 import InstallPWA from '@/components/install-pwa'
-import BannerStrip from '@/components/banner-strip'
+import BannerStripLoader from '@/components/banner-strip-loader'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
-import { getSupabase } from '@/lib/supabase-server'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -48,35 +49,28 @@ export const viewport: Viewport = {
   themeColor: '#25D366',
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { data: banners } = await getSupabase()
-    .from('banners')
-    .select('id, text, link, link_label')
-    .eq('active', true)
-    .order('created_at', { ascending: false })
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${inter.variable} min-h-screen bg-white font-sans`}>
         <Navbar />
-        <BannerStrip
-          banners={(banners || []).map(b => ({
-            id: b.id,
-            text: b.text,
-            link: b.link || '',
-            link_label: b.link_label || 'Learn more',
-          }))}
-        />
+        <Suspense fallback={null}>
+          <BannerStripLoader />
+        </Suspense>
         <PWARegistration />
         <InstallPWA />
         <WhatsAppSupportButton />
-        <img
-          src="/wadbody.webp"
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-          className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10"
-        />
+        <div className="fixed inset-0 -z-10 pointer-events-none select-none">
+          <Image
+            src="/wadbody.webp"
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover"
+          />
+        </div>
         <main className="relative pb-16 md:pb-0">{children}</main>
         <Footer />
       </body>

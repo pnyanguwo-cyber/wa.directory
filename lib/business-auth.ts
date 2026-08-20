@@ -4,7 +4,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 const COOKIE = 'business_session'
 
 function secret(): string {
-  return process.env.BUSINESS_AUTH_SECRET || 'wa-directory-dev-secret-change-me'
+  const s = process.env.BUSINESS_AUTH_SECRET
+  if (!s) throw new Error('BUSINESS_AUTH_SECRET is not set')
+  return s
 }
 
 function normalizePhone(phone: string): string {

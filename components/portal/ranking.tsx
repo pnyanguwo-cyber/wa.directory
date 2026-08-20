@@ -29,30 +29,24 @@ const POSITION_INFO = [
   { pos: 3, label: 'Bronze', subtitle: 'Third spot — must be less than the #2 fee' },
 ]
 
-export default function PortalRanking({ businessId, category, city, spots }: {
+export default function PortalRanking({ businessId, category, city, spots, bids: initialBids, currentFees: initialFees }: {
   businessId: string
   category: string
   city: string
   spots: Spot[]
+  bids: Bid[]
+  currentFees: { one: number | null; two: number | null; three: number | null }
 }) {
-  const [bids, setBids] = useState<Bid[]>([])
-  const [currentFees, setCurrentFees] = useState<{ one: number | null; two: number | null; three: number | null }>({ one: null, two: null, three: null })
+  const [bids, setBids] = useState<Bid[]>(initialBids || [])
+  const [currentFees, setCurrentFees] = useState<{ one: number | null; two: number | null; three: number | null }>(
+    initialFees || { one: null, two: null, three: null }
+  )
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [selectedPos, setSelectedPos] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
   const [dimmed, setDimmed] = useState(false)
-
-  useEffect(() => {
-    fetch(`/api/portal/ranking?category=${encodeURIComponent(category)}&city=${encodeURIComponent(city)}`)
-      .then(r => r.json())
-      .then(d => {
-        setBids(d.bids || [])
-        setCurrentFees(d.currentFees || { one: null, two: null, three: null })
-      })
-      .catch(() => {})
-  }, [category, city])
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

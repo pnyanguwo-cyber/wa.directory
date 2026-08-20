@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import Splash from '@/components/splash'
 
 type Mode = 'login' | 'otp' | 'verify' | 'forgot' | 'reset'
@@ -117,9 +118,12 @@ export default function LoginPage() {
       {splash && <Splash label={splash} />}
       <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
         <div className="text-center mb-6">
-          <img
+          <Image
             src="/logo-square.png"
             alt="WA Directory logo"
+            width={128}
+            height={128}
+            priority
             className="mx-auto w-14 h-14 object-contain rounded-2xl shadow-[0_6px_16px_rgba(37,211,102,0.35)] mb-3"
           />
           <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">{headings[mode].title}</h1>

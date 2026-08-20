@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
 import Link from 'next/link'
+import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
@@ -12,6 +13,7 @@ import BusinessCard from '@/components/business-card'
 import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
+import { memoize } from '@/lib/memo'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 
 const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
@@ -19,29 +21,38 @@ const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 export const revalidate = 3600
 export const dynamicParams = true
 
+function getBusinessProfile(slug: string) {
+  return memoize(`business-profile:${slug}`, 1000, async () => {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select(BUSINESS_PROFILE_COLUMNS)
+      .eq('slug', slug)
+      .single() as { data: Business | null }
+    return data
+  })
+}
+
 export async function generateStaticParams() {
   const { data } = await getSupabase()
     .from('businesses')
     .select('slug, id')
+    .eq('verified', true)
+    .limit(5000)
 
   return (data || []).map(b => ({ slug: b.slug || b.id }))
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const { data } = await getSupabase()
-    .from('businesses')
-    .select('name, bio, city')
-    .eq('slug', params.slug)
-    .single() as { data: { name: string; bio: string; city: string } | null }
+  const business = await getBusinessProfile(params.slug)
 
-  if (!data) return {}
+  if (!business) return {}
 
   return {
-    title: `${data.name} | WA Directory`,
-    description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp in ${data.city || 'Zimbabwe'}.`,
+    title: `${business.name} | WA Directory`,
+    description: business.bio?.slice(0, 160) || `Contact ${business.name} on WhatsApp in ${business.city || 'Zimbabwe'}.`,
     openGraph: {
-      title: `${data.name} | WA Directory`,
-      description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp.`,
+      title: `${business.name} | WA Directory`,
+      description: business.bio?.slice(0, 160) || `Contact ${business.name} on WhatsApp.`,
       siteName: 'WA Directory',
       locale: 'en_ZW',
       type: 'profile',
@@ -77,12 +88,16 @@ function LogoDisplay({ name, url }: { name: string; url?: string }) {
 
   if (url) {
     return (
-      <img
-        src={url}
-        alt={name}
-        className="w-20 h-20 rounded-full object-cover border-4 border-white -mt-10 relative z-10"
-        loading="lazy"
-      />
+      <div className="w-20 h-20 rounded-full border-4 border-white -mt-10 relative z-10 overflow-hidden">
+        <Image
+          src={url}
+          alt={name}
+          fill
+          sizes="80px"
+          className="object-cover"
+          loading="lazy"
+        />
+      </div>
     )
   }
 
@@ -115,11 +130,7 @@ function CatalogItems({ catalogLink }: { catalogLink: string }) {
 }
 
 async function BusinessContent({ slug }: { slug: string }) {
-  let { data: business } = await getSupabase()
-    .from('businesses')
-    .select(BUSINESS_PROFILE_COLUMNS)
-    .eq('slug', slug)
-    .single() as { data: Business | null }
+  let business = await getBusinessProfile(slug)
 
   if (!business) {
     const { data: fallback } = await getSupabase()

@@ -1,5 +1,6 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
+import Image from 'next/image'
 import SearchBar from '@/components/search-bar'
 import FeaturedScroll from '@/components/featured-scroll'
 import FeaturedBusinesses from '@/components/featured-businesses'
@@ -11,7 +12,6 @@ export const revalidate = 300
 
 const CATEGORY_CHIPS = ['Plumbing', 'Solar & Power', 'Catering', 'Auto Repairs', 'Salons & Spas', 'Tech & Phones']
 const ALL_BUSINESSES_INITIAL = 24
-
 export default async function HomePage() {
   const supabase = getSupabase()
 
@@ -27,7 +27,7 @@ export default async function HomePage() {
     .select(BUSINESS_CARD_COLUMNS)
     .eq('verified', true)
     .order('rating', { ascending: false })
-    .limit(ALL_BUSINESSES_INITIAL + 3)
+    .limit(ALL_BUSINESSES_INITIAL)
 
   const { count } = await supabase
     .from('businesses')
@@ -43,19 +43,23 @@ export default async function HomePage() {
         <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface py-6 sm:py-10 border-b border-gray-200/50">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
 
-          <img
+          <Image
             src="/wad1.webp"
             alt=""
             aria-hidden="true"
-            decoding="async"
-            className="absolute left-0 top-0 h-full w-1/2 object-cover object-left pointer-events-none select-none hidden sm:block"
+            fill
+            priority
+            sizes="50vw"
+            className="object-cover object-left pointer-events-none select-none hidden sm:block"
           />
-          <img
+          <Image
             src="/wad2.webp"
             alt=""
             aria-hidden="true"
-            decoding="async"
-            className="absolute right-0 top-0 h-full w-1/2 object-cover object-right pointer-events-none select-none hidden sm:block"
+            fill
+            priority
+            sizes="50vw"
+            className="object-cover object-right pointer-events-none select-none hidden sm:block"
           />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">
