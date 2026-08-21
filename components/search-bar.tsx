@@ -88,7 +88,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
           {/* Search Glass & AI Spark Icon */}
           <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-whatsapp-600">
             <svg
-              className="w-5 h-5"
+              className="w-6 h-6"
               fill="none"
               stroke="currentColor"
               strokeWidth="2.2"
@@ -113,7 +113,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
             aria-autocomplete="list"
             aria-controls="search-suggestions"
             aria-expanded={showDropdown}
-            className={`w-full pl-12 ${large ? 'pr-28 h-14 text-base sm:text-lg' : 'pr-12 h-12 text-base'} rounded-2xl border border-gray-200/90 bg-white/95 backdrop-blur-md focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_2px_4px_rgba(0,0,0,0.02)]`}
+            className={`w-full pl-12 ${large ? 'pr-28 h-16 text-lg sm:text-xl' : 'pr-12 h-12 text-base'} rounded-2xl border border-gray-200/90 bg-white/95 backdrop-blur-md focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_2px_4px_rgba(0,0,0,0.02)]`}
           />
 
           {/* Action / Spinner inside search bar */}
@@ -123,10 +123,10 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
             ) : large ? (
               <button
                 type="submit"
-                className="btn-primary h-10 px-4 text-xs sm:text-sm font-medium flex items-center gap-1.5 rounded-xl"
+                className="btn-primary h-12 px-5 text-sm sm:text-base font-medium flex items-center gap-1.5 rounded-xl"
               >
                 <span>Search</span>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                 </svg>
               </button>
