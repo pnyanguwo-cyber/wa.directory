@@ -40,7 +40,7 @@ export default async function HomePage() {
     <>
       <main className="min-h-[calc(100vh-3.5rem)]">
         {/* Glass Mesh Hero */}
-        <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface py-10 sm:py-16 min-h-[480px] sm:min-h-[600px] border-b border-gray-200/50">
+        <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface pt-0 pb-10 sm:py-16 min-h-[480px] sm:min-h-[600px] border-b border-gray-200/50">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
 
           <img
@@ -48,14 +48,14 @@ export default async function HomePage() {
             alt=""
             aria-hidden="true"
             decoding="async"
-            className="absolute left-0 top-0 h-full w-[58%] object-contain object-left pointer-events-none select-none hidden sm:block"
+            className="absolute left-0 top-0 h-full w-[48%] object-contain object-left pointer-events-none select-none hidden sm:block"
           />
           <img
             src="/wad2.webp"
             alt=""
             aria-hidden="true"
             decoding="async"
-            className="absolute right-0 top-0 h-full w-[58%] object-contain object-right pointer-events-none select-none hidden sm:block"
+            className="absolute right-0 top-0 h-full w-[48%] object-contain object-right pointer-events-none select-none hidden sm:block"
           />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">

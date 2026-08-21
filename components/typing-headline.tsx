@@ -42,15 +42,17 @@ export default function TypingHeadline() {
   }, [currentText, isDeleting, wordIndex])
 
   return (
-    <h1 className="text-4xl sm:text-6xl font-extrabold text-text-primary mb-4 tracking-tight leading-tight">
-      Find any{' '}
-      <span className="relative inline-block text-whatsapp-600 border-b-2 border-whatsapp-500/40 pb-0.5">
-        {currentText}
-        <span
-          className="inline-block w-0.5 h-9 sm:h-14 ml-0.5 bg-whatsapp-500 animate-pulse align-middle"
-          aria-hidden="true"
-        />
-      </span>{' '}
+    <h1 className="text-4xl sm:text-6xl font-extrabold text-text-primary mb-4 tracking-tight leading-tight text-center">
+      <span className="whitespace-nowrap">Find any{' '}
+        <span className="relative inline-block text-whatsapp-600 border-b-2 border-whatsapp-500/40 pb-0.5">
+          {currentText}
+          <span
+            className="inline-block w-0.5 h-9 sm:h-14 ml-0.5 bg-whatsapp-500 animate-pulse align-middle"
+            aria-hidden="true"
+          />
+        </span>
+      </span>
+      <br />
       on WhatsApp
     </h1>
   )
