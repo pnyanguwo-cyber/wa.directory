@@ -187,6 +187,9 @@ async function BusinessContent({ slug }: { slug: string }) {
   }
 
   const shareSlug = business.slug || business.id
+  const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
+  const qrUrl = phoneClean ? `https://wa.me/${phoneClean}?text=${qrMessage}` : ''
 
   return (
     <>
@@ -367,7 +370,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                 <div className="sm:w-56 shrink-0">
                   <h2 className="text-[16px] font-semibold text-text-primary mb-3">Scan to chat</h2>
                   <QrCard
-                    value={`${SITE_URL}/qr/${business.slug || business.id}`}
+                    value={qrUrl}
                     title="Chat with us on WhatsApp"
                     subtitle="Scan with your phone camera to start a chat"
                     downloadName={`${business.slug || 'business'}-qr.png`}
@@ -375,8 +378,9 @@ async function BusinessContent({ slug }: { slug: string }) {
                 </div>
               )}
 
+              <div className="flex-1 min-w-0">
               {business.bio && (
-                <div className="flex-1 min-w-0">
+                <>
                   <h2 className="text-[16px] font-semibold text-text-primary mb-3">Details</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {business.whatsapp_username && (
@@ -445,8 +449,37 @@ async function BusinessContent({ slug }: { slug: string }) {
                     </div>
                   </div>
                 </div>
+                </>
+              )}
+              {ratings.length > 0 && (
+                <div className={business.bio ? 'mt-4' : ''}>
+                  <h2 className="text-[16px] font-semibold text-text-primary mb-3">Top reviews</h2>
+                  <div className="space-y-3">
+                    {ratings.slice(0, 5).map((r, i) => (
+                      <div key={i} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-whatsapp-50 text-whatsapp-700 flex items-center justify-center text-[10px] font-bold">
+                              {r.customer_phone.slice(-2)}
+                            </div>
+                            <span className="text-xs font-semibold text-text-primary">+{r.customer_phone.replace(/^\+/, '').slice(0, 4)}•••{r.customer_phone.slice(-3)}</span>
+                          </div>
+                          <span className="text-[10px] text-text-secondary">{new Date(r.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 mb-1">
+                          {[1, 2, 3, 4, 5].map(s => (
+                            <svg key={s} className={`w-3 h-3 ${s <= r.rating ? 'text-yellow-500' : 'text-gray-300'}`} viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8 2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
+                        {r.comment && <p className="text-xs text-text-secondary leading-relaxed">{r.comment}</p>}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+              </div>
             </div>
 
             {business.catalog_link && (
@@ -470,43 +503,6 @@ async function BusinessContent({ slug }: { slug: string }) {
             </div>
           </div>
         </div>
-
-        {ratings.length > 0 && (
-          <div className="card p-5 sm:p-6 mt-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold text-text-primary">Ratings & reviews</h2>
-              <div className="flex items-center gap-2">
-                <Stars rating={business.rating} />
-                <span className="text-sm text-text-secondary font-semibold">{business.rating.toFixed(1)}</span>
-              </div>
-            </div>
-            <div className="space-y-4">
-              {ratings.slice(0, 10).map((r, i) => (
-                <div key={i} className="border-b border-gray-100 last:border-0 pb-4 last:pb-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-whatsapp-50 text-whatsapp-700 flex items-center justify-center text-xs font-bold">
-                        {r.customer_phone.slice(-2)}
-                      </div>
-                      <span className="text-sm font-semibold text-text-primary">+{r.customer_phone.replace(/^\+/, '').slice(0, 4)}•••{r.customer_phone.slice(-3)}</span>
-                    </div>
-                    <span className="text-[11px] text-text-secondary">{new Date(r.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map(s => (
-                        <svg key={s} className={`w-3.5 h-3.5 ${s <= r.rating ? 'text-yellow-500' : 'text-gray-300'}`} viewBox="0 0 20 20" fill="currentColor">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                      ))}
-                    </div>
-                  </div>
-                  {r.comment && <p className="text-sm text-text-secondary leading-relaxed">{r.comment}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {similar.length > 0 && (
           <div className="mt-6">

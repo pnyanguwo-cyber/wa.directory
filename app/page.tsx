@@ -49,14 +49,14 @@ export default async function HomePage() {
             alt=""
             aria-hidden="true"
             decoding="async"
-            className="absolute left-0 top-0 h-full w-[48%] object-contain object-left pointer-events-none select-none hidden sm:block"
+            className="absolute left-0 top-0 h-full w-[48%] object-contain object-left pointer-events-none select-none hidden sm:block scale-125"
           />
           <img
             src="/wad2.webp"
             alt=""
             aria-hidden="true"
             decoding="async"
-            className="absolute right-0 top-0 h-full w-[48%] object-contain object-right pointer-events-none select-none hidden sm:block"
+            className="absolute right-0 top-0 h-full w-[48%] object-contain object-right pointer-events-none select-none hidden sm:block scale-125"
           />
           
           <div className="relative max-w-4xl mx-auto px-4 text-center">

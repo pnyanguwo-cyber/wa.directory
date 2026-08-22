@@ -21,8 +21,10 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
 
   const key = business.slug || business.id
   const profileUrl = `${SITE_URL}/business/${key}`
-  const chatUrl = `${SITE_URL}/qr/${key}`
-  const waLink = business.phone ? `https://wa.me/${business.phone.replace(/\D/g, '')}` : null
+  const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const chatMsg = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
+  const chatUrl = phoneClean ? `https://wa.me/${phoneClean}?text=${chatMsg}` : `${SITE_URL}/qr/${key}`
+  const waLink = phoneClean ? `https://wa.me/${phoneClean}` : null
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 space-y-6">
