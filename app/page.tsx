@@ -42,7 +42,7 @@ export default async function HomePage() {
       <main className="min-h-[calc(100vh-3.5rem)]">
         {/* Glass Mesh Hero */}
         <section className="relative overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/70 via-surface to-surface pt-0 pb-10 sm:py-16 min-h-[480px] sm:min-h-[600px] border-b border-gray-200/50">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-64 bg-[radial-gradient(circle_at_center,_rgba(37,211,102,0.12)_0%,_transparent_70%)] pointer-events-none" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[500px] sm:h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(37,211,102,0.18)_0%,_transparent_70%)] pointer-events-none" />
 
           <img
             src="/wad1.webp"
