@@ -42,6 +42,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
   const [notice, setNotice] = useState('')
   const [selectedPos, setSelectedPos] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
+  const [fallbackPos, setFallbackPos] = useState<number | null>(null)
   const [dimmed, setDimmed] = useState(false)
 
   useEffect(() => {
@@ -95,7 +96,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
     const res = await fetch('/api/portal/ranking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, city, position: selectedPos, amount }),
+      body: JSON.stringify({ category, city, position: selectedPos, amount, fallback_position: selectedPos === 1 ? fallbackPos : null }),
     })
     const data = await res.json()
     setBusy(false)
@@ -191,6 +192,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
               type="button"
               onClick={() => {
                 setSelectedPos(p.pos)
+                setFallbackPos(null)
                 setError('')
               }}
               className={`h-10 px-4 rounded-2xl text-xs font-semibold border transition-all ${
@@ -205,6 +207,27 @@ export default function PortalRanking({ businessId, category, city, spots }: {
         </div>
         {selectedPos && (
           <>
+            {selectedPos === 1 && (
+              <div>
+                <p className="text-xs text-text-secondary mb-2">If I don't get #1, I'd like:</p>
+                <div className="flex gap-2">
+                  {[null, 2, 3].map(pos => (
+                    <button
+                      key={String(pos)}
+                      type="button"
+                      onClick={() => setFallbackPos(pos)}
+                      className={`h-9 px-4 rounded-2xl text-xs font-semibold border transition-all ${
+                        fallbackPos === pos
+                          ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
+                          : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
+                      }`}
+                    >
+                      {pos === null ? 'None' : `#${pos}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">
                 Monthly fee (USD) — {feeHint(selectedPos)}

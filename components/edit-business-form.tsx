@@ -38,6 +38,8 @@ export default function EditBusinessForm({
     catalog_link: business.catalog_link || '',
     logo_url: business.logo_url || '',
     website: (business as { website?: string }).website || '',
+    address: business.address || '',
+    show_location: business.show_location !== false,
   })
   const [categories, setCategories] = useState<string[]>(business.category || [])
   const [areas, setAreas] = useState<string[]>(business.areas?.length ? business.areas : (business.area ? [business.area] : []))
@@ -145,6 +147,8 @@ export default function EditBusinessForm({
           catalog_link: form.catalog_link,
           logo_url: logoUrl,
           website: form.website.trim(),
+          address: form.address.trim(),
+          show_location: form.show_location,
         }),
       })
       const data = await res.json()
@@ -286,6 +290,36 @@ export default function EditBusinessForm({
         {form.city === '*' && (
           <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country</p>
         )}
+
+        <div>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">
+            Street Address <span className="text-text-secondary font-normal">(optional)</span>
+          </label>
+          <input
+            type="text"
+            value={form.address}
+            onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+            placeholder="e.g. 123 Samora Machel Ave, Harare"
+            className="input-field"
+          />
+          <p className="text-xs text-whatsapp-600 mt-1">Your address will generate a Google Maps link for directions</p>
+        </div>
+
+        <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
+          <div>
+            <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
+            <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
+            role="switch"
+            aria-checked={form.show_location}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.show_location ? 'translate-x-5' : ''}`} />
+          </button>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Average Price <span className="text-text-secondary font-normal">(optional)</span></label>

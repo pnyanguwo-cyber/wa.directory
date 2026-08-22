@@ -7,7 +7,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { id, name, phone, country_code, whatsapp_username, category, areas, city, area, bio, price_range, catalog_link, logo_url, website, verified } = body
+    const { id, name, phone, country_code, whatsapp_username, category, areas, city, area, bio, price_range, catalog_link, logo_url, website, verified, address, show_location, featured_eligible } = body
 
     if (!id || !name || !phone) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
@@ -40,6 +40,9 @@ export async function POST(request: Request) {
         website: website || null,
         verified: !!verified,
         location: [primaryArea, city, 'Zimbabwe'].filter(Boolean).join(', ') || '',
+        address: address || '',
+        show_location: show_location !== false,
+        featured_eligible: featured_eligible !== false,
       })
       .eq('id', id)
 

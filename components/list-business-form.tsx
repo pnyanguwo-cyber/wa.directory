@@ -75,6 +75,8 @@ export default function ListBusinessForm({
     price_range: '',
     website: '',
     password: '',
+    address: '',
+    show_location: true,
   })
   const [categories, setCategories] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
@@ -217,6 +219,8 @@ export default function ListBusinessForm({
           verified: false,
           rating: 0,
           review_count: 0,
+          address: form.address.trim() || '',
+          show_location: form.show_location,
         })
         .select()
         .single()
@@ -311,7 +315,10 @@ export default function ListBusinessForm({
           </div>
         </div>
         <div className="flex flex-col gap-3">
-          <Link href={`/`} className="btn-primary py-3 text-[16px]">
+          <Link href={`/`} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
             Back to Home
           </Link>
         </div>
@@ -498,6 +505,34 @@ export default function ListBusinessForm({
           {!hasLocation && (
             <p className="text-xs text-danger">Select a city or area</p>
           )}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Street Address <span className="text-text-secondary font-normal">(optional)</span>
+            </label>
+            <input
+              type="text"
+              value={form.address}
+              onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+              placeholder="e.g. 123 Samora Machel Ave, Harare"
+              className="input-field"
+            />
+            <p className="text-xs text-whatsapp-600 mt-1">Adding your address lets customers get directions on Google Maps</p>
+          </div>
+          <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
+            <div>
+              <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
+              <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
+              role="switch"
+              aria-checked={form.show_location}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.show_location ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
           <button
             onClick={handleGenerateBio}
             disabled={!isValidStep2 || bioLoading}
@@ -544,7 +579,10 @@ export default function ListBusinessForm({
             </div>
           )}
           <div className="flex gap-2 pt-2">
-            <button onClick={() => setStep(1)} className="btn-secondary flex-1 py-3 text-[16px]">
+            <button onClick={() => setStep(1)} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full flex-1 py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Back
             </button>
             <button onClick={() => setStep(3)} disabled={!isValidStep2} className="btn-primary flex-1 py-3 text-[16px]">
@@ -739,7 +777,10 @@ export default function ListBusinessForm({
             </p>
           </div>
           <div className="flex gap-2 pt-2">
-            <button onClick={() => setStep(2)} className="btn-secondary flex-1 py-3 text-[16px]">
+            <button onClick={() => setStep(2)} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full flex-1 py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Back
             </button>
             <button

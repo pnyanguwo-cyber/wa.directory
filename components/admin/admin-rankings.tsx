@@ -36,6 +36,7 @@ interface Bid {
   period: string
   status: string
   admin_feedback: string
+  fallback_position: number | null
   created_at: string
   business: BizRef | null
 }
@@ -217,6 +218,7 @@ export default function AdminRankings() {
             <h2 className="text-lg font-bold text-text-primary">Reject bid</h2>
             <p className="text-xs text-text-secondary">
               {rejecting.business?.name} — #{rejecting.position} in {rejecting.category}{rejecting.city ? `, ${rejecting.city}` : ''} for ${Number(rejecting.amount).toFixed(2)}
+              {rejecting.fallback_position && <span className="ml-1 text-amber-600">(fallback #{rejecting.fallback_position} will be auto-submitted)</span>}
             </p>
             <textarea
               value={rejectFeedback}
@@ -288,6 +290,7 @@ export default function AdminRankings() {
                       <p className="text-sm font-bold text-text-primary truncate">{b.business?.name || 'Unknown'}</p>
                       <p className="text-[11px] text-text-secondary">
                         #{b.position} · {b.category}{b.city ? `, ${b.city}` : ' · nationwide'} · period {b.period}
+                        {b.fallback_position && <span className="ml-1 text-amber-600">→ fallback #{b.fallback_position}</span>}
                       </p>
                     </div>
                     <span className="text-sm font-extrabold text-whatsapp-700">${Number(b.amount).toFixed(2)}/mo</span>
@@ -360,7 +363,7 @@ export default function AdminRankings() {
                   <div key={b.id} className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-100 px-3 py-2">
                     <span className={`w-2 h-2 rounded-full ${b.status === 'pending' ? 'bg-amber-500' : b.status === 'approved' ? 'bg-whatsapp-500' : b.status === 'rejected' ? 'bg-red-500' : 'bg-gray-400'}`} />
                     <p className="text-xs font-bold text-text-primary truncate flex-1 min-w-0">{b.business?.name || 'Unknown'}</p>
-                    <p className="text-[11px] text-text-secondary">#{b.position} · {b.category}{b.city ? `, ${b.city}` : ''} · {b.period}</p>
+                    <p className="text-[11px] text-text-secondary">#{b.position} · {b.category}{b.city ? `, ${b.city}` : ''} · {b.period}{b.fallback_position ? ` · fallback #${b.fallback_position}` : ''}</p>
                     <p className="text-xs font-extrabold text-whatsapp-700">${Number(b.amount).toFixed(2)}</p>
                     <span className={`text-[10px] font-bold uppercase capitalize px-2 py-0.5 rounded-full border ${statusStyle(b.status)}`}>{b.status}</span>
                     {b.admin_feedback && <p className="text-[11px] text-text-secondary italic w-full">“{b.admin_feedback}”</p>}

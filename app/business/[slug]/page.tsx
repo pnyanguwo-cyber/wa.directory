@@ -200,7 +200,7 @@ async function BusinessContent({ slug }: { slug: string }) {
           <div className="flex items-center justify-between mb-4">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-text-secondary hover:text-text-primary text-sm transition-colors"
+            className="inline-flex items-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-4 py-2 text-sm font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -362,22 +362,23 @@ async function BusinessContent({ slug }: { slug: string }) {
               </div>
             )}
 
-            {business.whatsapp_link && (
-              <div className="mb-6">
-                <h2 className="text-[16px] font-semibold text-text-primary mb-3">Scan to chat</h2>
-                <QrCard
-                  value={`${SITE_URL}/qr/${business.slug || business.id}`}
-                  title="Chat with us on WhatsApp"
-                  subtitle="Scan with your phone camera to start a chat"
-                  downloadName={`${business.slug || 'business'}-qr.png`}
-                />
-              </div>
-            )}
+            <div className="flex flex-col sm:flex-row gap-6 mb-6">
+              {business.whatsapp_link && (
+                <div className="sm:w-56 shrink-0">
+                  <h2 className="text-[16px] font-semibold text-text-primary mb-3">Scan to chat</h2>
+                  <QrCard
+                    value={`${SITE_URL}/qr/${business.slug || business.id}`}
+                    title="Chat with us on WhatsApp"
+                    subtitle="Scan with your phone camera to start a chat"
+                    downloadName={`${business.slug || 'business'}-qr.png`}
+                  />
+                </div>
+              )}
 
-            {business.bio && (
-              <div className="mb-6">
-                <h2 className="text-[16px] font-semibold text-text-primary mb-3">Details</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {business.bio && (
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-[16px] font-semibold text-text-primary mb-3">Details</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {business.whatsapp_username && (
                     <div className="rounded-2xl bg-surface border border-gray-200/80 px-3.5 py-2.5 flex items-center gap-2.5">
                       <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="currentColor" viewBox="0 0 24 24">
@@ -400,6 +401,29 @@ async function BusinessContent({ slug }: { slug: string }) {
                       </p>
                     </div>
                   </div>
+                  {business.address && business.show_location !== false && (
+                    <div className="rounded-2xl bg-surface border border-gray-200/80 px-3.5 py-2.5 flex items-center gap-2.5 sm:col-span-2">
+                      <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z" />
+                      </svg>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[11px] font-semibold text-text-secondary">Address</p>
+                        <p className="text-sm font-bold text-text-primary truncate">{business.address}</p>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address + ', ' + (business.city || 'Zimbabwe') + ', Zimbabwe')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 h-8 px-3 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                        </svg>
+                        Directions
+                      </a>
+                    </div>
+                  )}
                   {business.price_range && (
                     <div className="rounded-2xl bg-surface border border-gray-200/80 px-3.5 py-2.5 flex items-center gap-2.5">
                       <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -421,8 +445,9 @@ async function BusinessContent({ slug }: { slug: string }) {
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+                </div>
+              )}
+            </div>
 
             {business.catalog_link && (
               <div className="mb-6">

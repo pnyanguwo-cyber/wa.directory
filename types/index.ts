@@ -19,6 +19,9 @@
   logo_url: string
   price_range: string
   website?: string
+  address?: string
+  show_location?: boolean
+  featured_eligible?: boolean
   created_at: string
   edit_token?: string
 }

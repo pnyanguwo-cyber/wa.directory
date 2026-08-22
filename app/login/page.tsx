@@ -200,8 +200,11 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => setMode('login')}
-              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium"
+              className="w-full inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-4 py-2 text-xs font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all"
             >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
               Back to login
             </button>
           </form>

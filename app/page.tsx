@@ -26,6 +26,7 @@ export default async function HomePage() {
     .from('businesses')
     .select(BUSINESS_CARD_COLUMNS)
     .eq('verified', true)
+    .eq('featured_eligible', true)
     .order('rating', { ascending: false })
     .limit(ALL_BUSINESSES_INITIAL + 3)
 

@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const businessId = getBusinessId()
   if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
 
-  const { category, city, position, amount } = await request.json().catch(() => ({}))
+  const { category, city, position, amount, fallback_position } = await request.json().catch(() => ({}))
   if (!category || !['1', '2', '3'].includes(String(position))) {
     return NextResponse.json({ error: 'Category and position are required' }, { status: 400 })
   }
@@ -73,6 +73,14 @@ export async function POST(request: Request) {
   const fee = Number(amount)
   if (!Number.isFinite(fee) || fee <= 0) {
     return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
+  }
+
+  const fallback = fallback_position != null ? Number(fallback_position) : null
+  if (fallback !== null && ![2, 3].includes(fallback)) {
+    return NextResponse.json({ error: 'Fallback position must be 2 or 3' }, { status: 400 })
+  }
+  if (fallback !== null && pos !== 1) {
+    return NextResponse.json({ error: 'Fallback position is only available when bidding for #1' }, { status: 400 })
   }
 
   const supabase = getSupabase()
@@ -130,6 +138,7 @@ export async function POST(request: Request) {
     amount: fee,
     period: nextMonthStart(),
     status: 'pending',
+    fallback_position: fallback,
   })
 
   if (error) {

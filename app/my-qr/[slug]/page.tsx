@@ -114,8 +114,11 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
         Tip: the chat QR works from any phone camera — no WhatsApp Business needed.
       </p>
       <div className="text-center">
-        <Link href="/portal" className="text-xs font-semibold text-whatsapp-600 hover:underline">
-          ← Back to my portal
+        <Link href="/portal" className="inline-flex items-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-4 py-2 text-xs font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to my portal
         </Link>
       </div>
     </div>

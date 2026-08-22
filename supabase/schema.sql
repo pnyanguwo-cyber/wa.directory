@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS businesses (
   logo_url TEXT DEFAULT '',
   price_range TEXT DEFAULT '',
   website TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  show_location BOOLEAN DEFAULT TRUE,
+  featured_eligible BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -48,6 +51,9 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS edit_token TEXT;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS whatsapp_username TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS areas TEXT[] DEFAULT '{}';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS show_location BOOLEAN DEFAULT TRUE;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS featured_eligible BOOLEAN DEFAULT TRUE;
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
@@ -257,6 +263,7 @@ CREATE TABLE IF NOT EXISTS bids (
   period DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'outbid', 'expired')),
   admin_feedback TEXT DEFAULT '',
+  fallback_position INT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

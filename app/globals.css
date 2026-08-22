@@ -3,19 +3,43 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-primary: 255 255 255;
+    --bg-secondary: 240 242 245;
+    --bg-card: 255 255 255;
+    --text-primary: 17 27 33;
+    --text-secondary: 84 101 111;
+    --border-color: 229 231 235;
+    --border-light: 243 244 246;
+  }
+
+  .dark {
+    --bg-primary: 17 27 33;
+    --bg-secondary: 32 44 51;
+    --bg-card: 24 36 43;
+    --text-primary: 233 237 239;
+    --text-secondary: 136 154 163;
+    --border-color: 52 67 75;
+    --border-light: 42 57 65;
+  }
+
   html {
     -webkit-tap-highlight-color: transparent;
     scroll-behavior: smooth;
   }
 
   body {
-    @apply text-text-primary bg-surface/50 antialiased selection:bg-whatsapp-100 selection:text-whatsapp-900;
+    @apply antialiased selection:bg-whatsapp-100 selection:text-whatsapp-900;
+    background-color: rgb(var(--bg-primary));
+    color: rgb(var(--text-primary));
   }
 }
 
 @layer components {
   .skeleton {
-    @apply bg-gradient-to-r from-surface via-white to-surface bg-[length:200%_100%] animate-shimmer rounded-xl;
+    @apply bg-gradient-to-r animate-shimmer rounded-xl;
+    background-image: linear-gradient(to right, rgb(var(--bg-secondary)), rgb(var(--bg-card)), rgb(var(--bg-secondary)));
+    background-size: 200% 100%;
   }
 
   .skeleton-text {
@@ -37,6 +61,9 @@
   .badge-verified {
     @apply inline-flex items-center gap-1 bg-whatsapp-100/80 text-whatsapp-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-whatsapp-200/60 shadow-sm backdrop-blur-sm;
   }
+  .dark .badge-verified {
+    @apply bg-whatsapp-900/40 text-whatsapp-300 border-whatsapp-700/40;
+  }
 
   .btn-primary {
     @apply bg-whatsapp-500 text-white font-semibold rounded-2xl transition-all duration-200 shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
@@ -46,30 +73,47 @@
   }
 
   .btn-secondary {
-    @apply border border-gray-200/80 bg-white/80 backdrop-blur-md text-text-primary font-medium rounded-2xl shadow-sm transition-all duration-200;
+    @apply border font-medium rounded-2xl shadow-sm transition-all duration-200 backdrop-blur-md;
+    border-color: rgb(var(--border-color));
+    background-color: rgba(var(--bg-card), 0.8);
+    color: rgb(var(--text-primary));
   }
   .btn-secondary:not(:disabled) {
-    @apply hover:bg-white hover:border-gray-300 hover:shadow-card active:scale-[0.97];
+    @apply hover:shadow-card active:scale-[0.97];
+    background-color: rgb(var(--bg-card));
+    border-color: rgb(var(--border-color));
   }
 
   .card {
-    @apply bg-white/90 backdrop-blur-md rounded-2xl border border-white/80 shadow-card transition-all duration-200;
+    @apply backdrop-blur-md rounded-2xl shadow-card transition-all duration-200;
+    background-color: rgba(var(--bg-card), 0.9);
+    border-color: rgba(var(--bg-card), 0.8);
   }
 
   .neo-card {
-    @apply bg-white/95 rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(18,140,126,0.12)] transition-all duration-200;
+    @apply rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(18,140,126,0.12)] transition-all duration-200;
+    background-color: rgba(var(--bg-card), 0.95);
+    border-color: rgb(var(--border-light));
   }
 
   .input-field {
-    @apply w-full px-4 py-3.5 border border-gray-200/80 rounded-2xl focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 bg-white/90 shadow-[inset_1px_1px_3px_rgba(0,0,0,0.04)];
+    @apply w-full px-4 py-3.5 rounded-2xl focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200;
+    border-color: rgb(var(--border-color));
+    background-color: rgba(var(--bg-card), 0.9);
+    box-shadow: inset 1px 1px 3px rgba(0,0,0,0.04);
   }
 
   .chip {
-    @apply bg-white/90 border border-gray-200/60 text-text-secondary text-xs font-medium px-3 py-1.5 rounded-full hover:bg-whatsapp-50 hover:text-whatsapp-700 hover:border-whatsapp-200 transition-all duration-150 shadow-sm cursor-pointer;
+    @apply border text-text-secondary text-xs font-medium px-3 py-1.5 rounded-full hover:bg-whatsapp-50 hover:text-whatsapp-700 hover:border-whatsapp-200 transition-all duration-150 shadow-sm cursor-pointer;
+    background-color: rgba(var(--bg-card), 0.9);
+    border-color: rgb(var(--border-light));
   }
 
   .chip-active {
     @apply bg-whatsapp-100 text-whatsapp-800 border-whatsapp-300 font-semibold shadow-sm;
+  }
+  .dark .chip-active {
+    @apply bg-whatsapp-900/40 text-whatsapp-300 border-whatsapp-700/40;
   }
 }
 

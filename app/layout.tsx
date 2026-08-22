@@ -8,6 +8,7 @@ import InstallPWA from '@/components/install-pwa'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
 import { getSupabase } from '@/lib/supabase-server'
+import { ThemeProvider } from 'next-themes'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -56,29 +57,31 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     .order('created_at', { ascending: false })
 
   return (
-    <html lang="en">
-      <body className={`${inter.variable} min-h-screen bg-white font-sans`}>
-        <Navbar />
-        <BannerStrip
-          banners={(banners || []).map(b => ({
-            id: b.id,
-            text: b.text,
-            link: b.link || '',
-            link_label: b.link_label || 'Learn more',
-          }))}
-        />
-        <PWARegistration />
-        <InstallPWA />
-        <WhatsAppSupportButton />
-        <img
-          src="/wadbody.webp"
-          alt=""
-          aria-hidden="true"
-          decoding="async"
-          className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10"
-        />
-        <main className="relative pb-16 md:pb-0">{children}</main>
-        <Footer />
+    <html lang="en" suppressHydrationWarning>
+      <body className={`${inter.variable} min-h-screen font-sans`}>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+          <Navbar />
+          <BannerStrip
+            banners={(banners || []).map(b => ({
+              id: b.id,
+              text: b.text,
+              link: b.link || '',
+              link_label: b.link_label || 'Learn more',
+            }))}
+          />
+          <PWARegistration />
+          <InstallPWA />
+          <WhatsAppSupportButton />
+          <img
+            src="/wadbody.webp"
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+            className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10 dark:opacity-0 transition-opacity duration-500"
+          />
+          <main className="relative pb-16 md:pb-0">{children}</main>
+          <Footer />
+        </ThemeProvider>
       </body>
     </html>
   )

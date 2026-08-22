@@ -23,7 +23,7 @@ export async function GET() {
       .limit(300),
     supabase
       .from('bids')
-      .select('id, business_id, category, city, position, amount, period, status, admin_feedback, created_at')
+      .select('id, business_id, category, city, position, amount, period, status, admin_feedback, fallback_position, created_at')
       .order('created_at', { ascending: false })
       .limit(200),
   ])
@@ -214,7 +214,7 @@ export async function PATCH(request: Request) {
 
       const { data: bid } = await supabase
         .from('bids')
-        .select('business_id, category, city, position')
+        .select('business_id, category, city, position, amount, period, fallback_position')
         .eq('id', bid_id)
         .maybeSingle()
 
@@ -226,21 +226,44 @@ export async function PATCH(request: Request) {
       if (bid) {
         const { data: business } = await supabase
           .from('businesses')
-          .select('phone')
+          .select('phone, name')
           .eq('id', bid.business_id)
           .maybeSingle()
+
         if (business?.phone) {
-          sendWhatsAppMessage(
-            business.phone,
-            [
-              'ℹ️ *Your bid was not approved*',
-              '',
-              `Bid: ${bid.category}${bid.city ? ` in ${bid.city}` : ''} — position #${bid.position}`,
-              feedback ? `Reason: ${feedback}` : 'Reason: not specified',
-              '',
-              'You can submit a new bid anytime from your portal.',
-            ].join('\n')
-          ).catch(() => {})
+          let message = [
+            'ℹ️ *Your bid was not approved*',
+            '',
+            `Bid: ${bid.category}${bid.city ? ` in ${bid.city}` : ''} — position #${bid.position}`,
+            feedback ? `Reason: ${feedback}` : 'Reason: not specified',
+          ].join('\n')
+
+          if (bid.fallback_position && bid.position === 1) {
+            const { error: fallbackError } = await supabase.from('bids').insert({
+              business_id: bid.business_id,
+              category: bid.category,
+              city: bid.city,
+              position: bid.fallback_position,
+              amount: bid.amount,
+              period: bid.period,
+              status: 'pending',
+              fallback_position: null,
+            })
+
+            if (!fallbackError) {
+              message += [
+                '',
+                '',
+                `🔄 *Fallback bid created*`,
+                `Your #1 bid was redirected to position #${bid.fallback_position} for the same amount ($${Number(bid.amount).toFixed(2)}).`,
+                'Awaiting admin approval.',
+              ].join('\n')
+            }
+          } else {
+            message += '\n\nYou can submit a new bid anytime from your portal.'
+          }
+
+          sendWhatsAppMessage(business.phone, message).catch(() => {})
         }
       }
       return NextResponse.json({ success: true })
