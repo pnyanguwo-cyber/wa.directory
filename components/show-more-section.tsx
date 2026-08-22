@@ -42,7 +42,7 @@ export default function ShowMoreSection({ businesses }: { businesses: Business[]
       <h2 id="show-more-heading" className="text-2xl sm:text-3xl font-bold text-text-primary tracking-tight mb-4">
         All Businesses
       </h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {visible.map(b => (
           <BusinessCard key={b.id} business={b} />
         ))}

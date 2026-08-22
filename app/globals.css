@@ -59,10 +59,10 @@
   }
 
   .badge-verified {
-    @apply inline-flex items-center gap-1 bg-whatsapp-100/80 text-whatsapp-800 text-xs font-semibold px-2.5 py-0.5 rounded-full border border-whatsapp-200/60 shadow-sm backdrop-blur-sm;
+    @apply inline-flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 shrink-0 drop-shadow-sm;
   }
   .dark .badge-verified {
-    @apply bg-whatsapp-900/40 text-whatsapp-300 border-whatsapp-700/40;
+    @apply drop-shadow-[0_0_4px_rgba(0,149,246,0.4)];
   }
 
   .btn-primary {
@@ -91,8 +91,8 @@
   }
 
   .neo-card {
-    @apply rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_12px_36px_rgba(18,140,126,0.12)] transition-all duration-200;
-    background-color: rgba(var(--bg-card), 0.95);
+    @apply rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.1)] hover:shadow-[0_12px_36px_rgba(18,140,126,0.12)] transition-all duration-200;
+    background-color: rgba(var(--bg-card), 0.78);
     border-color: rgb(var(--border-light));
   }
 
@@ -104,9 +104,15 @@
   }
 
   .chip {
-    @apply border text-text-secondary text-xs font-medium px-3 py-1.5 rounded-full hover:bg-whatsapp-50 hover:text-whatsapp-700 hover:border-whatsapp-200 transition-all duration-150 shadow-sm cursor-pointer;
-    background-color: rgba(var(--bg-card), 0.9);
-    border-color: rgb(var(--border-light));
+    @apply border text-text-primary text-xs font-semibold px-3.5 py-2 rounded-full hover:bg-whatsapp-50 hover:text-whatsapp-700 hover:border-whatsapp-300 transition-all duration-150 shadow-md cursor-pointer;
+    background-color: rgba(255, 255, 255, 0.85);
+    border-color: rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(8px);
+  }
+  .dark .chip {
+    @apply text-gray-200 hover:bg-whatsapp-900/30 hover:text-whatsapp-300 hover:border-whatsapp-600;
+    background-color: rgba(30, 30, 30, 0.85);
+    border-color: rgba(255, 255, 255, 0.1);
   }
 
   .chip-active {

@@ -26,8 +26,8 @@ export default function FilterBar({ total, query }: FilterBarProps) {
 
   return (
     <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-      <p className="text-text-secondary text-sm">
-        <span className="font-semibold text-text-primary">{total}</span>{' '}
+      <p className="text-text-secondary dark:text-gray-400 text-sm">
+        <span className="font-semibold text-text-primary dark:text-gray-100">{total}</span>{' '}
         business{total !== 1 ? 'es' : ''} for &ldquo;{query}&rdquo;
       </p>
       <div className="flex items-center gap-2">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
+import Icon from '@/components/icon'
 
 const SUPPORT_NUMBER = '263773791864'
 
@@ -25,8 +26,8 @@ export default function WhatsAppSupportButton() {
   return (
     <div className={`fixed z-50 flex flex-col items-end gap-2 transition-all duration-300 ${overStickyBar ? 'bottom-24 sm:bottom-5 right-5' : 'bottom-5 right-5'}`}>
       {showTip && (
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-soft-lift px-4 py-2.5 text-xs text-text-primary max-w-[220px] animate-slide-up">
-          Need help? Chat with support 👋
+        <div className="bg-white border border-gray-200 rounded-2xl shadow-soft-lift px-4 py-2.5 text-xs text-text-primary max-w-[220px] animate-slide-up flex items-center gap-1.5">
+          Need help? Chat with support <Icon name="hand" className="w-3.5 h-3.5" />
         </div>
       )}
       <a

@@ -33,7 +33,7 @@ export default function FeaturedBusinesses({ businesses }: { businesses: Busines
             <p className="text-text-secondary text-sm sm:text-base mt-0.5">Hand-picked verified shops and services ready to chat</p>
           </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         {businesses.map(b => (
           <BusinessCard key={b.id} business={b} />
         ))}

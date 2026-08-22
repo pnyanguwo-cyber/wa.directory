@@ -86,9 +86,9 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
       <form onSubmit={handleSubmit}>
         <div className="relative flex items-center">
           {/* Search Glass & AI Spark Icon */}
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-whatsapp-600">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-whatsapp-600 dark:text-whatsapp-400">
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
               stroke="currentColor"
               strokeWidth="2.2"
@@ -108,29 +108,54 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => suggestions.length > 0 && setShowDropdown(true)}
-            placeholder="Search shops, services, prices e.g. plumber"
+            placeholder="Search shops, services, prices e.g. solar installer, plumber..."
             aria-label="Search for businesses, services, or locations"
             aria-autocomplete="list"
             aria-controls="search-suggestions"
             aria-expanded={showDropdown}
-            className={`w-full pl-12 ${large ? 'pr-28 h-16 text-lg sm:text-xl' : 'pr-12 h-12 text-base'} rounded-2xl border border-gray-200/90 bg-white/95 backdrop-blur-md focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_20px_rgba(0,0,0,0.06),inset_0_2px_4px_rgba(0,0,0,0.02)]`}
+            className={`w-full pl-11 sm:pl-13 ${large ? 'pr-24 sm:pr-32 h-14 sm:h-16 text-base sm:text-lg' : 'pr-20 h-12 text-sm sm:text-base'} rounded-2xl border border-gray-200/90 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 text-text-primary dark:text-gray-100 placeholder:text-text-secondary/70 dark:placeholder:text-gray-400 backdrop-blur-md focus:border-whatsapp-500 dark:focus:border-whatsapp-400 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_24px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(0,0,0,0.02)]`}
           />
 
-          {/* Action / Spinner inside search bar */}
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+          {/* Action / Clear / Spinner inside search bar */}
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 sm:gap-2">
+            {query.trim() && !loading && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery('')
+                  setSuggestions([])
+                  setShowDropdown(false)
+                }}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+
             {loading ? (
               <div className="w-5 h-5 mr-3 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" role="status" aria-label="Loading suggestions" />
             ) : large ? (
               <button
                 type="submit"
-                className="btn-primary h-12 px-5 text-sm sm:text-base font-medium flex items-center gap-1.5 rounded-xl"
+                className="btn-primary h-10 sm:h-12 px-3.5 sm:px-5 text-sm sm:text-base font-semibold flex items-center gap-1.5 rounded-xl shadow-md active:scale-95"
               >
-                <span>Search</span>
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <span className="hidden sm:inline">Search</span>
+                <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                 </svg>
               </button>
-            ) : null}
+            ) : (
+              <button
+                type="submit"
+                className="btn-primary h-9 px-3 text-xs font-semibold flex items-center gap-1 rounded-xl shadow-sm"
+              >
+                <span>Find</span>
+              </button>
+            )}
           </div>
         </div>
       </form>
@@ -140,7 +165,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
         <ul
           id="search-suggestions"
           role="listbox"
-          className="absolute top-full mt-2 left-0 right-0 bg-white/95 backdrop-blur-xl border border-gray-200/80 rounded-2xl shadow-dropdown z-50 overflow-hidden m-0 p-1 list-none animate-slide-up"
+          className="absolute top-full mt-2 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/90 dark:border-gray-700 rounded-2xl shadow-dropdown z-50 overflow-hidden m-0 p-1.5 list-none animate-slide-up"
         >
           {suggestions.map((name, i) => (
             <li
@@ -151,22 +176,22 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
                 setShowDropdown(false)
                 router.push(`/search?q=${encodeURIComponent(name)}`)
               }}
-              className={`w-full text-left px-4 py-3 rounded-xl text-sm transition-all duration-150 cursor-pointer flex items-center justify-between ${
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer flex items-center justify-between ${
                 i === selectedIndex
-                  ? 'bg-whatsapp-50 text-whatsapp-800 font-semibold shadow-sm'
-                  : 'text-text-primary hover:bg-surface'
+                  ? 'bg-whatsapp-50 dark:bg-whatsapp-900/40 text-whatsapp-800 dark:text-whatsapp-200 font-semibold shadow-sm'
+                  : 'text-text-primary dark:text-gray-200 hover:bg-surface dark:hover:bg-gray-800'
               }`}
             >
-              <span className="flex items-center gap-2.5">
-                <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <span className="flex items-center gap-2.5 truncate">
+                <svg className="w-4 h-4 text-whatsapp-600 dark:text-whatsapp-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="11" cy="11" r="8" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
                 </svg>
-                {name}
+                <span className="truncate">{name}</span>
               </span>
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-              </svg>
+              <span className="text-xs text-whatsapp-700 dark:text-whatsapp-400 font-medium shrink-0 ml-2">
+                Search &rarr;
+              </span>
             </li>
           ))}
         </ul>
@@ -174,3 +199,4 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
     </div>
   )
 }
+

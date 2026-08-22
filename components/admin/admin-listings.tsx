@@ -515,11 +515,11 @@ export default function AdminListings() {
                     <div className="flex items-center gap-2 mb-0.5">
                       <h3 className="font-bold text-text-primary text-sm truncate">{b.name}</h3>
                       {b.verified && (
-                        <span className="badge-verified text-[10px] px-2 py-0.5 shrink-0">
-                          <svg className="w-3 h-3 text-whatsapp-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                        <span className="badge-verified shrink-0">
+                          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M23 12L21.2 14.5L21.5 17.5L18.7 18.7L17.5 21.5L14.5 21.2L12 23L9.5 21.2L6.5 21.5L5.3 18.7L2.5 17.5L2.8 14.5L1 12L2.8 9.5L2.5 6.5L5.3 5.3L6.5 2.5L9.5 2.8L12 1L14.5 2.8L17.5 2.5L18.7 5.3L21.5 6.5L21.2 9.5Z" fill="#0095F6" stroke="white" strokeWidth="0.8" />
+                            <path d="M9.5 15.5L7 13L5.5 14.5L9.5 18.5L18.5 9.5L17 8L9.5 15.5Z" fill="white" />
                           </svg>
-                          Verified
                         </span>
                       )}
                     </div>

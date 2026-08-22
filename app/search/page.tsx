@@ -98,7 +98,7 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
       ) : (
         <>
           <ImpressionPing businesses={businesses} category={matchedCategory !== 'Other' ? matchedCategory : ''} />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             {businesses.map(b => (
               <BusinessCard key={b.id} business={b} />
             ))}
@@ -119,7 +119,7 @@ function SearchSkeleton() {
           <div className="skeleton h-8 w-20 rounded-full" />
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         {[1, 2, 3, 4].map(i => (
           <SkeletonCard key={i} />
         ))}

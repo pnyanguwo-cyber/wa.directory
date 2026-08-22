@@ -13,13 +13,17 @@ export interface ApprovedArea {
 }
 
 export async function getApprovedCategories(): Promise<ApprovedCategory[]> {
-  const { data } = await getSupabase()
-    .from('categories')
-    .select('name, icon, keywords')
-    .eq('active', true)
-    .order('name', { ascending: true })
-  return (data || []) as ApprovedCategory[]
+  try {
+    const { data } = await getSupabase()
+      .from('categories')
+      .select('name, icon, keywords')
+      .eq('active', true)
+      .order('name', { ascending: true })
+    if (data && data.length > 0) return data as ApprovedCategory[]
+  } catch {}
+  return staticCategories.map(c => ({ name: c.name, icon: c.icon, keywords: c.keywords }))
 }
+
 
 export async function getApprovedCategoryNames(): Promise<Set<string>> {
   const rows = await getApprovedCategories()
@@ -27,12 +31,17 @@ export async function getApprovedCategoryNames(): Promise<Set<string>> {
 }
 
 export async function getApprovedAreas(): Promise<ApprovedArea[]> {
-  const { data } = await getSupabase()
-    .from('areas')
-    .select('city, name')
-    .eq('active', true)
-  return (data || []) as ApprovedArea[]
+  try {
+    const { data } = await getSupabase()
+      .from('areas')
+      .select('city, name')
+      .eq('active', true)
+    return (data || []) as ApprovedArea[]
+  } catch {
+    return []
+  }
 }
+
 
 export async function getApprovedAreaNames(city: string): Promise<Set<string>> {
   const rows = await getApprovedAreas()

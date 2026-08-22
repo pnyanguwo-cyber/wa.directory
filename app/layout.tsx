@@ -71,13 +71,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
           <PWARegistration />
           <InstallPWA />
-          <WhatsAppSupportButton />
+          {/* Global Floor / Background Wallpaper */}
           <img
             src="/wadbody.webp"
             alt=""
             aria-hidden="true"
             decoding="async"
-            className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-10 dark:opacity-0 transition-opacity duration-500"
+            className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-30 opacity-90 dark:opacity-25 transition-opacity duration-500"
+          />
+          {/* Translucent overlay for crisp card contrast */}
+          <div
+            aria-hidden="true"
+            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-20 bg-white/40 dark:bg-gray-950/80 backdrop-blur-[0.5px]"
+          />
+          {/* Ambient radial accent lighting */}
+          <div
+            aria-hidden="true"
+            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(37,211,102,0.12),transparent)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(18,140,126,0.2),transparent)]"
           />
           <main className="relative pb-16 md:pb-0">{children}</main>
           <Footer />
