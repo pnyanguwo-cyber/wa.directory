@@ -132,7 +132,7 @@ export default async function HomePage() {
           <TypingHeadline />
 
           {/* Subtitle */}
-          <p className="text-text-secondary dark:text-gray-300 text-sm sm:text-lg max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed font-normal">
+          <p className="text-text-primary dark:text-gray-100 text-sm sm:text-lg max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed font-medium">
             Find verified local shops, trusted service providers, and real-time catalog prices in Harare, Bulawayo, and across Zimbabwe. Connect directly on WhatsApp with zero hassle.
           </p>
 

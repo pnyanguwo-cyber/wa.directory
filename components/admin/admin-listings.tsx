@@ -11,6 +11,9 @@ import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
 
 const PAGE_SIZE = 15
 
+type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'rating-desc' | 'reviews-desc'
+type SubscriptionFilter = 'all' | 'premium' | 'basic'
+
 interface EditForm {
   name: string
   phone: string
@@ -49,6 +52,12 @@ export default function AdminListings() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'pending'>('all')
+  const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [filterSubscription, setFilterSubscription] = useState<SubscriptionFilter>('all')
+  const [filterCategory, setFilterCategory] = useState('')
+  const [filterCity, setFilterCity] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
+  const [subscriptionIds, setSubscriptionIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [dataLoading, setDataLoading] = useState(true)
@@ -93,6 +102,13 @@ export default function AdminListings() {
         if (data) setBusinesses(data as Business[])
         setDataLoading(false)
       })
+    getClient()
+      .from('subscriptions')
+      .select('business_id')
+      .eq('status', 'active')
+      .then(({ data }) => {
+        setSubscriptionIds(new Set((data || []).map((s: any) => s.business_id)))
+      })
   }
 
   const stats = useMemo(() => {
@@ -109,6 +125,10 @@ export default function AdminListings() {
     let list = businesses
     if (filterStatus === 'verified') list = list.filter(b => b.verified)
     if (filterStatus === 'pending') list = list.filter(b => !b.verified)
+    if (filterSubscription === 'premium') list = list.filter(b => subscriptionIds.has(b.id))
+    if (filterSubscription === 'basic') list = list.filter(b => !subscriptionIds.has(b.id))
+    if (filterCategory) list = list.filter(b => b.category?.includes(filterCategory))
+    if (filterCity) list = list.filter(b => (b.city || '').toLowerCase() === filterCity.toLowerCase())
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(b =>
@@ -118,8 +138,41 @@ export default function AdminListings() {
         (b.location || '').toLowerCase().includes(q)
       )
     }
+    list = [...list].sort((a, b) => {
+      switch (sortBy) {
+        case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case 'name-asc': return a.name.localeCompare(b.name)
+        case 'name-desc': return b.name.localeCompare(a.name)
+        case 'rating-desc': return (b.rating || 0) - (a.rating || 0)
+        case 'reviews-desc': return (b.review_count || 0) - (a.review_count || 0)
+        default: return 0
+      }
+    })
     return list
-  }, [businesses, search, filterStatus])
+  }, [businesses, search, filterStatus, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds])
+
+  const uniqueCategories = useMemo(() => {
+    const cats = new Set<string>()
+    businesses.forEach(b => b.category?.forEach(c => cats.add(c)))
+    return [...cats].sort()
+  }, [businesses])
+
+  const uniqueCities = useMemo(() => {
+    const cities = new Set<string>()
+    businesses.forEach(b => { if (b.city) cities.add(b.city) })
+    return [...cities].sort()
+  }, [businesses])
+
+  const hasActiveFilters = filterStatus !== 'all' || filterSubscription !== 'all' || filterCategory || filterCity || sortBy !== 'newest'
+
+  function clearFilters() {
+    setFilterStatus('all')
+    setFilterSubscription('all')
+    setFilterCategory('')
+    setFilterCity('')
+    setSortBy('newest')
+  }
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -472,8 +525,70 @@ export default function AdminListings() {
               {status === 'all' ? 'All' : status === 'verified' ? 'Verified' : 'Pending'}
             </button>
           ))}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`h-11 px-4 rounded-2xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              showFilters || hasActiveFilters
+                ? 'bg-whatsapp-500 text-white shadow-md'
+                : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
+            }`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" />
+            </svg>
+            Filters
+            {hasActiveFilters && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+          </button>
         </div>
       </div>
+
+      {showFilters && (
+        <div className="neo-card p-4 space-y-4 animate-slide-down">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-text-primary">Filters & Sort</h3>
+            {hasActiveFilters && (
+              <button onClick={clearFilters} className="text-xs text-whatsapp-600 font-semibold hover:underline">
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Sort by</label>
+              <select value={sortBy} onChange={e => setSortBy(e.target.value as SortOption)} className="input-field text-xs py-2 w-full">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="name-asc">Name A→Z</option>
+                <option value="name-desc">Name Z→A</option>
+                <option value="rating-desc">Highest rated</option>
+                <option value="reviews-desc">Most reviews</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Subscription</label>
+              <select value={filterSubscription} onChange={e => setFilterSubscription(e.target.value as SubscriptionFilter)} className="input-field text-xs py-2 w-full">
+                <option value="all">All</option>
+                <option value="premium">Premium only</option>
+                <option value="basic">Basic only</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Category</label>
+              <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="input-field text-xs py-2 w-full">
+                <option value="">All categories</option>
+                {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">City</label>
+              <select value={filterCity} onChange={e => setFilterCity(e.target.value)} className="input-field text-xs py-2 w-full">
+                <option value="">All cities</option>
+                {uniqueCities.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dataLoading ? (
         <div className="space-y-3">
