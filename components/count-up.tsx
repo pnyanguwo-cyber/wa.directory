@@ -3,10 +3,21 @@
 import { useEffect, useState } from 'react'
 
 export default function CountUp({ target, duration = 1500 }: { target: number; duration?: number }) {
-  const [count, setCount] = useState(target)
+  const [count, setCount] = useState(0)
 
   useEffect(() => {
-    setCount(0)
+    if (target === 0) {
+      setCount(0)
+      return
+    }
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReduced) {
+      setCount(target)
+      return
+    }
+
     const start = performance.now()
     let raf: number
 

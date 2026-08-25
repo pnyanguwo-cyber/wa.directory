@@ -12,34 +12,55 @@ function getSupabase() {
 
 export async function POST(request: Request) {
   try {
-    const { business_id, edit_token, phone, password } = await request.json()
+    const { edit_token, phone, password } = await request.json()
 
     if (!password || password.length < 6) {
       return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
     }
 
+    // Ownership is proven by possession of the listing's edit_token — a
+    // server-generated secret delivered to the owner. A raw business_id is
+    // NOT accepted here: it is public, so trusting it would let anyone claim
+    // any listing (account takeover).
+    if (!edit_token) {
+      return NextResponse.json({ error: 'A valid setup link is required' }, { status: 400 })
+    }
+    if (!phone) {
+      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
+    }
+
     const supabase = getSupabase()
 
-    let business: { id: string; phone: string } | null = null
-
-    if (business_id) {
-      const { data } = await supabase.from('businesses').select('id, phone').eq('id', business_id).single()
-      business = data || null
-    } else if (edit_token) {
-      const { data } = await supabase.from('businesses').select('id, phone').eq('edit_token', edit_token).single()
-      business = data || null
-    }
+    const { data: business } = await supabase
+      .from('businesses')
+      .select('id, phone')
+      .eq('edit_token', edit_token)
+      .single()
 
     if (!business) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 })
     }
 
-    if (phone) {
-      const given = normalizePhone(phone)
-      const stored = normalizePhone(business.phone || '')
-      if (stored && given !== stored) {
-        return NextResponse.json({ error: 'Phone number does not match this listing' }, { status: 400 })
-      }
+    // The entered phone must match the listed number (defence in depth).
+    const given = normalizePhone(phone)
+    const stored = normalizePhone(business.phone || '')
+    if (!stored || given !== stored) {
+      return NextResponse.json({ error: 'Phone number does not match this listing' }, { status: 400 })
+    }
+
+    // Never overwrite an existing password. Once an account is secured, a new
+    // password must go through the OTP-verified reset flow (/api/account/reset).
+    const { data: existing } = await supabase
+      .from('business_accounts')
+      .select('password_hash')
+      .eq('business_id', business.id)
+      .maybeSingle()
+
+    if (existing?.password_hash) {
+      return NextResponse.json(
+        { error: 'An account already exists for this listing. Please log in or reset your password.' },
+        { status: 409 }
+      )
     }
 
     const password_hash = await bcrypt.hash(password, 10)

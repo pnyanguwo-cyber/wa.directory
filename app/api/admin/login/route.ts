@@ -1,24 +1,25 @@
 import { NextResponse } from 'next/server'
+import { signAdminToken, verifyAdminPassword, ADMIN_COOKIE, ADMIN_MAX_AGE_MS } from '@/lib/admin-auth'
 
 export async function POST(request: Request) {
   try {
     const { password } = await request.json()
 
-    if (!process.env.ADMIN_PASSWORD) {
+    if (!process.env.ADMIN_PASSWORD || !process.env.BUSINESS_AUTH_SECRET) {
       return NextResponse.json(
         { success: false, error: 'Server misconfigured' },
         { status: 500 }
       )
     }
 
-    if (password === process.env.ADMIN_PASSWORD) {
+    if (verifyAdminPassword(password)) {
       const response = NextResponse.json({ success: true })
-      response.cookies.set('admin_token', 'true', {
+      response.cookies.set(ADMIN_COOKIE, signAdminToken(), {
         httpOnly: true,
         secure: true,
         sameSite: 'lax',
         path: '/',
-        maxAge: 60 * 60 * 24,
+        maxAge: Math.floor(ADMIN_MAX_AGE_MS / 1000),
       })
       return response
     }

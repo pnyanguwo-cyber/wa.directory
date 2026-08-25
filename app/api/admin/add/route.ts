@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { isAdmin } from '@/lib/admin-auth'
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('admin_token')
-    if (!token || token.value !== 'true') {
+    if (!isAdmin()) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://wadirectory.vercel.app/sitemap.xml
+Sitemap: https://wadirectory.co.zw/sitemap.xml

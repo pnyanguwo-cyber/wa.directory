@@ -3,15 +3,12 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { getClient } from '@/lib/supabase-client'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories as staticCategories } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import QrCard from '@/components/qr-card'
-
-const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
 interface ApprovedCategory { name: string; icon: string }
 interface ApprovedArea { city: string; name: string }
@@ -25,15 +22,6 @@ const cityOptions = [
   { value: '*', label: 'Whole country' },
   ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
 ]
-
-function generateSlug(name: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 50) || 'business'
-  return `${base}-${Math.random().toString(36).slice(2, 8)}`
-}
 
 type LogoMode = 'url' | 'upload'
 type FeatureRequest = { type: 'category' | 'area'; name: string; city?: string }
@@ -62,6 +50,7 @@ export default function ListBusinessForm({
   const catalogRef = useRef<HTMLInputElement>(null)
   const websiteRef = useRef<HTMLInputElement>(null)
   const priceRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const [form, setForm] = useState({
     name: '',
     countryCode: '+263',
@@ -81,6 +70,7 @@ export default function ListBusinessForm({
   const [categories, setCategories] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [requests, setRequests] = useState<FeatureRequest[]>([])
+  const [errors, setErrors] = useState<{ password?: string; logo?: string; submit?: string }>({})
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
@@ -136,9 +126,10 @@ export default function ListBusinessForm({
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      alert('File too large (max 2MB)')
+      setErrors(prev => ({ ...prev, logo: 'File too large (max 2MB)' }))
       return
     }
+    setErrors(prev => ({ ...prev, logo: undefined }))
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -172,6 +163,13 @@ export default function ListBusinessForm({
   }
 
   async function handleSubmit() {
+    if (form.password && form.password.length < 6) {
+      setErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters, or leave it blank to set one later.' }))
+      setStep(3)
+      passwordRef.current?.focus()
+      return
+    }
+    setErrors(prev => ({ ...prev, submit: undefined }))
     setLoading(true)
     try {
       let logoUrl = form.logo_url.trim()
@@ -185,67 +183,55 @@ export default function ListBusinessForm({
         logoUrl = url
       }
 
-      const slug = generateSlug(form.name)
+      // Listing creation happens server-side (validated + service role).
       const fullPhone = (form.countryCode + form.phone).replace(/[^0-9]/g, '')
-      const whatsappLink = `https://wa.me/${fullPhone}?text=${WA_MSG}`
-      const location = form.city === '*'
-        ? 'Zimbabwe'
-        : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')
-
-      const token = crypto.randomUUID()
-      const price = form.price_range.trim()
-      const normalizedPrice = price ? (price.startsWith('$') ? price : `$${price}`) : null
-
-      const { data, error } = await getClient()
-        .from('businesses')
-        .insert({
+      const createRes = await fetch('/api/businesses/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name: form.name.trim(),
-          slug,
+          countryCode: form.countryCode,
+          phone: form.phone,
           whatsapp_username: form.whatsapp_username.trim(),
-          bio: form.bio || `Professional ${form.description} services.`,
-          category: categories,
-          location,
-          country_code: form.countryCode,
-          city: form.city === '*' ? '' : form.city,
-          area: form.city === '*' ? '' : (areas[0] || ''),
-          areas: form.city === '*' ? [] : areas,
-          phone: fullPhone,
-          whatsapp_link: whatsappLink,
-          catalog_link: form.catalog_link.trim() || null,
-          logo_url: logoUrl || null,
-          price_range: normalizedPrice,
-          website: form.website.trim() || null,
-          edit_token: token,
-          verified: false,
-          rating: 0,
-          review_count: 0,
-          address: form.address.trim() || '',
+          description: form.description,
+          bio: form.bio,
+          categories,
+          city: form.city,
+          areas,
+          catalog_link: form.catalog_link.trim(),
+          logo_url: logoUrl,
+          price_range: form.price_range,
+          website: form.website.trim(),
+          address: form.address.trim(),
           show_location: form.show_location,
-        })
-        .select()
-        .single()
+        }),
+      })
+      if (!createRes.ok) {
+        const payload = await createRes.json().catch(() => null)
+        throw new Error(payload?.error || 'Could not create your listing. Please try again.')
+      }
+      const created = await createRes.json() as { id: string; slug: string; edit_token: string }
 
-      if (error) throw error
-      setEditToken(token)
-      setSubmittedId(data.slug || data.id)
-      submitFeatureRequests(data.id)
+      setEditToken(created.edit_token)
+      setSubmittedId(created.slug || created.id)
+      submitFeatureRequests(created.id)
       if (form.password && form.password.length >= 6) {
         fetch('/api/account/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ business_id: data.id, phone: fullPhone, password: form.password }),
+          body: JSON.stringify({ edit_token: created.edit_token, phone: fullPhone, password: form.password }),
         }).catch(() => {})
       }
       fetch('/api/admin/notify-new-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.city, phone: fullPhone, id: data.id } }),
+        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.city, phone: fullPhone, id: created.id } }),
       }).catch(() => {})
     } catch (err) {
       const msg =
         (err as { message?: string })?.message ||
         (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
-      alert(msg)
+      setErrors(prev => ({ ...prev, submit: msg }))
     } finally {
       setLoading(false)
     }
@@ -270,16 +256,16 @@ export default function ListBusinessForm({
         <p className="text-text-secondary mb-2">{form.name} is pending approval.</p>
         <p className="text-sm text-text-secondary mb-6">Once approved, customers will find you on WA Directory.</p>
         {requests.length > 0 && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
-            <p className="text-xs font-semibold text-amber-800 mb-1">Your requests are in review:</p>
-            <p className="text-sm text-amber-800">
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-6 text-left">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Your requests are in review:</p>
+            <p className="text-sm text-amber-800 dark:text-amber-300">
               {requests.map(r => `"${r.name}"`).join(', ')} will appear once an admin approves {requests.length > 1 ? 'them' : 'it'}.
             </p>
           </div>
         )}
-        <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 mb-6 text-left">
-          <p className="text-xs font-semibold text-whatsapp-800 mb-1">Save this link to edit your listing later:</p>
-          <p className="text-sm text-whatsapp-700 break-all font-mono bg-white rounded-lg p-2 border border-whatsapp-100 select-all">
+        <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 mb-6 text-left">
+          <p className="text-xs font-semibold text-whatsapp-800 dark:text-whatsapp-300 mb-1">Save this link to edit your listing later:</p>
+          <p className="text-sm text-whatsapp-700 dark:text-whatsapp-300 break-all font-mono bg-white dark:bg-gray-900 rounded-lg p-2 border border-whatsapp-100 dark:border-whatsapp-900 select-all">
             {typeof window !== 'undefined' ? `${window.location.origin}/edit?token=${editToken}` : ''}
           </p>
           <p className="text-xs text-text-secondary mt-2">If you lose this link, contact us to get a new one.</p>
@@ -292,7 +278,7 @@ export default function ListBusinessForm({
             downloadName={`${form.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edit-link.png`}
           />
         </div>
-        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card mb-6">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card mb-6">
           <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once approved)</p>
           <p className="text-xs text-text-secondary mb-4">
             Print these and place them on your counter, shelves and packaging — customers scan to chat with you directly.
@@ -342,11 +328,11 @@ export default function ListBusinessForm({
         {[1, 2, 3].map(s => (
           <div key={s} className="flex items-center">
             {s > 1 && (
-              <div className={`h-1 w-8 sm:w-12 transition-colors duration-300 ${step >= s ? 'bg-whatsapp-500' : 'bg-gray-200'}`} />
+              <div className={`h-1 w-8 sm:w-12 transition-colors duration-300 ${step >= s ? 'bg-whatsapp-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
             )}
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
-                step >= s ? 'bg-whatsapp-500 text-white scale-100' : 'bg-gray-200 text-gray-500 scale-90'
+                step >= s ? 'bg-whatsapp-500 text-white scale-100' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 scale-90'
               }`}
             >
               {s}
@@ -518,7 +504,7 @@ export default function ListBusinessForm({
             />
             <p className="text-xs text-whatsapp-600 mt-1">Adding your address lets customers get directions on Google Maps</p>
           </div>
-          <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
+          <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">
             <div>
               <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
               <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
@@ -526,7 +512,7 @@ export default function ListBusinessForm({
             <button
               type="button"
               onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
               role="switch"
               aria-checked={form.show_location}
             >
@@ -536,7 +522,7 @@ export default function ListBusinessForm({
           <button
             onClick={handleGenerateBio}
             disabled={!isValidStep2 || bioLoading}
-            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
+            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
           >
             {bioLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -548,7 +534,7 @@ export default function ListBusinessForm({
             )}
           </button>
           {form.bio && (
-            <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 animate-slide-up">
+            <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 animate-slide-up">
               <p className="text-sm text-text-primary">{form.bio}</p>
               <div className="flex items-center gap-2 mt-3">
                 <button
@@ -596,11 +582,11 @@ export default function ListBusinessForm({
         <div className="space-y-4 animate-fade-in">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
-            <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
+            <div className="flex gap-1 mb-3 bg-surface dark:bg-gray-800 rounded-xl p-1">
               <button
-                onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview('') }}
+                onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview(''); setErrors(prev => ({ ...prev, logo: undefined })) }}
                 className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                  logoMode === 'url' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                  logoMode === 'url' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 URL
@@ -608,7 +594,7 @@ export default function ListBusinessForm({
               <button
                 onClick={() => setLogoMode('upload')}
                 className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                  logoMode === 'upload' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                  logoMode === 'upload' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Upload
@@ -628,7 +614,7 @@ export default function ListBusinessForm({
                 <p className="text-xs text-whatsapp-600 mt-1">Square image works best (max 2MB)</p>
                 {form.logo_url && (
                   <div className="mt-2 flex items-center gap-2 animate-fade-in">
-                    <img src={form.logo_url} alt="logo preview" className="w-10 h-10 rounded-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                    <img src={form.logo_url} alt="logo preview" width={40} height={40} className="w-10 h-10 rounded-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                     <span className="text-xs text-text-secondary">Preview</span>
                   </div>
                 )}
@@ -644,11 +630,11 @@ export default function ListBusinessForm({
                 />
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 transition-all duration-150 active:scale-[0.98]"
+                  className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 transition-all duration-150 active:scale-[0.98]"
                 >
                   {logoPreview ? (
                     <div className="flex flex-col items-center gap-2">
-                      <img src={logoPreview} alt="logo preview" className="w-16 h-16 rounded-full object-cover" />
+                      <img src={logoPreview} alt="logo preview" width={64} height={64} className="w-16 h-16 rounded-full object-cover" />
                       <span className="text-xs text-text-secondary">{logoFile?.name}</span>
                     </div>
                   ) : (
@@ -662,6 +648,14 @@ export default function ListBusinessForm({
                   )}
                 </button>
               </div>
+            )}
+            {errors.logo && (
+              <p className="text-xs text-danger mt-2 flex items-center gap-1 animate-fade-in">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                </svg>
+                {errors.logo}
+              </p>
             )}
           </div>
           <div>
@@ -706,21 +700,34 @@ export default function ListBusinessForm({
             <p className="text-xs text-whatsapp-600 mt-1">Your website or online store link</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5">
               Portal Password <span className="text-text-secondary">(optional)</span>
             </label>
             <input
+              ref={passwordRef}
+              id="field-password"
               type="password"
               minLength={6}
               value={form.password}
-              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              onChange={e => { setForm(f => ({ ...f, password: e.target.value })); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
               placeholder="Create a password for your portal account"
               className="input-field"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'field-password-error' : undefined}
             />
-            <p className="text-xs text-whatsapp-600 mt-1">
-              Set a password now to unlock your statistics portal, or do it later from your edit link.
-            </p>
+            {errors.password ? (
+              <p id="field-password-error" className="text-xs text-danger mt-1 flex items-center gap-1 animate-fade-in">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                </svg>
+                {errors.password}
+              </p>
+            ) : (
+              <p className="text-xs text-whatsapp-600 mt-1">
+                Set a password now to unlock your statistics portal, or do it later from your edit link.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
@@ -742,7 +749,7 @@ export default function ListBusinessForm({
             </div>
             <p className="text-xs text-whatsapp-600 mt-1">Average price customers should expect</p>
           </div>
-          <div className="bg-surface border border-gray-200 rounded-xl p-4 space-y-2">
+          <div className="bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-text-primary mb-2">Preview</h3>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Name:</span> {form.name}
@@ -776,6 +783,14 @@ export default function ListBusinessForm({
               {form.bio || `Professional ${form.description} services.`}
             </p>
           </div>
+          {errors.submit && (
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              {errors.submit}
+            </p>
+          )}
           <div className="flex gap-2 pt-2">
             <button onClick={() => setStep(2)} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full flex-1 py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

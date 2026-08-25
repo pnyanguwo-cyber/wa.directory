@@ -53,7 +53,7 @@ export default async function EditPage({
     <main className="min-h-screen py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-4">
         {!existingAccount && (
-          <div className="bg-gradient-to-br from-whatsapp-50 to-white backdrop-blur-xl rounded-3xl border border-whatsapp-200 shadow-soft-lift p-6 flex items-center justify-between gap-4 flex-wrap">
+          <div className="bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 backdrop-blur-xl rounded-3xl border border-whatsapp-200 dark:border-whatsapp-800/50 shadow-soft-lift p-6 flex items-center justify-between gap-4 flex-wrap">
             <div>
               <h2 className="text-base font-extrabold text-text-primary tracking-tight">Create your portal account</h2>
               <p className="text-xs text-text-secondary mt-1">
@@ -71,7 +71,7 @@ export default async function EditPage({
             </Link>
           </div>
         )}
-        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
+        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/70 dark:border-gray-800 shadow-soft-lift p-6 sm:p-8">
           <EditBusinessForm
             business={business}
             categoryOptions={approvedCategories.map(c => ({ value: c.name, label: `${c.icon} ${c.name}` }))}

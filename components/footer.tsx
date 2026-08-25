@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import Icon from '@/components/icon'
 
 export default function Footer() {
@@ -11,9 +12,11 @@ export default function Footer() {
           {/* Brand Col */}
           <div className="col-span-2 space-y-3">
             <div className="flex items-center gap-2.5">
-              <img
+              <Image
                 src="/logo-square.png"
                 alt="WA Directory logo"
+                width={36}
+                height={36}
                 className="h-9 w-9 rounded-xl object-contain shadow-sm"
               />
               <span className="font-extrabold text-base tracking-tight text-text-primary dark:text-gray-100">

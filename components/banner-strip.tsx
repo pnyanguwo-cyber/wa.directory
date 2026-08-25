@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface BannerData {
   id: string
@@ -12,17 +12,29 @@ export interface BannerData {
 const dismissKey = (id: string) => `banner-dismissed-${id}`
 
 export default function BannerStrip({ banners }: { banners: BannerData[] }) {
+  // Start with every banner visible so server and client render identically,
+  // then hide the ones dismissed this session after mount (avoids hydration mismatch).
   const [visible, setVisible] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {}
-    for (const b of banners) {
-      try {
-        initial[b.id] = !sessionStorage.getItem(dismissKey(b.id))
-      } catch {
-        initial[b.id] = true
-      }
-    }
+    for (const b of banners) initial[b.id] = true
     return initial
   })
+
+  const ids = banners.map(b => b.id).join(',')
+  useEffect(() => {
+    setVisible(prev => {
+      const next = { ...prev }
+      for (const b of banners) {
+        try {
+          if (sessionStorage.getItem(dismissKey(b.id))) next[b.id] = false
+        } catch {
+          // sessionStorage unavailable — leave banner visible
+        }
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids])
 
   const active = banners.filter(b => visible[b.id])
   if (active.length === 0) return null

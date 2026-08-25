@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useId } from 'react'
 
 interface MultiSearchSelectProps {
   options: { value: string; label: string }[]
@@ -35,6 +35,9 @@ export default function MultiSearchSelect({
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const reactId = useId()
+  const inputId = `mss-input-${reactId}`
+  const listboxId = `mss-listbox-${reactId}`
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -115,12 +118,12 @@ export default function MultiSearchSelect({
   }
 
   return (
-    <div ref={wrapperRef}>
+    <div ref={wrapperRef} className="relative">
       {label && (
-        <label className="block text-sm font-medium text-text-primary mb-1.5">{label}</label>
+        <label htmlFor={inputId} className="block text-sm font-medium text-text-primary mb-1.5">{label}</label>
       )}
       <div
-        className="flex flex-wrap items-center gap-1.5 border border-gray-200 rounded-xl bg-white px-2.5 py-2 cursor-text transition-all focus-within:border-whatsapp-500 focus-within:ring-2 focus-within:ring-whatsapp-500/20"
+        className="flex flex-wrap items-center gap-1.5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 px-2.5 py-2 cursor-text transition-all focus-within:border-whatsapp-500 focus-within:ring-2 focus-within:ring-whatsapp-500/20"
         onClick={() => wrapperRef.current?.querySelector('input')?.focus()}
       >
         {values.map(v => {
@@ -131,10 +134,10 @@ export default function MultiSearchSelect({
               key={v}
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium border ${
                 isPrimary
-                  ? 'bg-orange-50 text-orange-800 border-orange-300'
+                  ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-800/50'
                   : isPending
-                    ? 'bg-gray-100 text-gray-500 border-gray-200'
-                    : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                    : 'bg-whatsapp-50 dark:bg-whatsapp-950/50 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50'
               }`}
             >
               {isPrimary && (
@@ -158,6 +161,7 @@ export default function MultiSearchSelect({
         })}
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           value={query}
           onChange={e => {
@@ -171,20 +175,26 @@ export default function MultiSearchSelect({
           className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm py-1"
           autoComplete="off"
           role="combobox"
+          aria-expanded={open}
+          aria-controls={listboxId}
+          aria-autocomplete="list"
+          aria-haspopup="listbox"
         />
       </div>
       {hint && <p className="text-xs text-whatsapp-600 mt-1">{hint}</p>}
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-dropdown max-h-52 overflow-y-auto relative">
+        <div id={listboxId} role="listbox" className="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-dropdown max-h-52 overflow-y-auto">
           {filtered.length > 0 ? (
             filtered.map((o, i) => (
               <button
                 key={o.value}
                 type="button"
+                role="option"
+                aria-selected={values.includes(o.value)}
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pickOption(o)}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  i === activeIndex ? 'bg-surface' : 'hover:bg-surface'
+                  i === activeIndex ? 'bg-surface dark:bg-gray-800' : 'hover:bg-surface dark:hover:bg-gray-800'
                 } ${values.includes(o.value) ? 'text-whatsapp-700 font-medium' : 'text-text-primary'}`}
               >
                 {o.label}
@@ -197,7 +207,7 @@ export default function MultiSearchSelect({
             <button
               type="button"
               onClick={handleRequest}
-              className="w-full text-left px-4 py-2.5 text-sm text-whatsapp-700 font-medium hover:bg-surface transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-whatsapp-700 font-medium hover:bg-surface dark:hover:bg-gray-800 transition-colors"
             >
               Request &quot;{query.trim()}&quot; as a new {label ? 'item' : 'option'}
             </button>

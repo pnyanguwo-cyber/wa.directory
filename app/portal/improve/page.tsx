@@ -100,9 +100,9 @@ export default async function PortalImprovePage() {
   const visible = paid ? tips : tips.slice(0, 3)
 
   const levelStyles: Record<Tip['level'], string> = {
-    good: 'border-whatsapp-200 bg-whatsapp-50/60',
-    warn: 'border-amber-200 bg-amber-50/60',
-    bad: 'border-red-200 bg-red-50/60',
+    good: 'border-whatsapp-200 bg-whatsapp-50/60 dark:border-whatsapp-800/50 dark:bg-whatsapp-950/30',
+    warn: 'border-amber-200 bg-amber-50/60 dark:border-amber-800/50 dark:bg-amber-950/30',
+    bad: 'border-red-200 bg-red-50/60 dark:border-red-800/50 dark:bg-red-950/30',
   }
   const levelDot: Record<Tip['level'], string> = {
     good: 'bg-whatsapp-500',
@@ -122,7 +122,7 @@ export default async function PortalImprovePage() {
       </div>
 
       {comparison && (
-        <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+        <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card">
           <p className="text-sm font-bold text-text-primary mb-1">Profile views vs your category</p>
           <p className="text-xs text-text-secondary mb-3">
             Compared against {comparison.count} verified businesses in “{business.category[0]}”.
@@ -167,7 +167,7 @@ export default async function PortalImprovePage() {
       </div>
 
       {!paid && (
-        <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 text-center">
+        <div className="bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-2xl p-5 text-center">
           <p className="text-sm font-bold text-text-primary">Unlock the full analysis</p>
           <p className="text-xs text-text-secondary mt-1 mb-3">
             Get all {tips.length} tips plus a live comparison against other {business.category[0]} businesses in your area.

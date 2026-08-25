@@ -43,7 +43,6 @@ export default function PortalRanking({ businessId, category, city, spots }: {
   const [selectedPos, setSelectedPos] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
   const [fallbackPos, setFallbackPos] = useState<number | null>(null)
-  const [dimmed, setDimmed] = useState(false)
 
   useEffect(() => {
     fetch(`/api/portal/ranking?category=${encodeURIComponent(category)}&city=${encodeURIComponent(city)}`)
@@ -54,38 +53,6 @@ export default function PortalRanking({ businessId, category, city, spots }: {
       })
       .catch(() => {})
   }, [category, city])
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === 'PrintScreen' || (e.ctrlKey && (e.key === 'p' || e.key === 's' || e.key === 'c'))) {
-        e.preventDefault()
-      }
-    }
-    function onContextMenu(e: MouseEvent) {
-      e.preventDefault()
-    }
-    function onCopy(e: ClipboardEvent) {
-      e.preventDefault()
-    }
-    function onBlur() {
-      setDimmed(true)
-    }
-    function onFocus() {
-      setDimmed(false)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('contextmenu', onContextMenu)
-    window.addEventListener('copy', onCopy)
-    window.addEventListener('blur', onBlur)
-    window.addEventListener('focus', onFocus)
-    return () => {
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('contextmenu', onContextMenu)
-      window.removeEventListener('copy', onCopy)
-      window.removeEventListener('blur', onBlur)
-      window.removeEventListener('focus', onFocus)
-    }
-  }, [])
 
   async function submitBid(e: React.FormEvent) {
     e.preventDefault()
@@ -120,23 +87,13 @@ export default function PortalRanking({ businessId, category, city, spots }: {
   }
 
   return (
-    <div className={`space-y-6 relative select-none ${dimmed ? 'opacity-40' : ''} transition-opacity duration-300`}>
-      <div className="pointer-events-none absolute inset-0 z-20" aria-hidden="true" />
-
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-text-primary">Ranking & bidding</h2>
         <p className="text-xs text-text-secondary mt-0.5">
           Top 3 spots in “{category}”{city ? ` in ${city}` : ''} for the current month. Bids are for next month and are confirmed by an admin near month-end.
         </p>
       </div>
-
-      {dimmed && (
-        <div className="fixed inset-0 bg-black/70 z-30 flex items-center justify-center pointer-events-none">
-          <p className="text-white text-sm font-semibold bg-black/50 rounded-2xl px-6 py-4">
-            Switch back to this tab to view bidding info
-          </p>
-        </div>
-      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {POSITION_INFO.map(p => {
@@ -146,14 +103,14 @@ export default function PortalRanking({ businessId, category, city, spots }: {
               key={p.pos}
               className={`rounded-2xl border p-4 shadow-card ${
                 p.pos === 1
-                  ? 'bg-gradient-to-br from-amber-50 to-white border-amber-200'
+                  ? 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border-amber-200 dark:border-amber-800/50'
                   : p.pos === 2
-                    ? 'bg-gradient-to-br from-gray-50 to-white border-gray-200'
-                    : 'bg-gradient-to-br from-orange-50 to-white border-orange-200'
+                    ? 'bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-gray-200 dark:border-gray-700'
+                    : 'bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/40 dark:to-gray-900 border-orange-200 dark:border-orange-800/50'
               }`}
             >
               <div className="flex items-center justify-between">
-                <p className={`text-sm font-extrabold ${p.pos === 1 ? 'text-amber-600' : p.pos === 2 ? 'text-gray-500' : 'text-orange-700'}`}>
+                <p className={`text-sm font-extrabold ${p.pos === 1 ? 'text-amber-600 dark:text-amber-400' : p.pos === 2 ? 'text-gray-500 dark:text-gray-400' : 'text-orange-700 dark:text-orange-400'}`}>
                   #{p.pos} {p.label}
                 </p>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">
@@ -178,7 +135,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
         <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>
       )}
 
-      <form onSubmit={submitBid} className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card space-y-4">
+      <form onSubmit={submitBid} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card space-y-4">
         <div>
           <p className="text-sm font-bold text-text-primary">Bid for next month</p>
           <p className="text-xs text-text-secondary mt-0.5">
@@ -198,7 +155,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
               className={`h-10 px-4 rounded-2xl text-xs font-semibold border transition-all ${
                 selectedPos === p.pos
                   ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                  : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
+                  : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
               }`}
             >
               Position #{p.pos}
@@ -219,7 +176,7 @@ export default function PortalRanking({ businessId, category, city, spots }: {
                       className={`h-9 px-4 rounded-2xl text-xs font-semibold border transition-all ${
                         fallbackPos === pos
                           ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                          : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
+                          : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
                       }`}
                     >
                       {pos === null ? 'None' : `#${pos}`}
@@ -255,10 +212,10 @@ export default function PortalRanking({ businessId, category, city, spots }: {
         <div className="space-y-2">
           <p className="text-sm font-bold text-text-primary">My bids for next month</p>
           {bids.map(b => (
-            <div key={b.id} className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
+            <div key={b.id} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className={`w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold ${
-                  b.position === 1 ? 'bg-amber-100 text-amber-700' : b.position === 2 ? 'bg-gray-100 text-gray-600' : 'bg-orange-100 text-orange-700'
+                  b.position === 1 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300' : b.position === 2 ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300' : 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300'
                 }`}>
                   #{b.position}
                 </span>
@@ -279,10 +236,6 @@ export default function PortalRanking({ businessId, category, city, spots }: {
           ))}
         </div>
       )}
-
-      <p className="text-[10px] text-text-secondary text-center">
-        Bidding details are protected — screenshots are disabled on this page.
-      </p>
     </div>
   )
 }

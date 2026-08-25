@@ -37,11 +37,11 @@ export default function PortalBilling({ businessId, businessName, sub }: {
   }
 
   const statusStyle: Record<string, string> = {
-    active: 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200',
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    expired: 'bg-red-50 text-red-700 border-red-200',
-    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
-    none: 'bg-gray-100 text-gray-600 border-gray-200',
+    active: 'bg-whatsapp-50 dark:bg-whatsapp-950/50 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50',
+    pending: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50',
+    expired: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50',
+    cancelled: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+    none: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
   }
 
   return (
@@ -51,7 +51,7 @@ export default function PortalBilling({ businessId, businessName, sub }: {
         <p className="text-xs text-text-secondary mt-0.5">Premium gives you full statistics, conversations, bidding and competitor insights.</p>
       </div>
 
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-text-primary">{businessName}</p>
@@ -65,18 +65,18 @@ export default function PortalBilling({ businessId, businessName, sub }: {
 
         {sub && (
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
+            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
               <p className="text-text-secondary font-medium">Monthly fee</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">${Number(sub.amount || 0).toFixed(2)}</p>
             </div>
-            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
+            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
               <p className="text-text-secondary font-medium">Expires</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">
                 {sub.expiresAt ? new Date(sub.expiresAt).toLocaleDateString() : '—'}
               </p>
             </div>
             {sub.adminNote && (
-              <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80 col-span-2 sm:col-span-1">
+              <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700 col-span-2 sm:col-span-1">
                 <p className="text-text-secondary font-medium">Admin note</p>
                 <p className="text-sm font-semibold text-text-primary mt-0.5">{sub.adminNote}</p>
               </div>
@@ -104,7 +104,7 @@ export default function PortalBilling({ businessId, businessName, sub }: {
               Your upgrade request is pending admin confirmation. Make your payment and let the admin know — they will activate it.
             </p>
           ) : (
-            <div className="rounded-2xl bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 p-4">
+            <div className="rounded-2xl bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border border-whatsapp-200 dark:border-whatsapp-800/50 p-4">
               <p className="text-sm font-bold text-text-primary">Go premium</p>
               <ul className="text-xs text-text-secondary mt-2 space-y-1">
                 <li>• Full statistics history (30/90/all days) + CSV export</li>

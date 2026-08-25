@@ -182,4 +182,27 @@
 .animate-delay-350 { animation-delay: 350ms; }
 .animate-delay-500 { animation-delay: 500ms; }
 
+/* Visible keyboard focus everywhere (icon-only buttons had none). */
+:focus-visible {
+  outline: 2px solid rgb(37 211 102);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Respect reduced-motion: neutralize the perpetual marquee/typing/bounce/spin
+   and long transitions that drain battery on low-end phones (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 

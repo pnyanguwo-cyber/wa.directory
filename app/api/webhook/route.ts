@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import crypto from 'node:crypto'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
@@ -7,8 +8,21 @@ import { validatePhone } from '@/data/countries'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
 
-const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN || 'wa-directory-verify-2024'
+const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
+
+// Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
+// if WHATSAPP_APP_SECRET is unset, no inbound payload can be authenticated, so
+// forged messages (toll fraud, fake listings, fake ratings) are rejected.
+function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (!appSecret) return false
+  if (!signatureHeader || !signatureHeader.startsWith('sha256=')) return false
+  const provided = Buffer.from(signatureHeader.slice(7), 'hex')
+  const expected = crypto.createHmac('sha256', appSecret).update(rawBody, 'utf8').digest()
+  if (provided.length !== expected.length) return false
+  return crypto.timingSafeEqual(provided, expected)
+}
 const ADMIN_WHATSAPP = process.env.ADMIN_WHATSAPP
 const COUNTRY_CODE = '+263'
 
@@ -577,7 +591,7 @@ export async function GET(request: Request) {
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
-  if (mode === 'subscribe' && token === WEBHOOK_VERIFY_TOKEN) {
+  if (mode === 'subscribe' && WEBHOOK_VERIFY_TOKEN && token === WEBHOOK_VERIFY_TOKEN) {
     console.log('Webhook verified successfully')
     return new NextResponse(challenge, { status: 200 })
   }
@@ -588,7 +602,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
+    const rawBody = await request.text()
+    if (!verifyMetaSignature(rawBody, request.headers.get('x-hub-signature-256'))) {
+      console.warn('[webhook] rejected: invalid or missing X-Hub-Signature-256')
+      return NextResponse.json({ status: 'unauthorized' }, { status: 401 })
+    }
+    const body = JSON.parse(rawBody)
 
     const entry = body?.entry?.[0]
     const changes = entry?.changes?.[0]

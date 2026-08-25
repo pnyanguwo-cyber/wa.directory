@@ -49,6 +49,7 @@ export default function EditBusinessForm({
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [logoError, setLogoError] = useState('')
   const [logoMode, setLogoMode] = useState<LogoMode>(business.logo_url ? 'url' : 'upload')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -85,9 +86,10 @@ export default function EditBusinessForm({
     const file = e.target.files?.[0]
     if (!file) return
     if (file.size > 2 * 1024 * 1024) {
-      alert('File too large (max 2MB)')
+      setLogoError('File too large (max 2MB)')
       return
     }
+    setLogoError('')
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
   }
@@ -305,7 +307,7 @@ export default function EditBusinessForm({
           <p className="text-xs text-whatsapp-600 mt-1">Your address will generate a Google Maps link for directions</p>
         </div>
 
-        <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
+        <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">
           <div>
             <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
             <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
@@ -313,7 +315,7 @@ export default function EditBusinessForm({
           <button
             type="button"
             onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
-            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
             role="switch"
             aria-checked={form.show_location}
           >
@@ -362,12 +364,12 @@ export default function EditBusinessForm({
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
-          <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
+          <div className="flex gap-1 mb-3 bg-surface dark:bg-gray-800 rounded-xl p-1">
             <button
               type="button"
               onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview('') }}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                logoMode === 'url' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                logoMode === 'url' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               URL
@@ -376,7 +378,7 @@ export default function EditBusinessForm({
               type="button"
               onClick={() => setLogoMode('upload')}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                logoMode === 'upload' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                logoMode === 'upload' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Upload
@@ -394,7 +396,7 @@ export default function EditBusinessForm({
               <p className="text-xs text-whatsapp-600 mt-1">Square image works best</p>
               {form.logo_url && (
                 <div className="mt-2 animate-fade-in">
-                  <img src={form.logo_url} alt="preview" className="w-12 h-12 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+                  <img src={form.logo_url} alt="preview" width={48} height={48} className="w-12 h-12 rounded-xl object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
                 </div>
               )}
             </div>
@@ -410,11 +412,11 @@ export default function EditBusinessForm({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 transition-all duration-150 active:scale-[0.98]"
+                className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 transition-all duration-150 active:scale-[0.98]"
               >
                 {logoPreview ? (
                   <div className="flex flex-col items-center gap-2">
-                    <img src={logoPreview} alt="logo preview" className="w-16 h-16 rounded-full object-cover" />
+                    <img src={logoPreview} alt="logo preview" width={64} height={64} className="w-16 h-16 rounded-full object-cover" />
                     <span className="text-xs text-text-secondary">{logoFile?.name}</span>
                   </div>
                 ) : (
@@ -428,6 +430,14 @@ export default function EditBusinessForm({
                 )}
               </button>
             </div>
+          )}
+          {logoError && (
+            <p className="text-xs text-danger mt-2 flex items-center gap-1 animate-fade-in">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              {logoError}
+            </p>
           )}
         </div>
 

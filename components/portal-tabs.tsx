@@ -32,7 +32,7 @@ export default function PortalTabs() {
             className={`h-11 px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
               matched
                 ? 'bg-whatsapp-500 text-white shadow-md'
-                : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
+                : 'bg-white dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">

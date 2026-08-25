@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -47,14 +48,17 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/60 via-surface to-surface flex items-center justify-center px-4 py-8">
       <div
         ref={cardRef}
-        className={`w-full max-w-md bg-white/90 backdrop-blur-xl rounded-3xl shadow-[0_12px_40px_rgba(11,20,26,0.08)] border border-white/90 p-8 space-y-6 transition-all duration-500 ${
+        className={`w-full max-w-md bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-3xl shadow-[0_12px_40px_rgba(11,20,26,0.08)] border border-white/90 dark:border-gray-800 p-8 space-y-6 transition-all duration-500 ${
           visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
         } ${shake ? 'animate-shake' : ''}`}
       >
         <div className={`text-center space-y-3 ${visible ? 'animate-slide-up animate-delay-100' : 'opacity-0'}`}>
-          <img
+          <Image
             src="/logo-square.png"
             alt="WA Directory logo"
+            width={56}
+            height={56}
+            priority
             className="mx-auto w-14 h-14 object-contain rounded-2xl shadow-[0_6px_16px_rgba(37,211,102,0.35)]"
           />
           <div>

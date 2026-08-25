@@ -69,10 +69,19 @@ CREATE INDEX IF NOT EXISTS idx_businesses_rating ON businesses (rating DESC);
 
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
 
+-- Public read of every column EXCEPT the secret edit_token.
+-- Listings are inserted server-side (service role) — no public INSERT policy.
 DROP POLICY IF EXISTS "Public read access" ON businesses;
 DROP POLICY IF EXISTS "Public insert access" ON businesses;
 CREATE POLICY "Public read access" ON businesses FOR SELECT USING (true);
-CREATE POLICY "Public insert access" ON businesses FOR INSERT WITH CHECK (true);
+
+REVOKE ALL ON public.businesses FROM anon, authenticated;
+GRANT SELECT (
+  id, name, bio, category, location, country_code, city, area,
+  slug, phone, whatsapp_link, whatsapp_username, verified, rating,
+  review_count, catalog_link, logo_url, price_range, website,
+  address, show_location, featured_eligible, areas, created_at
+) ON public.businesses TO anon, authenticated;
 
 -- Cache for AI-generated results (Gemini search expansions, SEO blurbs)
 CREATE TABLE IF NOT EXISTS ai_cache (
@@ -304,3 +313,31 @@ BEGIN
   UPDATE subscriptions SET status = 'expired' WHERE status = 'active' AND expires_at < NOW();
   RETURN n;
 END $$;
+
+-- ============================================================
+-- Security lockdown (005): portal/PII tables are default-deny.
+-- RLS enabled with no policies => anon/authenticated see nothing.
+-- The service role bypasses RLS, so all server-side code works.
+-- ============================================================
+
+ALTER TABLE business_accounts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stats_events       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_stats        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_logs          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ratings            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subscriptions      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rank_spots         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bids               ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_cache           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_sessions      ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON business_accounts FROM anon, authenticated;
+REVOKE ALL ON stats_events       FROM anon, authenticated;
+REVOKE ALL ON daily_stats        FROM anon, authenticated;
+REVOKE ALL ON chat_logs          FROM anon, authenticated;
+REVOKE ALL ON ratings            FROM anon, authenticated;
+REVOKE ALL ON subscriptions      FROM anon, authenticated;
+REVOKE ALL ON rank_spots         FROM anon, authenticated;
+REVOKE ALL ON bids               FROM anon, authenticated;
+REVOKE ALL ON ai_cache           FROM anon, authenticated;
+REVOKE ALL ON chat_sessions      FROM anon, authenticated;

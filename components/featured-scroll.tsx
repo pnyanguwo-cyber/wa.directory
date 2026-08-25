@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import type { Business } from '@/types'
+import LogoImage from '@/components/logo-image'
 
 function Stars({ rating }: { rating: number }) {
   return (
     <div className="flex items-center gap-0.5" aria-label={`Rated ${rating} out of 5 stars`}>
       {[1, 2, 3, 4, 5].map(i => (
-        <svg key={i} className={`w-4 h-4 ${i <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-200 fill-gray-200'}`} viewBox="0 0 24 24" aria-hidden="true">
+        <svg key={i} className={`w-4 h-4 ${i <= Math.round(rating) ? 'text-amber-400 fill-amber-400' : 'text-gray-300 fill-gray-300 dark:text-gray-600 dark:fill-gray-600'}`} viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
         </svg>
       ))}
@@ -40,7 +41,7 @@ export default function FeaturedScroll({ businesses }: { businesses: Business[] 
                 <Stars rating={b.rating} />
                 <div className="flex items-center gap-2.5 mt-2.5 mb-1.5">
                   {b.logo_url ? (
-                    <img src={b.logo_url} alt={b.name} className="w-11 h-11 rounded-xl object-cover shrink-0 ring-1 ring-gray-100 dark:ring-gray-700" loading="lazy" />
+                    <LogoImage src={b.logo_url} alt={b.name} width={44} height={44} sizes="44px" className="w-11 h-11 rounded-xl object-cover shrink-0 ring-1 ring-gray-100 dark:ring-gray-700" />
                   ) : (
                     <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 dark:from-whatsapp-900/60 dark:to-whatsapp-800/60 flex items-center justify-center shrink-0 border border-whatsapp-300/40 dark:border-whatsapp-700/40" aria-hidden="true">
                       <span className="text-sm font-bold text-whatsapp-800 dark:text-gray-200">{b.name.charAt(0)}</span>

@@ -260,6 +260,50 @@ export default function QrCard({
     setMounted(true)
   }, [])
 
+  const studioDialogRef = useRef<HTMLDivElement>(null)
+  const studioTitleId = useId()
+
+  // Studio modal: Escape-to-close, focus trap, and focus restore.
+  useEffect(() => {
+    if (!studioModalOpen) return
+    const previouslyFocused = document.activeElement as HTMLElement | null
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setStudioModalOpen(false)
+        return
+      }
+      if (e.key === 'Tab') {
+        const dialog = studioDialogRef.current
+        if (!dialog) return
+        const focusable = Array.from(
+          dialog.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => el.offsetParent !== null)
+        if (focusable.length === 0) return
+        const first = focusable[0]
+        const last = focusable[focusable.length - 1]
+        const active = document.activeElement as HTMLElement | null
+        if (e.shiftKey) {
+          if (active === first || active === dialog) {
+            e.preventDefault()
+            last.focus()
+          }
+        } else if (active === last) {
+          e.preventDefault()
+          first.focus()
+        }
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    studioDialogRef.current?.focus()
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previouslyFocused?.focus?.()
+    }
+  }, [studioModalOpen])
+
   const theme = QR_THEMES[currentTheme]
   const displayName = businessName || title || 'Official WhatsApp Business'
   const displayLocation = location || 'Zimbabwe'
@@ -1185,9 +1229,17 @@ export default function QrCard({
 
         {/* ---------------- FULL CUSTOMIZATION STUDIO MODAL ---------------- */}
         {studioModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-md animate-in fade-in duration-200"
+            onClick={() => setStudioModalOpen(false)}
+          >
             <div
-              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl p-4 sm:p-6 space-y-5"
+              ref={studioDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={studioTitleId}
+              tabIndex={-1}
+              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl p-4 sm:p-6 space-y-5 focus:outline-none"
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
@@ -1199,7 +1251,7 @@ export default function QrCard({
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-base sm:text-lg font-bold text-text-primary">
+                    <h2 id={studioTitleId} className="text-base sm:text-lg font-bold text-text-primary">
                       QR Code Customization Studio
                     </h2>
                     <p className="text-xs text-text-secondary">
@@ -1209,7 +1261,9 @@ export default function QrCard({
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => setStudioModalOpen(false)}
+                  aria-label="Close customization studio"
                   className="w-8 h-8 rounded-full bg-surface dark:bg-gray-800 text-text-secondary hover:text-text-primary flex items-center justify-center transition-colors"
                 >
                   ✕

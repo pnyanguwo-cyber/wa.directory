@@ -77,7 +77,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex bg-surface rounded-2xl p-1 border border-gray-200/80">
+          <div className="flex bg-surface dark:bg-gray-800 rounded-2xl p-1 border border-gray-200/80 dark:border-gray-700">
             {(['7', '30', '90', 'all'] as Range[]).map(r => (
               <button
                 key={r}
@@ -105,7 +105,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {(['profile_view', 'click_whatsapp', 'qr_scan', 'bot_search'] as const).map(t => (
-          <div key={t} className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+          <div key={t} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">{STAT_EVENT_LABELS[t]}</p>
             <p className="text-2xl font-extrabold text-text-primary mt-1">{totals[t] || 0}</p>
             <p className="text-[11px] text-text-secondary mt-0.5">Lifetime: {lifetime[t] || 0}</p>
@@ -114,7 +114,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
       </div>
 
       {grandTotal === 0 && (
-        <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 shadow-card">
+        <div className="bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-2xl p-5 shadow-card">
           <p className="text-sm font-bold text-whatsapp-800">Get found — share your QR codes</p>
           <p className="text-xs text-text-secondary mt-1">
             Print these and place them on your counter, shelves and packaging. Customers scan to chat with you directly.
@@ -144,7 +144,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         </div>
       )}
 
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-bold text-text-primary">Daily activity{paid ? '' : ' (last 7 days)'}</p>
           <p className="text-xs font-semibold text-whatsapp-700">{grandTotal} total events</p>
@@ -156,7 +156,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         ) : (
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto" role="img" aria-label="Daily activity chart">
             {Array.from({ length: 4 }).map((_, i) => (
-              <line key={i} x1="0" x2={chartWidth} y1={i * (chartHeight / 4)} y2={i * (chartHeight / 4)} stroke="#f0f0f0" strokeWidth="1" />
+              <line key={i} x1="0" x2={chartWidth} y1={i * (chartHeight / 4)} y2={i * (chartHeight / 4)} stroke="currentColor" className="text-gray-100 dark:text-gray-800" strokeWidth="1" />
             ))}
             {bars.map(b => (
               <g key={b.date}>
@@ -188,11 +188,11 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card">
         <p className="text-sm font-bold text-text-primary mb-3">Lifetime totals</p>
         <div className="flex flex-wrap gap-3">
           {Object.entries(lifetime).filter(([, v]) => v > 0).map(([type, count]) => (
-            <div key={type} className="rounded-2xl bg-surface border border-gray-200/80 px-3.5 py-2.5">
+            <div key={type} className="rounded-2xl bg-surface dark:bg-gray-800 border border-gray-200/80 dark:border-gray-700 px-3.5 py-2.5">
               <p className="text-[11px] font-semibold text-text-secondary">{getEventLabel(type)}</p>
               <p className="text-xl font-extrabold text-text-primary">{count}</p>
             </div>
@@ -206,7 +206,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
           {Object.entries(lifetime).filter(([, v]) => v > 0).map(([type, count]) => (
             <div key={type} className="flex items-center gap-3 mb-1.5">
               <span className="w-32 text-[11px] text-text-secondary truncate">{getEventLabel(type)}</span>
-              <div className="flex-1 h-2.5 bg-surface rounded-full overflow-hidden">
+              <div className="flex-1 h-2.5 bg-surface dark:bg-gray-800 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${(count / maxLifetime) * 100}%`, backgroundColor: STAT_EVENT_COLORS[type] || '#999' }}
@@ -218,11 +218,11 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card overflow-x-auto">
+      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card overflow-x-auto">
         <p className="text-sm font-bold text-text-primary mb-3">Daily table</p>
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-left text-text-secondary border-b border-gray-200">
+            <tr className="text-left text-text-secondary border-b border-gray-200 dark:border-gray-700">
               <th className="py-2 pr-3 font-semibold">Date</th>
               {Object.keys(STAT_EVENT_LABELS).map(t => (
                 <th key={t} className="py-2 pr-3 font-semibold whitespace-nowrap">{getEventLabel(t)}</th>
@@ -232,7 +232,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
           </thead>
           <tbody>
             {[...visible].reverse().map(d => (
-              <tr key={d.date} className="border-b border-gray-100 last:border-0">
+              <tr key={d.date} className="border-b border-gray-100 dark:border-gray-800 last:border-0">
                 <td className="py-2 pr-3 font-medium text-text-primary whitespace-nowrap">{d.date}</td>
                 {Object.keys(STAT_EVENT_LABELS).map(t => (
                   <td key={t} className="py-2 pr-3 text-text-secondary">{d.values[t] || 0}</td>

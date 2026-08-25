@@ -101,7 +101,7 @@ export default function SearchSelect({
         role="combobox"
       />
       {open && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-dropdown max-h-52 overflow-y-auto">
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-dropdown max-h-52 overflow-y-auto">
           {filtered.length > 0 ? (
             filtered.map((o, i) => (
               <button
@@ -109,7 +109,7 @@ export default function SearchSelect({
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pickOption(o)}
                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  i === activeIndex ? 'bg-surface' : 'hover:bg-surface'
+                  i === activeIndex ? 'bg-surface dark:bg-gray-800' : 'hover:bg-surface dark:hover:bg-gray-800'
                 } ${
                   o.value === value
                     ? 'text-whatsapp-700 font-medium'

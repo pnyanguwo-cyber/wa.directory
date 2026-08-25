@@ -1,7 +1,7 @@
 import { getSupabase } from '@/lib/supabase-server'
 
 export async function GET() {
-  const siteUrl = 'https://wadirectory.vercel.app'
+  const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
   const { data: businesses } = await getSupabase()
     .from('businesses')

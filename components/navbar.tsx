@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
@@ -39,9 +40,12 @@ export default function Navbar() {
       {loggingOut && <Splash label="Logging out..." />}
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <img
+          <Image
             src="/logo-square.png"
             alt="WA Directory logo"
+            width={40}
+            height={40}
+            priority
             className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
           />
           <span className="text-lg font-extrabold tracking-tight group-hover:text-whatsapp-700 transition-colors leading-tight" style={{ color: 'rgb(var(--text-primary))' }}>
@@ -54,8 +58,9 @@ export default function Navbar() {
             <button
               type="button"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:bg-surface"
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:bg-surface dark:hover:bg-gray-800"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {theme === 'dark' ? (
                 <svg className="w-5 h-5 text-amber-400" fill="currentColor" viewBox="0 0 24 24">

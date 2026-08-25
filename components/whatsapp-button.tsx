@@ -8,27 +8,11 @@ export default function WhatsAppButton({ phone, businessId }: { phone: string; b
   const cleaned = phone.replace(/[^0-9]/g, '')
   const message = encodeURIComponent('Hi, I found you on WA Directory')
   const webUrl = `https://wa.me/${cleaned}?text=${message}`
-  const waUrl = `whatsapp://send?phone=${cleaned}&text=${message}`
-
-  function handleClick(e: React.MouseEvent) {
-    e.preventDefault()
-    if (businessId) trackEvent(businessId, 'click_whatsapp')
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
-
-    if (isMobile) {
-      window.location.href = waUrl
-      setTimeout(() => {
-        window.location.href = webUrl
-      }, 500)
-    } else {
-      window.open(webUrl, '_blank', 'noopener')
-    }
-  }
 
   return (
     <a
       href={webUrl}
-      onClick={handleClick}
+      onClick={() => { if (businessId) trackEvent(businessId, 'click_whatsapp') }}
       target="_blank"
       rel="noopener noreferrer"
       className="btn-primary w-full py-3.5 text-[16px] flex items-center justify-center gap-2"

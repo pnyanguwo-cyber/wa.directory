@@ -9,6 +9,7 @@ import QrCard from '@/components/qr-card'
 import StatsPing from '@/components/stats-ping'
 import TrackLink from '@/components/track-link'
 import BusinessCard from '@/components/business-card'
+import LogoImage from '@/components/logo-image'
 import BusinessCardPrint from '@/components/business-card-print'
 import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
@@ -57,7 +58,7 @@ function Stars({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map(i => (
         <svg
           key={i}
-          className={`w-5 h-5 ${i <= stars ? 'text-yellow-500' : 'text-gray-300'}`}
+          className={`w-5 h-5 ${i <= stars ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -78,11 +79,13 @@ function LogoDisplay({ name, url }: { name: string; url?: string }) {
 
   if (url) {
     return (
-      <img
+      <LogoImage
         src={url}
         alt={name}
+        width={80}
+        height={80}
+        sizes="(max-width: 640px) 56px, 80px"
         className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-white -mt-7 sm:-mt-10 relative z-10"
-        loading="lazy"
       />
     )
   }
@@ -200,7 +203,7 @@ async function BusinessContent({ slug }: { slug: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-3 sm:p-6">
+        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/70 dark:border-gray-800 shadow-soft-lift p-3 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <Link
               href="/"
@@ -253,7 +256,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                     <span className="text-[10px] sm:text-xs font-semibold text-text-secondary">Popularity</span>
                     <span className="text-[10px] sm:text-xs font-bold text-whatsapp-700">{monthlyViews} profile views this month</span>
                   </div>
-                  <div className="h-1.5 sm:h-2 bg-surface rounded-full overflow-hidden">
+                  <div className="h-1.5 sm:h-2 bg-surface dark:bg-gray-800 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-whatsapp-400 to-whatsapp-600 rounded-full"
                       style={{ width: `${Math.min(100, 15 + monthlyViews * 0.85)}%` }}
@@ -276,10 +279,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                           key={a}
                           className={`inline-flex items-center gap-0.5 sm:gap-1 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-xs font-medium border ${
                             i === 0
-                              ? 'bg-orange-50 text-orange-800 border-orange-300'
+                              ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-800/50'
                               : isPending
-                                ? 'bg-gray-100 text-gray-500 border-gray-200'
-                                : 'bg-surface text-text-secondary border-gray-200'
+                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                                : 'bg-surface dark:bg-gray-800 text-text-secondary border-gray-200 dark:border-gray-700'
                           }`}
                         >
                           {i === 0 && (
@@ -307,7 +310,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                   </p>
                 )}
                 {business.price_range && (
-                  <span className="bg-surface text-text-secondary text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded flex items-center gap-1">
+                  <span className="bg-surface dark:bg-gray-800 text-text-secondary text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded flex items-center gap-1">
                     <span>{business.price_range.startsWith('$') ? '' : '$'}</span>
                     {business.price_range}
                   </span>
@@ -345,8 +348,8 @@ async function BusinessContent({ slug }: { slug: string }) {
                           key={i}
                           className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm border ${
                             isPending
-                              ? 'bg-gray-100 text-gray-500 border-gray-200'
-                              : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
+                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                              : 'bg-whatsapp-50 dark:bg-whatsapp-950/40 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50'
                           }`}
                         >
                           {cat}
@@ -495,10 +498,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                       <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Top reviews</h2>
                       <div className="space-y-2 sm:space-y-3">
                         {ratings.slice(0, 5).map((r, i) => (
-                          <div key={i} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                          <div key={i} className="border-b border-gray-100 dark:border-gray-800 last:border-0 pb-3 last:pb-0">
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-full bg-whatsapp-50 text-whatsapp-700 flex items-center justify-center text-[10px] font-bold">
+                                <div className="w-6 h-6 rounded-full bg-whatsapp-50 dark:bg-whatsapp-950/60 text-whatsapp-700 dark:text-whatsapp-400 flex items-center justify-center text-[10px] font-bold">
                                   {r.customer_phone.slice(-2)}
                                 </div>
                                 <span className="text-xs font-semibold text-text-primary">+{r.customer_phone.replace(/^\+/, '').slice(0, 4)}•••{r.customer_phone.slice(-3)}</span>
@@ -507,7 +510,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                             </div>
                             <div className="flex items-center gap-0.5 mb-1">
                               {[1, 2, 3, 4, 5].map(s => (
-                                <svg key={s} className={`w-3 h-3 ${s <= r.rating ? 'text-yellow-500' : 'text-gray-300'}`} viewBox="0 0 20 20" fill="currentColor">
+                                <svg key={s} className={`w-3 h-3 ${s <= r.rating ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}`} viewBox="0 0 20 20" fill="currentColor">
                                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                 </svg>
                               ))}
@@ -552,7 +555,7 @@ async function BusinessContent({ slug }: { slug: string }) {
 
               <div className="mt-4 text-center">
                 <a
-                  href="mailto:report@wadirectory.vercel.app?subject=Report%20Business"
+                  href={`mailto:wadirectory@proton.me?subject=${encodeURIComponent(`Report business: ${business.name}`)}`}
                   className="text-xs text-text-secondary hover:text-danger transition-colors"
                 >
                   Report this business
@@ -572,7 +575,7 @@ async function BusinessContent({ slug }: { slug: string }) {
             </div>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white border-t border-gray-200 sm:hidden z-40">
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 sm:hidden z-40">
             <WhatsAppButton phone={business.phone} businessId={business.id} />
           </div>
         </div>

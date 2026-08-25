@@ -11,6 +11,7 @@ import CategoryChips from '@/components/category-chips'
 import ExploreCategories from '@/components/explore-categories'
 import FaqSection from '@/components/faq-section'
 import Link from 'next/link'
+import Image from 'next/image'
 
 export const revalidate = 300
 
@@ -77,11 +78,12 @@ export default async function HomePage() {
             WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
           }}
         >
-          <img
+          <Image
             src="/wad1.webp"
             alt=""
-            decoding="async"
-            className="h-full w-full object-cover object-left"
+            fill
+            sizes="(max-width: 640px) 20vw, 45vw"
+            className="object-cover object-left"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-white/60 dark:to-gray-900/80" />
           <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70 dark:from-gray-900/30 dark:to-gray-900/70" />
@@ -96,11 +98,12 @@ export default async function HomePage() {
             WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
           }}
         >
-          <img
+          <Image
             src="/wad2.webp"
             alt=""
-            decoding="async"
-            className="h-full w-full object-cover object-right"
+            fill
+            sizes="(max-width: 640px) 20vw, 45vw"
+            className="object-cover object-right"
           />
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-white/60 dark:to-gray-900/80" />
           <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70 dark:from-gray-900/30 dark:to-gray-900/70" />

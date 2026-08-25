@@ -9,6 +9,7 @@ import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
 import { getSupabase } from '@/lib/supabase-server'
 import { ThemeProvider } from 'next-themes'
+import Image from 'next/image'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -17,7 +18,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://wadirectory.vercel.app'),
+  metadataBase: new URL(process.env.SITE_URL || 'https://wadirectory.co.zw'),
   title: 'WA Directory - Find any business on WhatsApp',
   description: 'AI finds shops, services, prices instantly',
   manifest: '/manifest.webmanifest',
@@ -44,41 +45,49 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: 'cover',
   themeColor: '#25D366',
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { data: banners } = await getSupabase()
-    .from('banners')
-    .select('id, text, link, link_label')
-    .eq('active', true)
-    .order('created_at', { ascending: false })
+  // Decorative read: degrade to "no banners" if Supabase is unreachable or
+  // misconfigured, rather than failing every page.
+  let activeBanners: { id: string; text: string; link: string; link_label: string }[] = []
+  try {
+    const { data: banners } = await getSupabase()
+      .from('banners')
+      .select('id, text, link, link_label')
+      .eq('active', true)
+      .order('created_at', { ascending: false })
+    activeBanners = (banners || []).map(b => ({
+      id: b.id,
+      text: b.text,
+      link: b.link || '',
+      link_label: b.link_label || 'Learn more',
+    }))
+  } catch {}
 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans`}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <Navbar />
-          <BannerStrip
-            banners={(banners || []).map(b => ({
-              id: b.id,
-              text: b.text,
-              link: b.link || '',
-              link_label: b.link_label || 'Learn more',
-            }))}
-          />
+          <BannerStrip banners={activeBanners} />
           <PWARegistration />
           <InstallPWA />
           {/* Global Floor / Background Wallpaper */}
-          <img
-            src="/wadbody.webp"
-            alt=""
+          <div
             aria-hidden="true"
-            decoding="async"
-            className="fixed inset-0 h-full w-full object-cover pointer-events-none select-none -z-30 opacity-90 dark:opacity-25 transition-opacity duration-500"
-          />
+            className="fixed inset-0 -z-30 pointer-events-none select-none"
+          >
+            <Image
+              src="/wadbody.webp"
+              alt=""
+              fill
+              sizes="100vw"
+              className="object-cover opacity-90 dark:opacity-25 transition-opacity duration-500"
+            />
+          </div>
           {/* Translucent overlay for crisp card contrast */}
           <div
             aria-hidden="true"
