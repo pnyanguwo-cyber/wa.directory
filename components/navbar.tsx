@@ -38,11 +38,13 @@ export default function Navbar() {
   }
 
   useEffect(() => {
+    // Re-sync on every route change so the navbar can never go stale
+    // (e.g. still saying "logged in" after logging out elsewhere).
     fetch('/api/account/session')
       .then(r => r.json())
       .then(d => setLoggedIn(!!d.loggedIn))
       .catch(() => setLoggedIn(false))
-  }, [])
+  }, [pathname])
 
   async function logout() {
     if (loggingOut) return
@@ -50,7 +52,11 @@ export default function Navbar() {
     try {
       await fetch('/api/account/logout', { method: 'POST' })
     } catch {}
-    router.push('/')
+    // Always dismiss the splash and flip the UI, even if we were already
+    // on '/' (same-route navigation doesn't remount anything).
+    setLoggedIn(false)
+    setLoggingOut(false)
+    router.replace('/')
     router.refresh()
   }
 
