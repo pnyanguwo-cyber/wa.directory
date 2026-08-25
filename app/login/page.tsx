@@ -31,6 +31,7 @@ export default function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setError('')
+    setSplash('Signing you in...')
     const res = await fetch('/api/account/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -39,10 +40,10 @@ export default function LoginPage() {
     const data = await res.json()
     setBusy(false)
     if (!res.ok) {
+      setSplash('')
       setError(data.error || 'Login failed')
       return
     }
-    setSplash('Signing you in...')
     router.push('/portal')
   }
 
@@ -71,6 +72,7 @@ export default function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setError('')
+    setSplash('Signing you in...')
     const res = await fetch('/api/account/otp-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,10 +81,10 @@ export default function LoginPage() {
     const data = await res.json()
     setBusy(false)
     if (!res.ok) {
+      setSplash('')
       setError(data.error || 'Could not log in')
       return
     }
-    setSplash('Signing you in...')
     router.push('/portal')
   }
 
@@ -90,6 +92,7 @@ export default function LoginPage() {
     e.preventDefault()
     setBusy(true)
     setError('')
+    setSplash('Signing you in...')
     const res = await fetch('/api/account/reset', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -98,10 +101,10 @@ export default function LoginPage() {
     const data = await res.json()
     setBusy(false)
     if (!res.ok) {
+      setSplash('')
       setError(data.error || 'Could not reset password')
       return
     }
-    setSplash('Signing you in...')
     router.push('/portal')
   }
 

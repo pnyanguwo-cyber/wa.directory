@@ -2,21 +2,40 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import Splash from '@/components/splash'
 
+const NAV_SPINNER = (
+  <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+  </svg>
+)
+
 export default function Navbar() {
   const router = useRouter()
+  const pathname = usePathname()
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  useEffect(() => {
+    setNavigatingTo(null)
+  }, [pathname])
+
+  function navigate(href: string) {
+    if (navigatingTo) return
+    setNavigatingTo(href)
+    router.push(href)
+  }
 
   useEffect(() => {
     fetch('/api/account/session')
@@ -58,7 +77,7 @@ export default function Navbar() {
             <button
               type="button"
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:bg-surface dark:hover:bg-gray-800"
+              className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:bg-surface dark:hover:bg-gray-800 active:scale-90"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
@@ -114,17 +133,22 @@ export default function Navbar() {
               </button>
             </>
           ) : (
-            <Link
-              href="/login"
+            <button
+              type="button"
+              onClick={() => navigate('/login')}
               title="Log in your account"
-              className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
+              className={`btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${navigatingTo === '/login' ? 'opacity-70 cursor-wait' : ''}`}
             >
-              <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-              <span className="hidden sm:inline">Log in your account</span>
-              <span className="inline sm:hidden">Login</span>
-            </Link>
+              {navigatingTo === '/login' ? (
+                NAV_SPINNER
+              ) : (
+                <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+              )}
+              <span className="hidden sm:inline">{navigatingTo === '/login' ? 'Opening...' : 'Log in your account'}</span>
+              <span className="inline sm:hidden">{navigatingTo === '/login' ? '...' : 'Login'}</span>
+            </button>
           )}
         </div>
       </div>

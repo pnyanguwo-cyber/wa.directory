@@ -124,13 +124,6 @@ export default async function HomePage() {
         />
 
         <div className="relative z-10 max-w-4xl mx-auto px-4 text-center">
-          {/* Top Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/90 dark:bg-gray-800/90 border border-whatsapp-200/80 dark:border-whatsapp-700/60 text-whatsapp-800 dark:text-gray-100 text-xs sm:text-sm font-semibold mb-3 sm:mb-5 shadow-sm backdrop-blur-md">
-            <span className="w-2 h-2 rounded-full bg-whatsapp-500 animate-pulse" aria-hidden="true" />
-            <Icon name="bot" className="w-4 h-4" />
-            <span>AI WhatsApp Business Directory • Zimbabwe</span>
-          </div>
-
           {/* Typing Headline */}
           <TypingHeadline />
 

@@ -92,6 +92,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true })
     }
 
+    if (body.action === 'delete') {
+      const accountIds: string[] = Array.isArray(body.account_ids)
+        ? body.account_ids.filter((x: unknown) => typeof x === 'string')
+        : body.account_id ? [body.account_id] : []
+      if (accountIds.length === 0) {
+        return NextResponse.json({ error: 'account_id(s) required' }, { status: 400 })
+      }
+
+      if (body.delete_listings) {
+        // Deleting the business cascades to its account(s) via FK ON DELETE CASCADE.
+        const { data: targets } = await supabase
+          .from('business_accounts')
+          .select('business_id')
+          .in('id', accountIds)
+        const businessIds = [...new Set((targets || []).map(t => t.business_id))]
+        if (businessIds.length === 0) {
+          return NextResponse.json({ error: 'No matching accounts' }, { status: 404 })
+        }
+        const { error } = await supabase
+          .from('businesses')
+          .delete()
+          .in('id', businessIds)
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+        return NextResponse.json({ success: true, deleted_listings: businessIds.length })
+      }
+
+      const { error } = await supabase
+        .from('business_accounts')
+        .delete()
+        .in('id', accountIds)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, deleted: accountIds.length })
+    }
+
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

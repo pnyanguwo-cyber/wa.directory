@@ -7,6 +7,7 @@ import PWARegistration from '@/components/pwa-registration'
 import InstallPWA from '@/components/install-pwa'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
+import SiteSplash from '@/components/site-splash'
 import { getSupabase } from '@/lib/supabase-server'
 import { ThemeProvider } from 'next-themes'
 import Image from 'next/image'
@@ -70,6 +71,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans`}>
+        <SiteSplash />
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <Navbar />
           <BannerStrip banners={activeBanners} />

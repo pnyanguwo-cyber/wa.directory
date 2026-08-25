@@ -74,6 +74,7 @@ function AccountSetupForm() {
     }
     setBusy(true)
     setError('')
+    setSplash('Creating your account...')
     const res = await fetch('/api/account/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -82,6 +83,7 @@ function AccountSetupForm() {
     const data = await res.json()
     setBusy(false)
     if (!res.ok) {
+      setSplash('')
       if (data.error?.includes('Phone number does not match')) {
         setFieldErrors({ phone: data.error })
       } else {
@@ -89,7 +91,6 @@ function AccountSetupForm() {
       }
       return
     }
-    setSplash('Creating your account...')
     router.push('/portal')
   }
 

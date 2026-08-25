@@ -12,12 +12,13 @@ import AdminStats from '@/components/admin/admin-stats'
 import AdminRankings from '@/components/admin/admin-rankings'
 import AdminSubscriptions from '@/components/admin/admin-subscriptions'
 import AdminAccounts from '@/components/admin/admin-accounts'
+import Splash from '@/components/splash'
 
 type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'banners' | 'chat' | 'stats' | 'rankings' | 'subscriptions' | 'accounts'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'listings', label: 'Listings', icon: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25zM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H15.75a2.25 2.25 0 0 1-2.25-2.25v-2.25z' },
   { id: 'stats', label: 'Statistics', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z' },
+  { id: 'listings', label: 'Listings', icon: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25zM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H15.75a2.25 2.25 0 0 1-2.25-2.25v-2.25z' },
   { id: 'rankings', label: 'Rankings & Bids', icon: 'M3 13.5 9 6.75l4.5 4.5L21 3.75M21 15.75v4.5a1.5 1.5 0 0 1-1.5 1.5h-15a1.5 1.5 0 0 1-1.5-1.5v-15a1.5 1.5 0 0 1 1.5-1.5h4.5' },
   { id: 'subscriptions', label: 'Subscriptions', icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5z' },
   { id: 'accounts', label: 'Accounts', icon: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
@@ -30,10 +31,19 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 
 export default function AdminPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('listings')
+  const [tab, setTab] = useState<Tab>('stats')
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    await fetch('/api/admin/logout', { method: 'POST' })
+    router.push('/admin-login')
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
+      {loggingOut && <Splash label="Logging out..." />}
       <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -46,10 +56,8 @@ export default function AdminPage() {
               Logged in
             </span>
             <button
-              onClick={async () => {
-                await fetch('/api/admin/logout', { method: 'POST' })
-                router.push('/admin-login')
-              }}
+              onClick={logout}
+              disabled={loggingOut}
               className="btn-secondary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
             >
               <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">

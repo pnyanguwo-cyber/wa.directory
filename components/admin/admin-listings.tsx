@@ -75,6 +75,9 @@ export default function AdminListings() {
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
   const [editForm, setEditForm] = useState<EditForm | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
 
   useEffect(() => {
     refresh()
@@ -97,7 +100,35 @@ export default function AdminListings() {
       Array.from(merged.entries()).map(([name, icon]) => ({ value: name, label: `${icon} ${name}` }))
     )
     setSubscriptionIds(new Set<string>(data.premiumIds || []))
+    setSelectedIds(new Set())
     setDataLoading(false)
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    setBulkDeleting(true)
+    const { ok, status } = await adminFetch('/api/admin/delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    })
+    setBulkDeleting(false)
+    setConfirmBulkDelete(false)
+    if (!ok) {
+      if (status === 401) router.push('/admin-login')
+      return
+    }
+    setSelectedIds(new Set())
+    refresh()
   }
 
   const stats = useMemo(() => {
@@ -140,6 +171,20 @@ export default function AdminListings() {
     })
     return list
   }, [businesses, search, filterStatus, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds])
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))
+
+  function toggleSelectAllFiltered() {
+    if (allFilteredSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        filtered.forEach(b => next.delete(b.id))
+        return next
+      })
+    } else {
+      setSelectedIds(new Set(filtered.map(b => b.id)))
+    }
+  }
 
   const uniqueCategories = useMemo(() => {
     const cats = new Set<string>()
@@ -280,6 +325,35 @@ export default function AdminListings() {
           onConfirm={() => handleDelete(confirmDelete)}
           onCancel={() => setConfirmDelete(null)}
         />
+      )}
+
+      {confirmBulkDelete && (
+        <ConfirmDialog
+          message={`Permanently delete ${selectedIds.size} listing${selectedIds.size === 1 ? '' : 's'}? This action cannot be undone.`}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setConfirmBulkDelete(false)}
+        />
+      )}
+
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 animate-slide-up">
+          <div className="flex items-center gap-3 bg-gray-900 text-white rounded-full shadow-2xl px-5 py-3">
+            <span className="text-xs font-bold whitespace-nowrap">{selectedIds.size} selected</span>
+            <button
+              onClick={() => setConfirmBulkDelete(true)}
+              disabled={bulkDeleting}
+              className="h-8 px-3.5 rounded-full bg-red-500 hover:bg-red-600 text-xs font-bold transition-all disabled:opacity-50 active:scale-95"
+            >
+              {bulkDeleting ? 'Deleting...' : 'Delete selected'}
+            </button>
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="h-8 px-3 rounded-full bg-white/10 hover:bg-white/20 text-xs font-semibold transition-all active:scale-95"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
       )}
 
       {showAddModal && (
@@ -602,12 +676,29 @@ export default function AdminListings() {
             <p className="text-xs font-medium text-text-secondary">
               Showing {(page - 1) * PAGE_SIZE + 1}&ndash;{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} listings
             </p>
+            <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allFilteredSelected}
+                onChange={toggleSelectAllFiltered}
+                className="w-4 h-4 accent-whatsapp-600 cursor-pointer"
+                aria-label="Select all filtered listings"
+              />
+              Select all ({filtered.length})
+            </label>
           </div>
 
           <div className="space-y-2.5">
             {paginated.map(b => (
               <div key={b.id} className="neo-card p-4 flex items-center justify-between gap-4">
                 <div className="min-w-0 flex-1 flex items-center gap-3.5">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(b.id)}
+                    onChange={() => toggleSelect(b.id)}
+                    className="w-4 h-4 accent-whatsapp-600 shrink-0 cursor-pointer"
+                    aria-label={`Select ${b.name}`}
+                  />
                   {b.logo_url ? (
                     <LogoImage src={b.logo_url} alt="" width={40} height={40} sizes="40px" className="w-10 h-10 rounded-xl object-cover shrink-0 ring-1 ring-gray-100" />
                   ) : (
