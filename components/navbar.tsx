@@ -73,8 +73,9 @@ export default function Navbar() {
             priority
             className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
           />
-          <span className="text-lg font-extrabold tracking-tight group-hover:text-whatsapp-700 transition-colors leading-tight" style={{ color: 'rgb(var(--text-primary))' }}>
-            WA Directory
+          <span className="text-lg font-extrabold tracking-tight leading-tight">
+            <span className="bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 bg-clip-text text-transparent">WA</span>
+            <span className="group-hover:text-whatsapp-700 transition-colors" style={{ color: 'rgb(var(--text-primary))' }}> Directory</span>
           </span>
         </Link>
 

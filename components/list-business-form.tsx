@@ -9,29 +9,28 @@ import { categories as staticCategories } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import QrCard from '@/components/qr-card'
+import RequestConfirmModal from '@/components/request-confirm-modal'
 
-interface ApprovedCategory { name: string; icon: string }
+interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
+interface ApprovedCity { name: string }
 
 const countryOptions = countryCodes.map(c => ({
   value: c.code,
   label: `${c.flag} ${c.code} ${c.country}`,
 }))
 
-const cityOptions = [
-  { value: '*', label: 'Whole country' },
-  ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
-]
-
 type LogoMode = 'url' | 'upload'
-type FeatureRequest = { type: 'category' | 'area'; name: string; city?: string }
+type FeatureRequest = { type: 'category' | 'area' | 'city'; name: string; city?: string }
 
 export default function ListBusinessForm({
   categoryOptions,
   approvedAreas,
+  approvedCities,
 }: {
   categoryOptions: { value: string; label: string }[]
   approvedAreas: ApprovedArea[]
+  approvedCities: ApprovedCity[]
 }) {
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -66,11 +65,17 @@ export default function ListBusinessForm({
     password: '',
     address: '',
     show_location: true,
+    isRemote: false,
   })
   const [categories, setCategories] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [requests, setRequests] = useState<FeatureRequest[]>([])
   const [errors, setErrors] = useState<{ password?: string; logo?: string; submit?: string }>({})
+  const [requestModal, setRequestModal] = useState<{ open: boolean; type: 'city' | 'area' | 'category'; name: string }>({ open: false, type: 'category', name: '' })
+  const [pendingCities, setPendingCities] = useState<string[]>([])
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
@@ -88,6 +93,33 @@ export default function ListBusinessForm({
     return list.sort((a, b) => a.label.localeCompare(b.label))
   })()
 
+  const categoryHints = (() => {
+    const hints = new Map<string, string>()
+    for (const c of staticCategories) {
+      if (c.hint) hints.set(c.name, c.hint)
+    }
+    return hints
+  })()
+
+  const allCityOptions = (() => {
+    const merged = new Map<string, string>()
+    for (const c of approvedCities) merged.set(c.name.toLowerCase(), c.name)
+    for (const c of zimbabweCities) {
+      if (!merged.has(c.name.toLowerCase())) merged.set(c.name.toLowerCase(), c.name)
+    }
+    for (const name of pendingCities) {
+      if (!merged.has(name.toLowerCase())) merged.set(name.toLowerCase(), name)
+    }
+    const list: { value: string; label: string }[] = []
+    merged.forEach((name) => list.push({ value: name, label: name }))
+    return list.sort((a, b) => a.label.localeCompare(b.label))
+  })()
+
+  const cityOptions = [
+    { value: '*', label: 'Whole country' },
+    ...allCityOptions,
+  ]
+
   const areaOptions = form.city && form.city !== '*'
     ? [
         ...(selectedCity?.areas || []).map(a => ({ value: a, label: a })),
@@ -98,7 +130,7 @@ export default function ListBusinessForm({
       ]
     : []
 
-  const hasLocation = form.city === '*' || !!form.city || areas.length > 0
+  const hasLocation = form.isRemote || form.city === '*' || !!form.city || areas.length > 0
   const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
   const isValidStep2 = form.description.trim() && categories.length > 0 && hasLocation
 
@@ -116,7 +148,9 @@ export default function ListBusinessForm({
       })
       const data = await res.json()
       if (data.bio) setForm(f => ({ ...f, bio: data.bio }))
+      else setErrors(prev => ({ ...prev, submit: 'Could not generate a bio. Please try again.' }))
     } catch {
+      setErrors(prev => ({ ...prev, submit: 'Failed to generate bio. Check your connection and try again.' }))
     } finally {
       setBioLoading(false)
     }
@@ -162,11 +196,29 @@ export default function ListBusinessForm({
     setRequests(r => [...r, { type: 'area', name: trimmed, city: form.city }])
   }
 
+  function handleRequestConfirm() {
+    if (requestModal.type === 'city') {
+      setPendingCities(c => [...c, requestModal.name])
+      setRequests(r => [...r, { type: 'city', name: requestModal.name }])
+      setForm(f => ({ ...f, city: requestModal.name }))
+    } else if (requestModal.type === 'area') {
+      handleRequestArea(requestModal.name)
+    } else if (requestModal.type === 'category') {
+      handleRequestCategory(requestModal.name)
+    }
+    setRequestModal({ open: false, type: 'category', name: '' })
+  }
+
   async function handleSubmit() {
     if (form.password && form.password.length < 6) {
       setErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters, or leave it blank to set one later.' }))
       setStep(3)
       passwordRef.current?.focus()
+      return
+    }
+    if (form.password && form.password !== confirmPassword) {
+      setErrors(prev => ({ ...prev, password: 'Passwords do not match.' }))
+      setStep(3)
       return
     }
     setErrors(prev => ({ ...prev, submit: undefined }))
@@ -185,6 +237,7 @@ export default function ListBusinessForm({
 
       // Listing creation happens server-side (validated + service role).
       const fullPhone = (form.countryCode + form.phone).replace(/[^0-9]/g, '')
+      const hasPendingCity = pendingCities.includes(form.city)
       const createRes = await fetch('/api/businesses/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -197,6 +250,7 @@ export default function ListBusinessForm({
           bio: form.bio,
           categories,
           city: form.city,
+          pending_city: hasPendingCity,
           areas,
           catalog_link: form.catalog_link.trim(),
           logo_url: logoUrl,
@@ -259,7 +313,7 @@ export default function ListBusinessForm({
           <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-6 text-left">
             <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Your requests are in review:</p>
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              {requests.map(r => `"${r.name}"`).join(', ')} will appear once an admin approves {requests.length > 1 ? 'them' : 'it'}.
+              {requests.map(r => r.type === 'city' ? `"${r.name}" (city)` : `"${r.name}"`).join(', ')} will appear once an admin approves {requests.length > 1 ? 'them' : 'it'}.
             </p>
           </div>
         )}
@@ -426,11 +480,24 @@ export default function ListBusinessForm({
               values={categories}
               onChange={setCategories}
               pending={pendingCategoryNames}
-              onRequestName={handleRequestCategory}
+              onRequestName={(name) => setRequestModal({ open: true, type: 'category', name })}
               onEnterNext={() => descriptionRef.current?.focus()}
               placeholder="e.g. cakes, food, magetsi..."
             />
             <p className="text-xs text-whatsapp-600 mt-1">Start typing to search (e.g. plumber, salon). Can't find yours? Type it and press Enter to request it.</p>
+            {categories.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {categories.map(c => {
+                  const cat = allCategoryOptions.find(o => o.value === c)
+                  const hint = categoryHints.get(c)
+                  return hint ? (
+                    <span key={c} className="text-xs text-text-secondary bg-surface dark:bg-gray-800 rounded-lg px-2 py-1">
+                      {cat?.label.split(' ')[0]} {hint}
+                    </span>
+                  ) : null
+                })}
+              </div>
+            )}
             {pendingCategoryNames.length > 0 && (
               <p className="text-xs text-amber-600 mt-1">
                 Requested: {pendingCategoryNames.join(', ')} (pending admin approval)
@@ -450,36 +517,102 @@ export default function ListBusinessForm({
             />
             <p className="text-xs text-whatsapp-600 mt-1">What you sell, your services, and your prices</p>
           </div>
+          <button
+            onClick={handleGenerateBio}
+            disabled={!form.description.trim() || bioLoading}
+            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
+          >
+            {bioLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+                Generating...
+              </span>
+            ) : (
+              'Generate AI Bio'
+            )}
+          </button>
+          {form.bio && (
+            <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 animate-slide-up">
+              <p className="text-sm text-text-primary">{form.bio}</p>
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => setForm(f => ({ ...f, description: f.bio, bio: '' }))}
+                  className="flex-1 bg-whatsapp-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-600 active:scale-[0.95] transition-all"
+                >
+                  Use This Bio
+                </button>
+                <button
+                  onClick={handleGenerateBio}
+                  disabled={bioLoading}
+                  className="flex-1 border border-whatsapp-500 text-whatsapp-600 py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-50 active:scale-[0.95] transition-all"
+                >
+                  {bioLoading ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <div className="w-3 h-3 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+                      ...
+                    </span>
+                  ) : 'Retry'}
+                </button>
+                <button
+                  onClick={() => setForm(f => ({ ...f, bio: '' }))}
+                  className="px-3 text-xs text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-text-secondary">Type what you sell above, then click to generate a professional bio.</p>
+          <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-text-primary">I work remotely (no physical location)</p>
+              <p className="text-xs text-text-secondary">Skip city/area selection - serve clients online</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const newRemote = !form.isRemote
+                setForm(f => ({ ...f, isRemote: newRemote, city: newRemote ? 'remote' : '' }))
+                if (newRemote) setAreas([])
+              }}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.isRemote ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              role="switch"
+              aria-checked={form.isRemote}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.isRemote ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SearchSelect
               options={cityOptions}
               value={form.city}
               onChange={v => setForm(f => ({ ...f, city: v }))}
               onEnterNext={() => (form.city && form.city !== '*' ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
-              placeholder="Select city"
+              placeholder={form.isRemote ? 'Remote - no location needed' : 'Select city'}
               label="Town/city your business is based in"
+              onRequestName={(name) => setRequestModal({ open: true, type: 'city', name })}
             />
             {form.city && form.city !== '*' ? (
               <div>
-                <MultiSearchSelect
-                  options={areaOptions}
-                  values={areas}
-                  onChange={setAreas}
-                  primary
-                  pending={pendingAreaNames}
-                  onRequestName={handleRequestArea}
-                  onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
-                  inputRef={areaInputRef}
-                  placeholder="Select areas"
-                  label="Areas you cover"
-                  hint={
-                    areas.length === 0
-                      ? undefined
-                      : areas.length === 1
-                        ? 'Your primary location is marked orange. Customers will see it highlighted.'
-                        : 'First area (orange) is your primary location. Add more if you cover them.'
-                  }
-                />
+              <MultiSearchSelect
+                options={areaOptions}
+                values={areas}
+                onChange={setAreas}
+                primary
+                pending={pendingAreaNames}
+                onRequestName={(name) => setRequestModal({ open: true, type: 'area', name })}
+                onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
+                inputRef={areaInputRef}
+                placeholder="Select areas"
+                label="Areas you cover"
+                hint={
+                  areas.length === 0
+                    ? undefined
+                    : areas.length === 1
+                      ? 'Your primary location is marked orange. Customers will see it highlighted.'
+                      : 'First area (orange) is your primary location. Add more if you cover them.'
+                }
+              />
               </div>
             ) : (
               <div />
@@ -519,51 +652,6 @@ export default function ListBusinessForm({
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.show_location ? 'translate-x-5' : ''}`} />
             </button>
           </div>
-          <button
-            onClick={handleGenerateBio}
-            disabled={!isValidStep2 || bioLoading}
-            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
-          >
-            {bioLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
-                Generating...
-              </span>
-            ) : (
-              'Generate AI Bio'
-            )}
-          </button>
-          {form.bio && (
-            <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 animate-slide-up">
-              <p className="text-sm text-text-primary">{form.bio}</p>
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  onClick={() => setForm(f => ({ ...f, description: f.bio, bio: '' }))}
-                  className="flex-1 bg-whatsapp-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-600 active:scale-[0.95] transition-all"
-                >
-                  Update
-                </button>
-                <button
-                  onClick={handleGenerateBio}
-                  disabled={bioLoading}
-                  className="flex-1 border border-whatsapp-500 text-whatsapp-600 py-2 rounded-lg text-sm font-medium hover:bg-whatsapp-50 active:scale-[0.95] transition-all"
-                >
-                  {bioLoading ? (
-                    <span className="flex items-center justify-center gap-1">
-                      <div className="w-3 h-3 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
-                      ...
-                    </span>
-                  ) : 'Retry'}
-                </button>
-                <button
-                  onClick={() => setForm(f => ({ ...f, bio: '' }))}
-                  className="px-3 text-xs text-text-secondary hover:text-text-primary transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          )}
           <div className="flex gap-2 pt-2">
             <button onClick={() => setStep(1)} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full flex-1 py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -703,19 +791,34 @@ export default function ListBusinessForm({
             <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5">
               Portal Password <span className="text-text-secondary">(optional)</span>
             </label>
-            <input
-              ref={passwordRef}
-              id="field-password"
-              type="password"
-              minLength={6}
-              value={form.password}
-              onChange={e => { setForm(f => ({ ...f, password: e.target.value })); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
-              placeholder="Create a password for your portal account"
-              className="input-field"
-              aria-invalid={!!errors.password}
-              aria-describedby={errors.password ? 'field-password-error' : undefined}
-            />
+            <div className="relative">
+              <input
+                ref={passwordRef}
+                id="field-password"
+                type={showPassword ? 'text' : 'password'}
+                minLength={6}
+                value={form.password}
+                onChange={e => { setForm(f => ({ ...f, password: e.target.value })); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('field-confirm-password')?.focus() } }}
+                placeholder="Create a password for your portal account"
+                className="input-field pr-10"
+                aria-invalid={!!errors.password}
+                aria-describedby={errors.password ? 'field-password-error' : undefined}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                )}
+              </button>
+            </div>
             {errors.password ? (
               <p id="field-password-error" className="text-xs text-danger mt-1 flex items-center gap-1 animate-fade-in">
                 <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -727,6 +830,42 @@ export default function ListBusinessForm({
               <p className="text-xs text-whatsapp-600 mt-1">
                 Set a password now to unlock your statistics portal, or do it later from your edit link.
               </p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5">
+              Confirm Password <span className="text-text-secondary">(optional)</span>
+            </label>
+            <div className="relative">
+              <input
+                id="field-confirm-password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                minLength={6}
+                value={confirmPassword}
+                onChange={e => { setConfirmPassword(e.target.value); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
+                placeholder="Re-enter your password"
+                className="input-field pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(p => !p)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary transition-colors"
+                tabIndex={-1}
+                aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+              >
+                {showConfirmPassword ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                )}
+              </button>
+            </div>
+            {confirmPassword && form.password && form.password !== confirmPassword && (
+              <p className="text-xs text-danger mt-1">Passwords do not match</p>
+            )}
+            {confirmPassword && form.password && form.password === confirmPassword && (
+              <p className="text-xs text-whatsapp-600 mt-1">Passwords match</p>
             )}
           </div>
           <div>
@@ -815,6 +954,14 @@ export default function ListBusinessForm({
           </div>
         </div>
       )}
+
+      <RequestConfirmModal
+        open={requestModal.open}
+        name={requestModal.name}
+        type={requestModal.type}
+        onConfirm={handleRequestConfirm}
+        onCancel={() => setRequestModal({ open: false, type: 'category', name: '' })}
+      />
     </div>
   )
 }

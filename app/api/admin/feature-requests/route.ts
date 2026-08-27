@@ -53,29 +53,37 @@ export async function POST(request: Request) {
       : req.name
 
     if (action === 'reject') {
-      const arrCol = req.type === 'category' ? 'category' : 'areas'
+      const arrCol = req.type === 'category' ? 'category' : req.type === 'area' ? 'areas' : 'city'
 
       // Remove the rejected name from the business's array
       const { data: biz } = await supabase
         .from('businesses')
-        .select('category, areas, phone, slug')
+        .select('category, areas, city, phone, slug')
         .eq('id', req.business_id)
         .single()
 
       if (biz) {
-        const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
-        const next = arr.filter((n: string) => n !== req.name && n !== finalName)
-        await supabase
-          .from('businesses')
-          .update({ [arrCol]: next })
-          .eq('id', req.business_id)
+        if (req.type === 'city') {
+          await supabase
+            .from('businesses')
+            .update({ city: '' })
+            .eq('id', req.business_id)
+        } else {
+          const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
+          const next = arr.filter((n: string) => n !== req.name && n !== finalName)
+          await supabase
+            .from('businesses')
+            .update({ [arrCol]: next })
+            .eq('id', req.business_id)
+        }
 
         if (biz.phone) {
           const profileUrl = biz.slug ? `${SITE_URL}/business/${biz.slug}` : SITE_URL
+          const typeLabel = req.type === 'category' ? 'category' : req.type === 'area' ? 'area' : 'city / town'
           sendWhatsAppMessage(
             '+' + String(biz.phone).replace(/\D/g, ''),
             [
-              `Hi! We couldn't approve *"${req.name}"* as your ${req.type === 'category' ? 'category' : 'area'}.`,
+              `Hi! We couldn't approve *"${req.name}"* as your ${typeLabel}.`,
               '',
               'Please review your listing, or suggest a correction by contacting us.',
               `Your listing: ${profileUrl}`,
@@ -94,24 +102,32 @@ export async function POST(request: Request) {
       await supabase
         .from('categories')
         .upsert({ name: finalName, active: true }, { onConflict: 'name' })
-    } else {
+    } else if (req.type === 'area') {
       await supabase
         .from('areas')
         .upsert({ city: req.city, name: finalName, active: true }, { onConflict: 'city,name' })
+    } else if (req.type === 'city') {
+      await supabase
+        .from('cities')
+        .upsert({ name: finalName, active: true }, { onConflict: 'name' })
     }
 
     // Replace the old name with the corrected name in the business's array
     const { data: biz } = await supabase
       .from('businesses')
-      .select('category, areas')
+      .select('category, areas, city')
       .eq('id', req.business_id)
       .single()
 
     if (biz) {
-      const arrCol = req.type === 'category' ? 'category' : 'areas'
-      const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
-      const next = arr.map((n: string) => (n === req.name ? finalName : n))
-      await supabase.from('businesses').update({ [arrCol]: next }).eq('id', req.business_id)
+      if (req.type === 'city') {
+        await supabase.from('businesses').update({ city: finalName }).eq('id', req.business_id)
+      } else {
+        const arrCol = req.type === 'category' ? 'category' : 'areas'
+        const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
+        const next = arr.map((n: string) => (n === req.name ? finalName : n))
+        await supabase.from('businesses').update({ [arrCol]: next }).eq('id', req.business_id)
+      }
     }
 
     await supabase

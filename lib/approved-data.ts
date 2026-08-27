@@ -1,5 +1,6 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { categories as staticCategories, matchCategory as staticMatch } from '@/data/categories'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
 
 export interface ApprovedCategory {
   name: string
@@ -46,6 +47,35 @@ export async function getApprovedAreas(): Promise<ApprovedArea[]> {
 export async function getApprovedAreaNames(city: string): Promise<Set<string>> {
   const rows = await getApprovedAreas()
   return new Set(rows.filter(r => r.city === city).map(r => r.name))
+}
+
+export interface ApprovedCity {
+  name: string
+}
+
+export async function getApprovedCities(): Promise<ApprovedCity[]> {
+  const staticCityNames = new Set(zimbabweCities.map(c => c.name))
+  try {
+    const { data } = await getSupabase()
+      .from('cities')
+      .select('name')
+      .eq('active', true)
+      .order('name', { ascending: true })
+    const dbCities = (data || []) as ApprovedCity[]
+    const merged = new Map<string, ApprovedCity>()
+    for (const c of dbCities) merged.set(c.name.toLowerCase(), c)
+    for (const name of staticCityNames) {
+      if (!merged.has(name.toLowerCase())) merged.set(name.toLowerCase(), { name })
+    }
+    return Array.from(merged.values()).sort((a, b) => a.name.localeCompare(b.name))
+  } catch {
+    return zimbabweCities.map(c => ({ name: c.name }))
+  }
+}
+
+export async function getApprovedCityNames(): Promise<Set<string>> {
+  const rows = await getApprovedCities()
+  return new Set(rows.map(r => r.name))
 }
 
 export function categoryIcon(

@@ -11,6 +11,8 @@ interface SearchSelectProps {
   required?: boolean
   onEnterNext?: () => void
   inputRef?: React.Ref<HTMLInputElement>
+  onRequestName?: (name: string) => void
+  noMatchLabel?: string
 }
 
 export default function SearchSelect({
@@ -21,6 +23,8 @@ export default function SearchSelect({
   label,
   onEnterNext,
   inputRef,
+  onRequestName,
+  noMatchLabel,
 }: SearchSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -43,11 +47,20 @@ export default function SearchSelect({
     o.label.toLowerCase().includes(query.toLowerCase())
   )
   const activeIndex = Math.min(Math.max(highlight, 0), Math.max(filtered.length - 1, 0))
+  const noMatch = query.trim().length > 0 && filtered.length === 0
 
   function pickOption(o: { value: string; label: string }) {
     onChange(o.value)
     setOpen(false)
     setQuery('')
+    setHighlight(0)
+  }
+
+  function handleRequest() {
+    if (!onRequestName) return
+    onRequestName(query.trim())
+    setQuery('')
+    setOpen(false)
     setHighlight(0)
   }
 
@@ -67,6 +80,9 @@ export default function SearchSelect({
       if (open && filtered.length > 0) {
         e.preventDefault()
         pickOption(filtered[activeIndex])
+      } else if (open && noMatch && onRequestName) {
+        e.preventDefault()
+        handleRequest()
       } else if (!open) {
         e.preventDefault()
         onEnterNext?.()
@@ -119,6 +135,14 @@ export default function SearchSelect({
                 {o.label}
               </button>
             ))
+          ) : noMatch && onRequestName ? (
+            <button
+              type="button"
+              onClick={handleRequest}
+              className="w-full text-left px-4 py-2.5 text-sm text-whatsapp-700 font-medium hover:bg-surface dark:hover:bg-gray-800 transition-colors"
+            >
+              {noMatchLabel || `Request "${query.trim()}" as a new option`}
+            </button>
           ) : (
             <div className="p-4 text-center text-text-secondary text-sm">
               No matches found

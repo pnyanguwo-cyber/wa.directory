@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       bio,
       categories,
       city,
+      pending_city,
       areas,
       catalog_link,
       logo_url,
@@ -55,7 +56,11 @@ export async function POST(request: Request) {
     }
 
     const validCityNames = new Set(zimbabweCities.map(c => c.name))
-    const cleanCity = typeof city === 'string' && (city === '*' ? '*' : validCityNames.has(city) ? city : '')
+    const isPendingCity = pending_city === true && typeof city === 'string' && city.trim().length > 0 && city !== 'remote'
+    const isRemote = typeof city === 'string' && city === 'remote'
+    const cleanCity = typeof city === 'string'
+      ? (city === '*' || isRemote ? city : validCityNames.has(city) ? city : isPendingCity ? city.trim() : '')
+      : ''
 
     // Categories must be a subset of the approved taxonomy.
     const approvedCategories = await getApprovedCategoryNames()

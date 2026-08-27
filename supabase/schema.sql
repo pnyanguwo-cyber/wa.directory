@@ -126,10 +126,18 @@ CREATE TABLE IF NOT EXISTS areas (
   UNIQUE (city, name)
 );
 
--- Public requests for new categories / areas (pending admin approval)
+-- Admin-managed cities (approved cities live here, merged with static list)
+CREATE TABLE IF NOT EXISTS cities (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL UNIQUE,
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Public requests for new categories / areas / cities (pending admin approval)
 CREATE TABLE IF NOT EXISTS feature_requests (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  type TEXT NOT NULL CHECK (type IN ('category', 'area')),
+  type TEXT NOT NULL CHECK (type IN ('category', 'area', 'city')),
   name TEXT NOT NULL,
   city TEXT DEFAULT '',
   business_id UUID REFERENCES businesses(id) ON DELETE CASCADE,
@@ -151,11 +159,13 @@ CREATE TABLE IF NOT EXISTS banners (
 
 CREATE INDEX IF NOT EXISTS idx_categories_active ON categories (active);
 CREATE INDEX IF NOT EXISTS idx_areas_city ON areas (city);
+CREATE INDEX IF NOT EXISTS idx_cities_active ON cities (active);
 CREATE INDEX IF NOT EXISTS idx_feature_requests_status ON feature_requests (status);
 CREATE INDEX IF NOT EXISTS idx_banners_active ON banners (active);
 
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE areas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE feature_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE banners ENABLE ROW LEVEL SECURITY;
 
@@ -164,6 +174,9 @@ CREATE POLICY "Public read categories" ON categories FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public read areas" ON areas;
 CREATE POLICY "Public read areas" ON areas FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Public read cities" ON cities;
+CREATE POLICY "Public read cities" ON cities FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Public read feature_requests" ON feature_requests;
 CREATE POLICY "Public read feature_requests" ON feature_requests FOR SELECT USING (true);
@@ -222,11 +235,12 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   UNIQUE (customer_phone, business_id)
 );
 
--- Customer ratings collected via the WhatsApp bot
+-- Customer ratings collected via the WhatsApp bot and web form
 CREATE TABLE IF NOT EXISTS ratings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   business_id UUID NOT NULL REFERENCES businesses(id) ON DELETE CASCADE,
-  customer_phone TEXT NOT NULL,
+  customer_phone TEXT NOT NULL DEFAULT '',
+  name TEXT DEFAULT '',
   rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
   comment TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()

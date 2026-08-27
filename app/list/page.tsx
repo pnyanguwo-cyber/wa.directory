@@ -1,12 +1,13 @@
 import ListBusinessForm from '@/components/list-business-form'
-import { getApprovedCategories, getApprovedAreas } from '@/lib/approved-data'
+import { getApprovedCategories, getApprovedAreas, getApprovedCities } from '@/lib/approved-data'
 
 export const revalidate = 300
 
 export default async function ListBusinessPage() {
-  const [approvedCategories, approvedAreas] = await Promise.all([
+  const [approvedCategories, approvedAreas, approvedCities] = await Promise.all([
     getApprovedCategories(),
     getApprovedAreas(),
+    getApprovedCities(),
   ])
 
   return (
@@ -19,6 +20,7 @@ export default async function ListBusinessPage() {
         <ListBusinessForm
           categoryOptions={approvedCategories.map(c => ({ value: c.name, label: `${c.icon} ${c.name}` }))}
           approvedAreas={approvedAreas}
+          approvedCities={approvedCities}
         />
       </div>
     </div>
