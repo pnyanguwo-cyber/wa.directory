@@ -45,7 +45,6 @@ export function setBusinessSession(businessId: string): void {
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: 30 * 24 * 60 * 60,
   })
 }
 

@@ -7,11 +7,9 @@ import { categories as staticCategories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
+import { PasswordStrengthMeter } from '@/components/password-strength'
 
-const cityOptions = [
-  { value: '*', label: 'Whole country' },
-  ...zimbabweCities.map(c => ({ value: c.name, label: c.name })),
-]
+const cityOptions = zimbabweCities.map(c => ({ value: c.name, label: c.name }))
 
 type LogoMode = 'url' | 'upload'
 type FeatureRequest = { type: 'category' | 'area'; name: string; city?: string }
@@ -27,19 +25,22 @@ export default function EditBusinessForm({
   approvedAreas: { city: string; name: string }[]
   pendingFeatureNames: { type: string; name: string; city?: string }[]
 }) {
+  const isLegacyRemote = business.is_remote === true || business.city === 'remote' || business.city === '*'
   const [form, setForm] = useState({
     name: business.name,
     phone: business.phone,
     country_code: business.country_code || '+263',
     whatsapp_username: business.whatsapp_username || '',
     bio: business.bio || '',
-    city: business.city || '',
+    city: isLegacyRemote ? '' : (business.city || ''),
     price_range: business.price_range || '',
     catalog_link: business.catalog_link || '',
     logo_url: business.logo_url || '',
     website: (business as { website?: string }).website || '',
     address: business.address || '',
     show_location: business.show_location !== false,
+    isPhysical: !isLegacyRemote && !!business.city,
+    isRemote: isLegacyRemote,
   })
   const [categories, setCategories] = useState<string[]>(business.category || [])
   const [areas, setAreas] = useState<string[]>(business.areas?.length ? business.areas : (business.area ? [business.area] : []))
@@ -55,6 +56,41 @@ export default function EditBusinessForm({
   const [logoPreview, setLogoPreview] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
+  const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
+  const [addressResult, setAddressResult] = useState<{ formatted_address: string; lat?: number; lng?: number } | null>(null)
+
+  async function handleValidateAddress() {
+    const addr = form.address.trim()
+    if (!addr) {
+      setAddressStatus('idle')
+      setAddressResult(null)
+      return
+    }
+    setAddressStatus('checking')
+    try {
+      const res = await fetch('/api/validate-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: addr }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || data?.error) {
+        setAddressStatus('idle')
+        setAddressResult(null)
+        return
+      }
+      if (data?.valid) {
+        setAddressStatus('valid')
+        setAddressResult({ formatted_address: data.formatted_address, lat: data.lat, lng: data.lng })
+      } else {
+        setAddressStatus('invalid')
+        setAddressResult(null)
+      }
+    } catch {
+      setAddressStatus('idle')
+      setAddressResult(null)
+    }
+  }
 
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
 
@@ -142,9 +178,10 @@ export default function EditBusinessForm({
           country_code: form.country_code,
           bio: form.bio,
           category: categories,
-          city: form.city === '*' ? '' : form.city,
-          area: form.city === '*' ? '' : (areas[0] || ''),
-          areas: form.city === '*' ? [] : areas,
+          city: form.isPhysical ? form.city : '',
+          area: form.isPhysical ? (areas[0] || '') : '',
+          areas: form.isPhysical ? areas : [],
+          is_remote: form.isRemote,
           price_range: form.price_range,
           catalog_link: form.catalog_link,
           logo_url: logoUrl,
@@ -257,15 +294,51 @@ export default function EditBusinessForm({
           />
         </div>
 
+        <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 space-y-3">
+          <p className="text-sm font-medium text-text-primary">Where do you operate? <span className="text-text-secondary font-normal">select at least one</span></p>
+          <div className="flex gap-3">
+            <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isPhysical}
+                onChange={e => {
+                  if (!e.target.checked && !form.isRemote) return
+                  setForm(f => ({ ...f, isPhysical: e.target.checked }))
+                }}
+                className="w-4 h-4 accent-whatsapp-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-text-primary">Physical</span>
+                <span className="block text-xs text-text-secondary">I have a shop / office</span>
+              </span>
+            </label>
+            <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isRemote}
+                onChange={e => {
+                  if (!e.target.checked && !form.isPhysical) return
+                  setForm(f => ({ ...f, isRemote: e.target.checked, ...(e.target.checked && !form.isPhysical ? { city: '', areas: [] } : {}) }))
+                }}
+                className="w-4 h-4 accent-whatsapp-500"
+              />
+              <span>
+                <span className="block text-sm font-medium text-text-primary">Remote</span>
+                <span className="block text-xs text-text-secondary">Serve whole country online</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SearchSelect
             options={cityOptions}
             value={form.city}
             onChange={v => setForm(f => ({ ...f, city: v }))}
-            placeholder="Select city"
+            placeholder={form.isRemote && !form.isPhysical ? 'Optional — remote covers whole country' : 'Select city'}
             label="Town/city your business is based in"
           />
-          {form.city && form.city !== '*' ? (
+          {form.city ? (
             <div>
               <MultiSearchSelect
                 options={areaOptions}
@@ -289,8 +362,11 @@ export default function EditBusinessForm({
             <div />
           )}
         </div>
-        {form.city === '*' && (
-          <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country</p>
+        {form.isRemote && !form.isPhysical && (
+          <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country online</p>
+        )}
+        {form.isRemote && form.isPhysical && form.city && (
+          <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city} — serves the whole country</p>
         )}
 
         <div>
@@ -301,10 +377,43 @@ export default function EditBusinessForm({
             type="text"
             value={form.address}
             onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+            onBlur={() => handleValidateAddress()}
             placeholder="e.g. 123 Samora Machel Ave, Harare"
             className="input-field"
           />
           <p className="text-xs text-whatsapp-600 mt-1">Your address will generate a Google Maps link for directions</p>
+          {addressStatus === 'checking' && (
+            <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
+              <span className="w-3.5 h-3.5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+              Checking address on Google Maps...
+            </p>
+          )}
+          {addressStatus === 'valid' && addressResult && (
+            <p className="text-xs text-whatsapp-700 mt-1 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span className="truncate">{addressResult.formatted_address}</span>
+              {addressResult.lat != null && addressResult.lng != null && (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${addressResult.lat},${addressResult.lng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline ml-1 shrink-0"
+                >
+                  View on Maps
+                </a>
+              )}
+            </p>
+          )}
+          {addressStatus === 'invalid' && (
+            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              Address not found on Google Maps. Please double-check the spelling.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">

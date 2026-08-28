@@ -43,8 +43,11 @@ export async function POST(request: Request) {
     if (body.action === 'reset') {
       const { account_id, new_password } = body
       if (!account_id) return NextResponse.json({ error: 'account_id is required' }, { status: 400 })
-      if (!new_password || new_password.length < 6) {
-        return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+      if (!new_password || new_password.length < 8 || !/[A-Za-z]/.test(new_password) || !/[0-9]/.test(new_password)) {
+        return NextResponse.json(
+          { error: 'Password must be at least 8 characters and include letters and numbers' },
+          { status: 400 }
+        )
       }
 
       const password_hash = await bcrypt.hash(new_password, 10)

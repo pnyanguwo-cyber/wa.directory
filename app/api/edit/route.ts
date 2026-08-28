@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location } = body
+    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location, is_remote } = body
 
     if (!edit_token) {
       return NextResponse.json({ error: 'Edit token is required' }, { status: 400 })
@@ -37,8 +37,11 @@ export async function POST(request: Request) {
     const fullPhone = phone.replace(/[^0-9]/g, '')
     const whatsappLink = `https://wa.me/${fullPhone}?text=Hi%2C%20I%20found%20you%20on%20WA%20Directory`
 
-    const areaList = Array.isArray(areas) ? areas.filter(Boolean) : []
-    const primaryArea = areaList[0] || area || ''
+    const isRemote = body.is_remote === true || city === 'remote' || city === '*'
+    const cityPhysical = isRemote ? '' : (typeof city === 'string' ? city : '')
+    let areaList = Array.isArray(areas) ? areas.filter(Boolean) : []
+    if (isRemote && !cityPhysical) areaList = []
+    const primaryArea = areaList[0] || (typeof area === 'string' ? area : '') || ''
 
     const { error: updateError } = await supabase
       .from('businesses')
@@ -50,10 +53,13 @@ export async function POST(request: Request) {
         category: typeof category === 'string' ? [category] : category,
         phone: fullPhone,
         country_code: country_code || null,
-        city: city || null,
+        city: cityPhysical || null,
         area: primaryArea || null,
         areas: areaList,
-        location: [areaList.join(', '), city, 'Zimbabwe'].filter(Boolean).join(', ') || '',
+        location: isRemote && !cityPhysical
+          ? 'Zimbabwe'
+          : [areaList.join(', '), cityPhysical, 'Zimbabwe'].filter(Boolean).join(', ') || '',
+        is_remote: isRemote,
         price_range: price_range || null,
         catalog_link: catalog_link || null,
         logo_url: logo_url || null,

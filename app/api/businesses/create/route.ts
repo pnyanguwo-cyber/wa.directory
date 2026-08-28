@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       website,
       address,
       show_location,
+      is_remote,
     } = body || {}
 
     // --- Validation ---
@@ -55,10 +56,10 @@ export async function POST(request: Request) {
     }
 
     const validCityNames = new Set(zimbabweCities.map(c => c.name))
-    const isPendingCity = pending_city === true && typeof city === 'string' && city.trim().length > 0 && city !== 'remote'
-    const isRemote = typeof city === 'string' && city === 'remote'
+    const isRemote = body.is_remote === true || (typeof city === 'string' && (city === 'remote' || city === '*'))
+    const isPendingCity = pending_city === true && typeof city === 'string' && city.trim().length > 0 && city !== 'remote' && city !== '*'
     const cleanCity = typeof city === 'string'
-      ? (city === '*' || isRemote ? city : validCityNames.has(city) ? city : isPendingCity ? city.trim() : '')
+      ? (isRemote ? '' : validCityNames.has(city) ? city : isPendingCity ? city.trim() : '')
       : ''
 
     const supabase = createClient(
@@ -86,9 +87,9 @@ export async function POST(request: Request) {
         .map(a => a.trim())
         .slice(0, 8)
     }
-    if (cleanCity === '*') cleanAreas = []
+    if (isRemote && !cleanCity) cleanAreas = []
 
-    const location = cleanCity === '*'
+    const location = isRemote && !cleanCity
       ? 'Zimbabwe'
       : [cleanAreas.join(', '), cleanCity, 'Zimbabwe'].filter(Boolean).join(', ')
 
@@ -114,9 +115,10 @@ export async function POST(request: Request) {
           category: cleanCategories,
           location,
           country_code: code,
-          city: cleanCity === '*' ? '' : cleanCity,
-          area: cleanCity === '*' || cleanAreas.length === 0 ? '' : cleanAreas[0],
-          areas: cleanCity === '*' ? [] : cleanAreas,
+          city: cleanCity,
+          area: cleanAreas.length === 0 ? '' : cleanAreas[0],
+          areas: cleanAreas,
+          is_remote: isRemote,
           phone: fullPhone,
           whatsapp_link: `https://wa.me/${fullPhone}?text=${WA_MSG}`,
           catalog_link: typeof catalog_link === 'string' && catalog_link.trim() ? catalog_link.trim() : null,

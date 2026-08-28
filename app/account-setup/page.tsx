@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import Splash from '@/components/splash'
+import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
 
 interface FieldErrors {
   phone?: string
@@ -49,8 +50,9 @@ function AccountSetupForm() {
     }
     if (!password) {
       errors.password = 'Password is required'
-    } else if (password.length < 6) {
-      errors.password = 'Password must be at least 6 characters'
+    } else {
+      const pwErr = validatePassword(password)
+      if (pwErr) errors.password = pwErr
     }
     if (!confirm) {
       errors.confirm = 'Please verify your password'
@@ -181,10 +183,11 @@ function AccountSetupForm() {
                   if (fieldErrors.password || fieldErrors.confirm) setFieldErrors(prev => ({ ...prev, password: undefined, confirm: undefined }))
                 }}
                 className={inputClass(!!fieldErrors.password)}
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters, with letters & numbers"
+                minLength={8}
               />
-              {toggleButton(showPassword, setShowPassword)}
-            </div>
+                {toggleButton(showPassword, setShowPassword)}
+              </div>
             {fieldErrors.password && (
               <p className="text-xs text-red-600 mt-1.5 flex items-center gap-1">
                 <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -193,6 +196,7 @@ function AccountSetupForm() {
                 {fieldErrors.password}
               </p>
             )}
+            <PasswordStrengthMeter password={password} />
           </div>
           <div>
             <label htmlFor="field-confirm" className="block text-sm font-medium text-text-primary mb-1.5">Verify Password</label>

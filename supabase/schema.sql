@@ -53,6 +53,7 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS areas TEXT[] DEFAULT '{}';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS show_location BOOLEAN DEFAULT TRUE;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS featured_eligible BOOLEAN DEFAULT TRUE;
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
@@ -80,7 +81,7 @@ GRANT SELECT (
   id, name, bio, category, location, country_code, city, area,
   slug, phone, whatsapp_link, whatsapp_username, verified, rating,
   review_count, catalog_link, logo_url, price_range, website,
-  address, show_location, featured_eligible, areas, created_at
+  address, show_location, is_remote, featured_eligible, areas, created_at
 ) ON public.businesses TO anon, authenticated;
 
 -- Cache for AI-generated results (Gemini search expansions, SEO blurbs)

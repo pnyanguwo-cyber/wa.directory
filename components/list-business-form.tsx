@@ -10,6 +10,7 @@ import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import QrCard from '@/components/qr-card'
 import RequestConfirmModal from '@/components/request-confirm-modal'
+import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
 
 interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
@@ -65,6 +66,7 @@ export default function ListBusinessForm({
     password: '',
     address: '',
     show_location: true,
+    isPhysical: true,
     isRemote: false,
   })
   const [categories, setCategories] = useState<string[]>([])
@@ -76,6 +78,8 @@ export default function ListBusinessForm({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+  const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
+  const [addressResult, setAddressResult] = useState<{ formatted_address: string; lat?: number; lng?: number } | null>(null)
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
@@ -115,10 +119,7 @@ export default function ListBusinessForm({
     return list.sort((a, b) => a.label.localeCompare(b.label))
   })()
 
-  const cityOptions = [
-    { value: '*', label: 'Whole country' },
-    ...allCityOptions,
-  ]
+  const cityOptions = allCityOptions
 
   const areaOptions = form.city && form.city !== '*'
     ? [
@@ -130,9 +131,12 @@ export default function ListBusinessForm({
       ]
     : []
 
-  const hasLocation = form.isRemote || form.city === '*' || !!form.city || areas.length > 0
+  const needsPhysical = form.isPhysical && !form.isRemote
+  const hasPhysical = !!form.city || areas.length > 0
+  const hasLocation = form.isRemote || hasPhysical
+  const locationMissing = (!form.isPhysical && !form.isRemote) || (needsPhysical && !hasPhysical)
   const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
-  const isValidStep2 = form.description.trim() && categories.length > 0 && hasLocation
+  const isValidStep2 = !!(form.description.trim() && categories.length > 0 && !locationMissing)
 
 const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
 const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
@@ -146,6 +150,40 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
     clearTimeout(timer)
   }
 }
+
+  async function handleValidateAddress() {
+    const addr = form.address.trim()
+    if (!addr) {
+      setAddressStatus('idle')
+      setAddressResult(null)
+      return
+    }
+    setAddressStatus('checking')
+    try {
+      const res = await fetch('/api/validate-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: addr }),
+      })
+      const data = await res.json().catch(() => null)
+      // Graceful fallback: no API key / server error → skip silently.
+      if (!res.ok || data?.error) {
+        setAddressStatus('idle')
+        setAddressResult(null)
+        return
+      }
+      if (data?.valid) {
+        setAddressStatus('valid')
+        setAddressResult({ formatted_address: data.formatted_address, lat: data.lat, lng: data.lng })
+      } else {
+        setAddressStatus('invalid')
+        setAddressResult(null)
+      }
+    } catch {
+      setAddressStatus('idle')
+      setAddressResult(null)
+    }
+  }
 
   async function handleGenerateBio() {
     if (!form.description.trim()) return
@@ -220,8 +258,9 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
   }
 
   async function handleSubmit() {
-    if (form.password && form.password.length < 6) {
-      setErrors(prev => ({ ...prev, password: 'Password must be at least 6 characters, or leave it blank to set one later.' }))
+    const pwError = form.password ? validatePassword(form.password) : null
+    if (pwError) {
+      setErrors(prev => ({ ...prev, password: `${pwError}, or leave it blank to set one later.` }))
       setStep(3)
       passwordRef.current?.focus()
       return
@@ -261,15 +300,16 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             description: form.description,
             bio: form.bio,
             categories,
-            city: form.city,
+            city: form.isPhysical ? form.city : '',
             pending_city: hasPendingCity,
-            areas,
+            areas: form.isRemote && !form.isPhysical ? [] : areas,
             catalog_link: form.catalog_link.trim(),
             logo_url: logoUrl,
             price_range: form.price_range,
             website: form.website.trim(),
             address: form.address.trim(),
             show_location: form.show_location,
+            is_remote: form.isRemote,
           }),
         })
       } catch (fetchErr) {
@@ -297,7 +337,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
       fetch('/api/admin/notify-new-business', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.city, phone: fullPhone, id: created.id } }),
+        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.isPhysical ? form.city : '', phone: fullPhone, id: created.id } }),
       }).catch(() => {})
     } catch (err) {
       const msg =
@@ -581,36 +621,52 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </div>
           )}
           <p className="text-xs text-text-secondary">Type what you sell above, then click to generate a professional bio.</p>
-          <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-text-primary">I work remotely (no physical location)</p>
-              <p className="text-xs text-text-secondary">Skip city/area selection - serve clients online</p>
+          <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 space-y-3">
+            <p className="text-sm font-medium text-text-primary">Where do you operate? <span className="text-text-secondary font-normal">select at least one</span></p>
+            <div className="flex gap-3">
+              <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isPhysical}
+                  onChange={e => {
+                    if (!e.target.checked && !form.isRemote) return
+                    setForm(f => ({ ...f, isPhysical: e.target.checked }))
+                  }}
+                  className="w-4 h-4 accent-whatsapp-500"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-text-primary">Physical</span>
+                  <span className="block text-xs text-text-secondary">I have a shop / office</span>
+                </span>
+              </label>
+              <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isRemote}
+                  onChange={e => {
+                    if (!e.target.checked && !form.isPhysical) return
+                    setForm(f => ({ ...f, isRemote: e.target.checked, ...(e.target.checked && !form.isPhysical ? { city: '', areas: [] } : {}) }))
+                  }}
+                  className="w-4 h-4 accent-whatsapp-500"
+                />
+                <span>
+                  <span className="block text-sm font-medium text-text-primary">Remote</span>
+                  <span className="block text-xs text-text-secondary">Serve whole country online</span>
+                </span>
+              </label>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                const newRemote = !form.isRemote
-                setForm(f => ({ ...f, isRemote: newRemote, city: newRemote ? 'remote' : '' }))
-                if (newRemote) setAreas([])
-              }}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.isRemote ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-              role="switch"
-              aria-checked={form.isRemote}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform duration-200 ${form.isRemote ? 'translate-x-5' : ''}`} />
-            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SearchSelect
               options={cityOptions}
               value={form.city}
               onChange={v => setForm(f => ({ ...f, city: v }))}
-              onEnterNext={() => (form.city && form.city !== '*' ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
-              placeholder={form.isRemote ? 'Remote - no location needed' : 'Select city'}
+              onEnterNext={() => (form.city ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
+              placeholder={form.isRemote && !form.isPhysical ? 'Optional — remote covers whole country' : 'Select city'}
               label="Town/city your business is based in"
               onRequestName={(name) => setRequestModal({ open: true, type: 'city', name })}
             />
-            {form.city && form.city !== '*' ? (
+            {form.city ? (
               <div>
               <MultiSearchSelect
                 options={areaOptions}
@@ -636,11 +692,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <div />
             )}
           </div>
-          {form.city === '*' && (
-            <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country</p>
+          {form.isRemote && !form.isPhysical && (
+            <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country online</p>
           )}
-          {!hasLocation && (
-            <p className="text-xs text-danger">Select a city or area</p>
+          {form.isRemote && form.isPhysical && form.city && (
+            <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city} — serves the whole country</p>
+          )}
+          {locationMissing && (
+            <p className="text-xs text-danger">Select at least one option above, and a city/area if you have a physical location.</p>
           )}
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">
@@ -650,10 +709,43 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               type="text"
               value={form.address}
               onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+              onBlur={() => handleValidateAddress()}
               placeholder="e.g. 123 Samora Machel Ave, Harare"
               className="input-field"
             />
             <p className="text-xs text-whatsapp-600 mt-1">Adding your address lets customers get directions on Google Maps</p>
+            {addressStatus === 'checking' && (
+              <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+                Checking address on Google Maps...
+              </p>
+            )}
+            {addressStatus === 'valid' && addressResult && (
+              <p className="text-xs text-whatsapp-700 mt-1 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="truncate">{addressResult.formatted_address}</span>
+                {addressResult.lat != null && addressResult.lng != null && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${addressResult.lat},${addressResult.lng}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline ml-1 shrink-0"
+                  >
+                    View on Maps
+                  </a>
+                )}
+              </p>
+            )}
+            {addressStatus === 'invalid' && (
+              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+                </svg>
+                Address not found on Google Maps. Please double-check the spelling.
+              </p>
+            )}
           </div>
           <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">
             <div>
@@ -814,7 +906,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 ref={passwordRef}
                 id="field-password"
                 type={showPassword ? 'text' : 'password'}
-                minLength={6}
+                minLength={8}
                 value={form.password}
                 onChange={e => { setForm(f => ({ ...f, password: e.target.value })); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('field-confirm-password')?.focus() } }}
@@ -849,6 +941,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 Set a password now to unlock your statistics portal, or do it later from your edit link.
               </p>
             )}
+            <PasswordStrengthMeter password={form.password} />
           </div>
           <div>
             <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5">
@@ -858,7 +951,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <input
                 id="field-confirm-password"
                 type={showConfirmPassword ? 'text' : 'password'}
-                minLength={6}
+                minLength={8}
                 value={confirmPassword}
                 onChange={e => { setConfirmPassword(e.target.value); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); priceRef.current?.focus() } }}
@@ -925,7 +1018,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Location:</span>{' '}
-              {form.city === '*' ? 'Zimbabwe' : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
+              {form.isRemote && !form.isPhysical
+                ? 'Serves whole country (online)'
+                : form.isRemote && form.isPhysical
+                  ? `Based in ${form.city || '—'} — serves whole country`
+                  : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
             </p>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Price:</span> {form.price_range ? (form.price_range.startsWith('$') ? form.price_range : `$${form.price_range}`) : 'Not set'}

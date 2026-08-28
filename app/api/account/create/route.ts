@@ -14,8 +14,11 @@ export async function POST(request: Request) {
   try {
     const { edit_token, phone, password } = await request.json()
 
-    if (!password || password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    if (!password || password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters and include letters and numbers' },
+        { status: 400 }
+      )
     }
 
     // Ownership is proven by possession of the listing's edit_token — a

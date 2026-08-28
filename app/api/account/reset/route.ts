@@ -16,8 +16,11 @@ export async function POST(request: Request) {
     if (!phone || !otp || !password) {
       return NextResponse.json({ error: 'Phone, code and password are required' }, { status: 400 })
     }
-    if (password.length < 6) {
-      return NextResponse.json({ error: 'Password must be at least 6 characters' }, { status: 400 })
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters and include letters and numbers' },
+        { status: 400 }
+      )
     }
 
     const supabase = getSupabase()

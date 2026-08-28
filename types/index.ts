@@ -21,6 +21,7 @@
   website?: string
   address?: string
   show_location?: boolean
+  is_remote?: boolean
   featured_eligible?: boolean
   created_at: string
   edit_token?: string
