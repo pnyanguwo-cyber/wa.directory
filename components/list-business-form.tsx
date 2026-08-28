@@ -134,8 +134,18 @@ export default function ListBusinessForm({
   const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
   const isValidStep2 = form.description.trim() && categories.length > 0 && hasLocation
 
-  const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
-  const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
+const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
+const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
+
+async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
   async function handleGenerateBio() {
     if (!form.description.trim()) return
@@ -229,8 +239,8 @@ export default function ListBusinessForm({
       if (logoFile) {
         const uploadForm = new FormData()
         uploadForm.append('file', logoFile)
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: uploadForm })
-        if (!uploadRes.ok) throw new Error('Upload failed')
+        const uploadRes = await fetchWithTimeout('/api/upload', { method: 'POST', body: uploadForm })
+        if (!uploadRes.ok) throw new Error('Upload failed. Please try a smaller image.')
         const { url } = await uploadRes.json()
         logoUrl = url
       }
@@ -238,28 +248,36 @@ export default function ListBusinessForm({
       // Listing creation happens server-side (validated + service role).
       const fullPhone = (form.countryCode + form.phone).replace(/[^0-9]/g, '')
       const hasPendingCity = pendingCities.includes(form.city)
-      const createRes = await fetch('/api/businesses/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name.trim(),
-          countryCode: form.countryCode,
-          phone: form.phone,
-          whatsapp_username: form.whatsapp_username.trim(),
-          description: form.description,
-          bio: form.bio,
-          categories,
-          city: form.city,
-          pending_city: hasPendingCity,
-          areas,
-          catalog_link: form.catalog_link.trim(),
-          logo_url: logoUrl,
-          price_range: form.price_range,
-          website: form.website.trim(),
-          address: form.address.trim(),
-          show_location: form.show_location,
-        }),
-      })
+      let createRes: Response
+      try {
+        createRes = await fetchWithTimeout('/api/businesses/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: form.name.trim(),
+            countryCode: form.countryCode,
+            phone: form.phone,
+            whatsapp_username: form.whatsapp_username.trim(),
+            description: form.description,
+            bio: form.bio,
+            categories,
+            city: form.city,
+            pending_city: hasPendingCity,
+            areas,
+            catalog_link: form.catalog_link.trim(),
+            logo_url: logoUrl,
+            price_range: form.price_range,
+            website: form.website.trim(),
+            address: form.address.trim(),
+            show_location: form.show_location,
+          }),
+        })
+      } catch (fetchErr) {
+        if (fetchErr instanceof DOMException && fetchErr.name === 'AbortError') {
+          throw new Error('Request timed out. Please check your connection and try again.')
+        }
+        throw new Error('Could not reach the server. Please check your connection and try again.')
+      }
       if (!createRes.ok) {
         const payload = await createRes.json().catch(() => null)
         throw new Error(payload?.error || 'Could not create your listing. Please try again.')

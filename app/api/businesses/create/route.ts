@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getApprovedCategoryNames } from '@/lib/approved-data'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
@@ -62,8 +61,18 @@ export async function POST(request: Request) {
       ? (city === '*' || isRemote ? city : validCityNames.has(city) ? city : isPendingCity ? city.trim() : '')
       : ''
 
-    // Categories must be a subset of the approved taxonomy.
-    const approvedCategories = await getApprovedCategoryNames()
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
+
+    // Fetch approved category names using the same client.
+    const { data: catRows } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('active', true)
+    const approvedCategories = new Set((catRows || []).map((r: { name: string }) => r.name))
+
     const cleanCategories = [...new Set(categories.map((c: string) => c.trim()))]
       .filter(c => approvedCategories.has(c))
     if (cleanCategories.length === 0) {
@@ -88,11 +97,6 @@ export async function POST(request: Request) {
 
     // Only ever generated here — a client-supplied edit_token is ignored.
     const editToken = crypto.randomUUID()
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
 
     // Slug collisions are rare (random suffix), but retry a few times regardless.
     let inserted: { id: string; slug: string | null } | null = null
