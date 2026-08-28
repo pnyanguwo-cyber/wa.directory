@@ -22,31 +22,25 @@ export default function SiteSplash() {
 
     setPhase('on')
 
-    // Staged progress milestones for butter-smooth visual feel
+    // Compressed timeline: ~500ms total
     const t0 = setTimeout(() => {
-      setProgress(35)
-      setStatusText('Connecting to verified network...')
-    }, 200)
+      setProgress(50)
+      setStatusText('Connecting...')
+    }, 50)
 
     const t1 = setTimeout(() => {
-      setProgress(75)
-      setStatusText('Loading Zimbabwean businesses...')
-    }, 650)
-
-    const t2 = setTimeout(() => {
       setProgress(100)
       setStatusText('Ready!')
-    }, 1100)
+    }, 200)
 
-    const t3 = setTimeout(() => setPhase('fading'), 1450)
-    const t4 = setTimeout(() => setPhase('off'), 2000)
+    const t2 = setTimeout(() => setPhase('fading'), 300)
+    const t3 = setTimeout(() => setPhase('off'), 500)
 
     return () => {
       clearTimeout(t0)
       clearTimeout(t1)
       clearTimeout(t2)
       clearTimeout(t3)
-      clearTimeout(t4)
     }
   }, [])
 
@@ -127,7 +121,6 @@ export default function SiteSplash() {
                 width={80}
                 height={80}
                 className="w-full h-full object-contain drop-shadow-md"
-                priority
               />
             </div>
 

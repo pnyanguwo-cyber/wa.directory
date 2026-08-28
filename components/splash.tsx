@@ -62,7 +62,6 @@ export default function Splash({
                 width={56}
                 height={56}
                 className="w-full h-full object-contain drop-shadow-sm"
-                priority
               />
             </div>
 

@@ -1,16 +1,17 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
+import dynamic from 'next/dynamic'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
-import PWARegistration from '@/components/pwa-registration'
-import InstallPWA from '@/components/install-pwa'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
-import SiteSplash from '@/components/site-splash'
-import { getSupabase } from '@/lib/supabase-server'
 import { ThemeProvider } from 'next-themes'
 import Image from 'next/image'
+
+const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
+const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
+const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
 
 const inter = Inter({
   subsets: ['latin'],
@@ -50,31 +51,14 @@ export const viewport: Viewport = {
   themeColor: '#25D366',
 }
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  // Decorative read: degrade to "no banners" if Supabase is unreachable or
-  // misconfigured, rather than failing every page.
-  let activeBanners: { id: string; text: string; link: string; link_label: string }[] = []
-  try {
-    const { data: banners } = await getSupabase()
-      .from('banners')
-      .select('id, text, link, link_label')
-      .eq('active', true)
-      .order('created_at', { ascending: false })
-    activeBanners = (banners || []).map(b => ({
-      id: b.id,
-      text: b.text,
-      link: b.link || '',
-      link_label: b.link_label || 'Learn more',
-    }))
-  } catch {}
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} min-h-screen font-sans`}>
         <SiteSplash />
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <Navbar />
-          <BannerStrip banners={activeBanners} />
+          <BannerStrip />
           <PWARegistration />
           <InstallPWA />
           {/* Global Floor / Background Wallpaper */}

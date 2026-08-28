@@ -34,7 +34,6 @@ export default function GlobalLoading() {
                 width={48}
                 height={48}
                 className="w-full h-full object-contain drop-shadow-xs"
-                priority
               />
             </div>
           </div>

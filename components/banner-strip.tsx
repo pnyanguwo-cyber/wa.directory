@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { getClient } from '@/lib/supabase-client'
 
 export interface BannerData {
   id: string
@@ -11,14 +12,35 @@ export interface BannerData {
 
 const dismissKey = (id: string) => `banner-dismissed-${id}`
 
-export default function BannerStrip({ banners }: { banners: BannerData[] }) {
-  // Start with every banner visible so server and client render identically,
-  // then hide the ones dismissed this session after mount (avoids hydration mismatch).
-  const [visible, setVisible] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {}
-    for (const b of banners) initial[b.id] = true
-    return initial
-  })
+export default function BannerStrip() {
+  const [banners, setBanners] = useState<BannerData[]>([])
+
+  useEffect(() => {
+    async function fetchBanners() {
+      try {
+        const { data } = await getClient()
+          .from('banners')
+          .select('id, text, link, link_label')
+          .eq('active', true)
+          .order('created_at', { ascending: false })
+        if (data) {
+          const mapped = data.map(b => ({
+            id: b.id,
+            text: b.text,
+            link: b.link || '',
+            link_label: b.link_label || 'Learn more',
+          }))
+          setBanners(mapped)
+          const initial: Record<string, boolean> = {}
+          for (const b of mapped) initial[b.id] = true
+          setVisible(initial)
+        }
+      } catch {}
+    }
+    fetchBanners()
+  }, [])
+
+  const [visible, setVisible] = useState<Record<string, boolean>>({})
 
   const ids = banners.map(b => b.id).join(',')
   useEffect(() => {
