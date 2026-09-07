@@ -71,7 +71,7 @@ export async function PATCH(request: Request) {
   if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
-    const { id, name, icon, keywords, active } = await request.json()
+    const { id, name, icon, keywords, active, special } = await request.json()
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
 
     const supabase = getSupabase()
@@ -86,6 +86,7 @@ export async function PATCH(request: Request) {
     if (icon !== undefined) patch.icon = icon
     if (keywords !== undefined) patch.keywords = keywords
     if (active !== undefined) patch.active = active
+    if (special !== undefined) patch.special = !!special
 
     const { error } = await supabase.from('categories').update(patch).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -17,7 +17,7 @@ const supabase = createClient(url, key)
 const { error: catErr } = await supabase
   .from('categories')
   .upsert(
-    categories.map(c => ({ name: c.name, icon: c.icon, keywords: c.keywords, active: true })),
+    categories.map(c => ({ name: c.name, icon: c.icon, keywords: c.keywords, active: true, special: !!c.special })),
     { onConflict: 'name', ignoreDuplicates: false }
   )
 if (catErr) throw new Error(`categories seed: ${catErr.message}`)

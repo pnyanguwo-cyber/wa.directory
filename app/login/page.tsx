@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import Splash from '@/components/splash'
+import { broadcastSession, safeNextPath } from '@/lib/session-sync'
 
 type Mode = 'login' | 'otp' | 'verify' | 'forgot' | 'reset'
 
@@ -44,7 +45,11 @@ export default function LoginPage() {
       setError(data.error || 'Login failed')
       return
     }
-    router.push('/portal')
+    broadcastSession(true)
+    // Return the user to the portal tab they came from (?next=), not the first tab.
+    const next = safeNextPath()
+    router.push(next)
+    router.refresh()
   }
 
   async function doSendCode(e: React.FormEvent) {
@@ -85,7 +90,10 @@ export default function LoginPage() {
       setError(data.error || 'Could not log in')
       return
     }
-    router.push('/portal')
+    broadcastSession(true)
+    const next = safeNextPath()
+    router.push(next)
+    router.refresh()
   }
 
   async function doReset(e: React.FormEvent) {
@@ -105,7 +113,10 @@ export default function LoginPage() {
       setError(data.error || 'Could not reset password')
       return
     }
-    router.push('/portal')
+    broadcastSession(true)
+    const next = safeNextPath()
+    router.push(next)
+    router.refresh()
   }
 
   const headings: Record<Mode, { title: string; subtitle: string }> = {
@@ -150,9 +161,12 @@ export default function LoginPage() {
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
                 className="input-field"
-                placeholder="+263 77 123 4567"
+                placeholder="077 379 1864 or +263 77 379 1864"
                 autoFocus
               />
+              <p className="text-[11px] text-text-secondary mt-1">
+                077…, 26377… or +26377… all work — we recognise them as the same number.
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">Password</label>

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createHmac, timingSafeEqual } from 'node:crypto'
+import { canonicalPhone } from '@/lib/phone'
 
 const COOKIE = 'business_session'
 
@@ -9,8 +10,11 @@ function secret(): string | null {
   return process.env.BUSINESS_AUTH_SECRET || null
 }
 
+// Accepts 077…, +26377…, 26377… interchangeably — every account flow
+// (login, forgot, OTP, reset, account create) compares through this, so the
+// format a user registered with never has to match how they log in.
 function normalizePhone(phone: string): string {
-  return '+' + phone.replace(/\D/g, '')
+  return '+' + canonicalPhone(phone)
 }
 
 export function signBusinessToken(businessId: string): string {

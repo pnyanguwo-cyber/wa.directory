@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTheme } from 'next-themes'
 import Splash from '@/components/splash'
+import { SESSION_EVENT } from '@/lib/session-sync'
 
 const NAV_SPINNER = (
   <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -37,16 +38,42 @@ export default function Navbar() {
     router.push(href)
   }
 
-  useEffect(() => {
-    // Re-sync on every route change so the navbar can never go stale
-    // (e.g. still saying "logged in" after logging out elsewhere).
-    fetch('/api/account/session')
-      .then(r => r.json())
-      .then(d => setLoggedIn(!!d.loggedIn))
-      .catch(() => setLoggedIn(false))
-  }, [pathname])
+  const refreshSession = useCallback(async function refreshSession() {
+    try {
+      const r = await fetch('/api/account/session', { cache: 'no-store' })
+      const d = await r.json()
+      // Only flip state on an authoritative answer. A network hiccup
+      // (offline, timeout) must never visually log the user out.
+      if (typeof d?.loggedIn === 'boolean') setLoggedIn(d.loggedIn)
+    } catch {
+      // keep current state
+    }
+  }, [])
 
-  async function logout() {
+  useEffect(() => {
+    // One authoritative check on mount. Login/logout flows broadcast the
+    // `wa:session` event so the navbar updates instantly — without re-fetching
+    // on every navigation (the old per-pathname refetch flipped the button to
+    // "Login" whenever a request failed, which felt like being logged out).
+    refreshSession()
+
+    function onSessionEvent(e: Event) {
+      const detail = (e as CustomEvent).detail
+      if (typeof detail?.loggedIn === 'boolean') setLoggedIn(detail.loggedIn)
+    }
+    function onVisible() {
+      if (document.visibilityState === 'visible') refreshSession()
+    }
+
+    window.addEventListener(SESSION_EVENT, onSessionEvent)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener(SESSION_EVENT, onSessionEvent)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [refreshSession])
+
+  const logout = useCallback(async function logout() {
     if (loggingOut) return
     setLoggingOut(true)
     try {
@@ -58,7 +85,7 @@ export default function Navbar() {
     setLoggingOut(false)
     router.replace('/')
     router.refresh()
-  }
+  }, [loggingOut, router])
 
   return (
     <nav className="sticky top-0 z-50 backdrop-blur-xl border-b shadow-sm dark:bg-gray-900/85 dark:border-gray-800" style={{ backgroundColor: 'rgba(var(--bg-card), 0.85)', borderColor: 'rgb(var(--border-color))' }} aria-label="Main navigation">

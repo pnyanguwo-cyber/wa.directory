@@ -3,6 +3,9 @@ export interface Category {
   keywords: string[]
   icon: string
   hint?: string
+  // Yellow Pages: public/special services (police, fire, government offices…).
+  // Listings in these categories render with the yellow-pages treatment.
+  special?: boolean
 }
 
 export const categories: Category[] = [
@@ -245,6 +248,20 @@ export const categories: Category[] = [
     keywords: ['landscaping', 'garden design', 'lawn care', 'grounds maintenance', 'gardening', 'irrigation', 'turf', 'landscaper', 'garden service'],
     icon: '🌳',
     hint: 'Landscaping, garden design, lawn care, irrigation, gardening',
+  },
+  {
+    name: 'Emergency Services',
+    keywords: ['police', 'zrp', 'fire brigade', 'firefighter', 'fire fighter', 'ambulance', 'emergency', 'disaster', 'rescue', 'civil protection', 'emergency hotline', 'toll free', 'sos'],
+    icon: '🚨',
+    hint: 'Police, fire brigade, ambulance, emergency response, hotlines',
+    special: true,
+  },
+  {
+    name: 'Government Services',
+    keywords: ['government', 'council', 'municipality', 'registrar', 'passport office', 'zimra', 'public office', 'civic', 'registry', 'home affairs', 'public service', 'utility office'],
+    icon: '🏛️',
+    hint: 'Council, municipality, registrar, passport, ZIMRA, public offices',
+    special: true,
   },
   { name: 'Other', keywords: [], icon: '📋' },
 ]

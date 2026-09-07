@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { categories as staticCategories } from '@/data/categories'
+import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+
+// Yellow Pages (special public-service) categories get a priority admin alert
+// so councils/police/fire listings are verified fast.
+const SPECIAL_CATEGORIES = new Set(staticCategories.filter(c => c.special).map(c => c.name))
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
@@ -34,6 +40,10 @@ export async function POST(request: Request) {
       address,
       show_location,
       is_remote,
+      phone_type,
+      lat,
+      lng,
+      address_verified,
     } = body || {}
 
     // --- Validation ---
@@ -50,8 +60,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A WhatsApp phone number is required.' }, { status: 400 })
     }
     const code = typeof countryCode === 'string' && countryCode.startsWith('+') ? countryCode : '+263'
-    const fullPhone = `${code}${phone}`.replace(/[^0-9]/g, '')
-    if (fullPhone.length < 10 || fullPhone.length > 15) {
+    // Voice listings (landlines & hotlines) are stored in national format and
+    // get a Call button instead of WhatsApp; everything else is WhatsApp-first.
+    const isVoice = phone_type === 'voice'
+    // Accept 077…, +26377…, 26377… etc. — always stored as full international digits.
+    const fullPhone = isVoice ? normalizeVoicePhone(phone) : toFullPhone(code, phone)
+    if (fullPhone.length < (isVoice ? 3 : 10) || fullPhone.length > 15) {
       return NextResponse.json({ error: 'That phone number looks invalid for the selected country code.' }, { status: 400 })
     }
 
@@ -120,12 +134,16 @@ export async function POST(request: Request) {
           areas: cleanAreas,
           is_remote: isRemote,
           phone: fullPhone,
-          whatsapp_link: `https://wa.me/${fullPhone}?text=${WA_MSG}`,
+          phone_type: isVoice ? 'voice' : 'whatsapp',
+          whatsapp_link: isVoice ? null : `https://wa.me/${fullPhone}?text=${WA_MSG}`,
           catalog_link: typeof catalog_link === 'string' && catalog_link.trim() ? catalog_link.trim() : null,
           logo_url: typeof logo_url === 'string' && logo_url.trim() ? logo_url.trim() : null,
           price_range: normalizedPrice,
           website: typeof website === 'string' && website.trim() ? website.trim() : null,
           address: typeof address === 'string' ? address.trim() : '',
+          lat: typeof lat === 'number' && Number.isFinite(lat) ? lat : null,
+          lng: typeof lng === 'number' && Number.isFinite(lng) ? lng : null,
+          address_verified: address_verified === true,
           show_location: show_location !== false,
           edit_token: editToken,
           verified: false,
@@ -140,6 +158,67 @@ export async function POST(request: Request) {
 
     if (!inserted) {
       return NextResponse.json({ error: lastError || 'Could not create the listing. Please try again.' }, { status: 500 })
+    }
+
+    // Yellow Pages submission: priority WhatsApp to the admin (authoritative —
+    // sent server-side so it fires even if the client never does).
+    const isYellowPages = cleanCategories.some(c => SPECIAL_CATEGORIES.has(c))
+    if (isYellowPages && process.env.ADMIN_WHATSAPP) {
+      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
+      sendWhatsAppMessage(
+        process.env.ADMIN_WHATSAPP,
+        [
+          '🚨 *YELLOW PAGES SUBMISSION — VERIFY FAST*',
+          '',
+          'A public-service listing was just submitted and needs priority verification.',
+          '',
+          `Name: ${name.trim()}`,
+          `Category: ${cleanCategories.join(', ')}`,
+          `Location: ${location}`,
+          `Phone: ${fullPhone}`,
+          '',
+          `Profile: ${siteUrl}/business/${inserted.slug || inserted.id}`,
+          `Review: ${siteUrl}/admin`,
+          '',
+          'Verify ASAP so it appears in the Emergency & Essential Services strip and /yellow-pages.',
+        ].join('\n')
+      )      .catch(() => {})
+    }
+
+    // Submission confirmation to the submitter's own WhatsApp: status + their
+    // private edit link. Best-effort, non-blocking. If a Meta-approved
+    // template is configured (WHATSAPP_TEMPLATE_SUBMITTED, params: name,
+    // status, edit link) it is used — business-initiated plain text only
+    // delivers inside Meta's 24h customer-service window.
+    {
+      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const editLink = `${siteUrl}/edit?token=${editToken}`
+      const statusText = isYellowPages
+        ? 'received — public-service listings get priority review'
+        : 'received — an admin will review it shortly'
+      const { sendWhatsAppMessage, sendWhatsAppTemplate } = await import('@/lib/whatsapp')
+      const tpl = process.env.WHATSAPP_TEMPLATE_SUBMITTED
+      if (tpl) {
+        sendWhatsAppTemplate(fullPhone, tpl, [name.trim(), statusText, editLink]).catch(() => {})
+      } else {
+        sendWhatsAppMessage(
+          fullPhone,
+          [
+            `✅ *LISTING RECEIVED — ${name.trim()}*`,
+            '',
+            `Your listing on WA Directory is ${statusText}.`,
+            '',
+            'Verification status: ⏳ Pending review',
+            isYellowPages ? 'Public-service listings are prioritized by our team.' : '',
+            '',
+            'Edit your listing anytime with your private link:',
+            editLink,
+            '',
+            'Keep this link safe — anyone with it can edit your listing.',
+          ].filter(Boolean).join('\n')
+        ).catch(() => {})
+      }
     }
 
     return NextResponse.json({

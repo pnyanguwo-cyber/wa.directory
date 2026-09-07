@@ -31,6 +31,11 @@ export async function GET() {
     <loc>${siteUrl}/list</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>${siteUrl}/yellow-pages</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
   </url>${businessUrls}
 </urlset>`
 

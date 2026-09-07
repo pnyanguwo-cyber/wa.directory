@@ -121,6 +121,66 @@
   .dark .chip-active {
     @apply bg-whatsapp-900/40 text-whatsapp-300 border-whatsapp-700/40;
   }
+
+  /* Yellow Pages: special public-service listings (police, fire, government…)
+     render with the classic amber directory treatment. */
+  .yellow-pages-card {
+    background: linear-gradient(
+      135deg,
+      rgba(254, 249, 195, 0.75),
+      rgba(254, 240, 138, 0.45) 45%,
+      rgba(var(--bg-card), 0.88)
+    );
+    border-color: rgba(234, 179, 8, 0.45) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(234, 179, 8, 0.12);
+  }
+  .dark .yellow-pages-card {
+    background: linear-gradient(
+      135deg,
+      rgba(113, 89, 8, 0.28),
+      rgba(82, 64, 4, 0.18) 45%,
+      rgba(var(--bg-card), 0.92)
+    );
+    border-color: rgba(234, 179, 8, 0.35) !important;
+  }
+
+  .badge-yellow-pages {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide;
+    background: linear-gradient(135deg, #fde047, #facc15);
+    color: #713f12;
+    border: 1px solid rgba(202, 138, 4, 0.5);
+    box-shadow: 0 1px 4px rgba(202, 138, 4, 0.35);
+  }
+  .dark .badge-yellow-pages {
+    color: #fef08a;
+    background: linear-gradient(135deg, rgba(202, 138, 4, 0.35), rgba(161, 98, 7, 0.35));
+    border-color: rgba(234, 179, 8, 0.4);
+  }
+
+  /* Pending verification badge (e.g. Yellow Pages lists councils before
+     verification completes). */
+  .badge-pending {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide;
+    background-color: rgba(254, 243, 199, 0.9);
+    color: #92400e;
+    border: 1px solid rgba(217, 119, 6, 0.4);
+  }
+  .dark .badge-pending {
+    background-color: rgba(120, 53, 15, 0.35);
+    color: #fcd34d;
+    border-color: rgba(217, 119, 6, 0.4);
+  }
+
+  .chip-yellow-pages {
+    @apply text-[10px] sm:text-xs font-bold;
+    background-color: rgba(254, 249, 195, 0.9);
+    border-color: rgba(202, 138, 4, 0.4) !important;
+    color: #854d0e;
+  }
+  .dark .chip-yellow-pages {
+    background-color: rgba(113, 89, 8, 0.3);
+    color: #fde047;
+  }
 }
 
 @layer utilities {

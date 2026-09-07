@@ -10,6 +10,7 @@ interface CategoryRow {
   icon: string
   keywords: string[]
   active: boolean
+  special: boolean
   business_count: number
 }
 
@@ -26,6 +27,7 @@ export default function AdminCategories() {
   const [editName, setEditName] = useState('')
   const [editIcon, setEditIcon] = useState('')
   const [editKeywords, setEditKeywords] = useState('')
+  const [editSpecial, setEditSpecial] = useState(false)
 
   useEffect(() => {
     load()
@@ -93,6 +95,7 @@ export default function AdminCategories() {
     setEditName(row.name)
     setEditIcon(row.icon)
     setEditKeywords((row.keywords || []).join(', '))
+    setEditSpecial(!!row.special)
   }
 
   async function saveEdit(e: React.FormEvent) {
@@ -107,6 +110,7 @@ export default function AdminCategories() {
         name: editName.trim(),
         icon: editIcon.trim() || '📋',
         keywords: editKeywords.split(',').map(s => s.trim()).filter(Boolean),
+        special: editSpecial,
       }),
     })
     setBusy(false)
@@ -159,6 +163,16 @@ export default function AdminCategories() {
                 <label className="text-xs font-medium text-text-secondary mb-1 block">Keywords (comma separated)</label>
                 <textarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} rows={3} className="input-field text-sm resize-none" placeholder="cakes, bread, pastry..." />
               </div>
+              <label className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl px-3 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editSpecial}
+                  onChange={e => setEditSpecial(e.target.checked)}
+                  className="w-4 h-4 accent-amber-500"
+                />
+                <span className="text-sm font-medium text-text-primary">★ Yellow Pages</span>
+                <span className="text-[11px] text-text-secondary">Special public-service listing (police, fire, government…) — renders with the yellow card treatment</span>
+              </label>
               <div className="flex gap-2.5 justify-end pt-2">
                 <button type="button" onClick={() => setEditing(null)} className="btn-secondary h-10 px-4 text-xs font-semibold">Cancel</button>
                 <button type="submit" disabled={busy} className="btn-primary h-10 px-5 text-xs font-semibold">{busy ? 'Saving...' : 'Save'}</button>
@@ -229,6 +243,7 @@ export default function AdminCategories() {
                 <tr key={r.id} className="border-b border-gray-50 last:border-0 hover:bg-surface/50 transition-colors">
                   <td className="px-4 py-3">
                     <span className="font-medium text-text-primary">{r.icon} {r.name}</span>
+                    {!!r.special && <span className="badge-yellow-pages ml-2">YP</span>}
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell text-text-secondary text-xs max-w-[280px] truncate">
                     {(r.keywords || []).join(', ')}

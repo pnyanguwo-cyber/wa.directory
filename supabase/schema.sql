@@ -54,6 +54,10 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS show_location BOOLEAN DEFAULT TRUE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_remote BOOLEAN DEFAULT FALSE;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS phone_type TEXT NOT NULL DEFAULT 'whatsapp';
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address_verified BOOLEAN DEFAULT FALSE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS featured_eligible BOOLEAN DEFAULT TRUE;
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
@@ -114,8 +118,21 @@ CREATE TABLE IF NOT EXISTS categories (
   icon TEXT DEFAULT '📋',
   keywords TEXT[] DEFAULT '{}',
   active BOOLEAN DEFAULT TRUE,
+  special BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS special BOOLEAN DEFAULT FALSE;
+
+-- Yellow Pages: seeded special public-service categories (manage in /admin).
+-- On conflict we only re-assert the special flag, never admin-edited content.
+INSERT INTO categories (name, icon, keywords, active, special) VALUES
+  ('Emergency Services', '🚨',
+   ARRAY['police','zrp','fire brigade','firefighter','fire fighter','ambulance','emergency','disaster','rescue','civil protection','emergency hotline','toll free','sos'],
+   TRUE, TRUE),
+  ('Government Services', '🏛️',
+   ARRAY['government','council','municipality','registrar','passport office','zimra','public office','civic','registry','home affairs','public service','utility office'],
+   TRUE, TRUE)
+ON CONFLICT (name) DO UPDATE SET special = TRUE;
 
 -- Admin-managed service areas per city
 CREATE TABLE IF NOT EXISTS areas (

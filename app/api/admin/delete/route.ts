@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
 
 export async function POST(request: Request) {
@@ -22,6 +23,12 @@ export async function POST(request: Request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     )
 
+    // Fetch contact details before deletion so owners can be notified.
+    const { data: doomed } = await supabase
+      .from('businesses')
+      .select('id, name, phone')
+      .in('id', ids)
+
     const { error } = await supabase
       .from('businesses')
       .delete()
@@ -29,6 +36,22 @@ export async function POST(request: Request) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Best-effort removal notice to each owner (non-blocking).
+    for (const b of doomed || []) {
+      const digits = (b.phone || '').replace(/\D/g, '')
+      if (!digits) continue
+      sendWhatsAppMessage(
+        '+' + digits,
+        [
+          `🗑️ *LISTING REMOVED — ${b.name}*`,
+          '',
+          'Your listing on WA Directory has been removed by our team.',
+          '',
+          'If you believe this was a mistake or want to re-list, please contact our support team.',
+        ].join('\n')
+      ).catch(() => {})
     }
 
     return NextResponse.json({ success: true, deleted: ids.length })

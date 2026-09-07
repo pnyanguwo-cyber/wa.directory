@@ -58,6 +58,19 @@ export default function EditBusinessForm({
   const router = useRouter()
   const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
   const [addressResult, setAddressResult] = useState<{ formatted_address: string; lat?: number; lng?: number } | null>(null)
+  // 'whatsapp' = mobile; 'voice' = landline or hotline (Call button, no wa.me).
+  const [phoneType, setPhoneType] = useState<'whatsapp' | 'voice'>(
+    business.phone_type === 'voice' ? 'voice' : 'whatsapp'
+  )
+
+  // Coordinates to save: re-validated ones win; otherwise keep whatever was
+  // stored before (idle = address untouched, invalid = clear them).
+  const effectiveCoords =
+    addressStatus === 'valid'
+      ? { lat: addressResult?.lat ?? null, lng: addressResult?.lng ?? null, verified: true }
+      : addressStatus === 'idle'
+        ? { lat: business.lat ?? null, lng: business.lng ?? null, verified: business.address_verified === true }
+        : { lat: null, lng: null, verified: false }
 
   async function handleValidateAddress() {
     const addr = form.address.trim()
@@ -187,7 +200,11 @@ export default function EditBusinessForm({
           logo_url: logoUrl,
           website: form.website.trim(),
           address: form.address.trim(),
+          lat: effectiveCoords.lat,
+          lng: effectiveCoords.lng,
+          address_verified: effectiveCoords.verified,
           show_location: form.show_location,
+          phone_type: phoneType,
         }),
       })
       const data = await res.json()
@@ -248,6 +265,38 @@ export default function EditBusinessForm({
             onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/[^0-9]/g, '') }))}
             className="input-field"
           />
+          <p className="text-[11px] text-text-secondary mt-1">
+            077…, 26377… or full international — the country code is added automatically if you forget it.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => setPhoneType('whatsapp')}
+              className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
+                phoneType === 'whatsapp'
+                  ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
+                  : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+              }`}
+            >
+              📱 WhatsApp mobile
+            </button>
+            <button
+              type="button"
+              onClick={() => setPhoneType('voice')}
+              className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
+                phoneType === 'voice'
+                  ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
+                  : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+              }`}
+            >
+              ☎️ Landline or hotline (voice only)
+            </button>
+          </div>
+          {phoneType === 'voice' && (
+            <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+              Saved exactly as entered (e.g. 024 2123456 or 999) — customers see a Call button instead of WhatsApp.
+            </p>
+          )}
         </div>
 
         <div>

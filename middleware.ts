@@ -62,7 +62,11 @@ export async function middleware(request: NextRequest) {
   if (path.startsWith('/portal')) {
     const session = request.cookies.get(BUSINESS_COOKIE)
     if (!session || !(await verifyBusinessToken(session.value))) {
-      return NextResponse.redirect(new URL('/login', request.url))
+      // Carry the original destination so login returns the user to the tab
+      // they were on instead of dropping them on the first portal tab.
+      const login = new URL('/login', request.url)
+      login.searchParams.set('next', path)
+      return NextResponse.redirect(login)
     }
   }
 

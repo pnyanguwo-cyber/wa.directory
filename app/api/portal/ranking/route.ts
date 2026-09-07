@@ -8,6 +8,35 @@ function nextMonthStart(): string {
   return d.toISOString().slice(0, 10)
 }
 
+// Businesses only ever compete inside their own categories, and inside their
+// own location — unless their listing serves the whole country (is_remote),
+// in which case they can view and bid in every city, one location at a time.
+async function loadScope(supabase: ReturnType<typeof getSupabase>, businessId: string) {
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('id, category, city, is_remote')
+    .eq('id', businessId)
+    .maybeSingle()
+  if (!business) return null
+
+  const myCategories = (business.category || []).filter(Boolean)
+  const isRemote = business.is_remote === true
+  const myCity = business.city || ''
+
+  return {
+    myCategories,
+    isRemote,
+    myCity,
+    // In-scope = one of the listing's own categories, and the listing's city —
+    // or any location (including nationwide '') when is_remote is set.
+    allows(category: string, city: string): boolean {
+      if (!myCategories.includes(category)) return false
+      if (isRemote) return true
+      return (city || '') === myCity
+    },
+  }
+}
+
 export async function GET(request: Request) {
   const businessId = getBusinessId()
   if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
@@ -15,44 +44,94 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const category = searchParams.get('category') || ''
   const city = searchParams.get('city') || ''
-  if (!category) return NextResponse.json({ error: 'Missing category' }, { status: 400 })
 
   const supabase = getSupabase()
+  const scope = await loadScope(supabase, businessId)
+  if (!scope) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
-  const [spotsRes, bidsRes, activeRes] = await Promise.all([
+  if (!category || !scope.allows(category, city)) {
+    return NextResponse.json(
+      {
+        error: 'You can only view rankings for your own categories and location.',
+        myCategories: scope.myCategories,
+        myCity: scope.myCity,
+        isRemote: scope.isRemote,
+      },
+      { status: 403 }
+    )
+  }
+
+  const period = nextMonthStart()
+
+  const [spotsRes, allBidsRes, myBidsRes] = await Promise.all([
+    // Current month's paid holders for this (category, city)
     supabase
       .from('rank_spots')
-      .select('id, business_id, category, city, position, monthly_fee, period_start, period_end, status')
+      .select('id, business_id, position, monthly_fee, period_start, period_end')
       .eq('category', category)
       .eq('city', city)
       .eq('status', 'active')
       .order('position', { ascending: true }),
+    // Next month's competition: every pending/approved bid in this scope
+    supabase
+      .from('bids')
+      .select('id, business_id, position, amount, status, created_at')
+      .eq('category', category)
+      .eq('city', city)
+      .eq('period', period)
+      .in('status', ['pending', 'approved'])
+      .order('amount', { ascending: false }),
+    // My own bids in this scope (all statuses, incl. admin feedback)
     supabase
       .from('bids')
       .select('id, position, amount, period, status, admin_feedback, created_at')
       .eq('business_id', businessId)
       .eq('category', category)
       .eq('city', city)
-      .eq('period', nextMonthStart())
+      .eq('period', period)
       .order('created_at', { ascending: false }),
-    supabase
-      .from('rank_spots')
-      .select('id, position, status, period_start, period_end')
-      .eq('business_id', businessId)
-      .eq('category', category)
-      .eq('city', city)
-      .eq('status', 'active')
   ])
 
-  const byPos = new Map<number, { id: string; business_id: string; monthly_fee: number; period_start: string; period_end: string }>()
-  for (const s of spotsRes.data || []) {
-    byPos.set(s.position, s)
-  }
+  // Resolve names for spot holders and competition bidders
+  const nameIds = new Set<string>([
+    ...(spotsRes.data || []).map(s => s.business_id),
+    ...(allBidsRes.data || []).map(b => b.business_id),
+  ])
+  const { data: bidders } = nameIds.size
+    ? await supabase.from('businesses').select('id, name').in('id', Array.from(nameIds))
+    : { data: [] }
+  const nameById = new Map((bidders || []).map(b => [b.id, b.name]))
+
+  const competition = (allBidsRes.data || []).map(b => ({
+    id: b.id,
+    position: b.position,
+    amount: Number(b.amount),
+    status: b.status,
+    businessName: nameById.get(b.business_id) || 'Business',
+    mine: b.business_id === businessId,
+  }))
+
+  const byPos = new Map<number, { monthly_fee: number; business_id: string }>()
+  for (const s of spotsRes.data || []) byPos.set(s.position, s)
 
   return NextResponse.json({
-    spots: spotsRes.data || [],
-    bids: bidsRes.data || [],
-    myActive: activeRes.data || [],
+    category,
+    city,
+    period,
+    myCategories: scope.myCategories,
+    myCity: scope.myCity,
+    isRemote: scope.isRemote,
+    spots: (spotsRes.data || []).map(s => ({
+      position: s.position,
+      businessId: s.business_id,
+      businessName: nameById.get(s.business_id) || 'Business',
+      monthlyFee: Number(s.monthly_fee || 0),
+      periodStart: s.period_start,
+      periodEnd: s.period_end,
+      mine: s.business_id === businessId,
+    })),
+    competition,
+    bids: myBidsRes.data || [],
     currentFees: {
       one: byPos.get(1)?.monthly_fee ?? null,
       two: byPos.get(2)?.monthly_fee ?? null,
@@ -84,13 +163,27 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabase()
+  const scope = await loadScope(supabase, businessId)
+  if (!scope) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+
+  // Hard scope enforcement: own categories only; own city unless nationwide.
+  if (!scope.allows(category, city || '')) {
+    return NextResponse.json(
+      {
+        error: scope.myCategories.includes(category)
+          ? 'You can only bid in your listing\u2019s location.'
+          : 'You can only bid in categories listed on your business.',
+      },
+      { status: 403 }
+    )
+  }
 
   const { data: existing } = await supabase
     .from('bids')
     .select('id, status')
     .eq('business_id', businessId)
     .eq('category', category)
-    .eq('city', city)
+    .eq('city', city || '')
     .eq('position', pos)
     .eq('period', nextMonthStart())
     .eq('status', 'pending')
@@ -104,7 +197,7 @@ export async function POST(request: Request) {
     .from('rank_spots')
     .select('position, monthly_fee')
     .eq('category', category)
-    .eq('city', city)
+    .eq('city', city || '')
     .eq('status', 'active')
 
   const feeByPos = new Map<number, number>()
@@ -133,7 +226,7 @@ export async function POST(request: Request) {
   const { error } = await supabase.from('bids').insert({
     business_id: businessId,
     category,
-    city,
+    city: city || '',
     position: pos,
     amount: fee,
     period: nextMonthStart(),

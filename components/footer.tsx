@@ -49,6 +49,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/yellow-pages" className="text-amber-700 dark:text-amber-400 hover:underline font-semibold">
+                  ★ Yellow Pages — Emergency &amp; Government
+                </Link>
+              </li>
+              <li>
                 <Link href="/search?q=Solar" className="hover:text-whatsapp-600 dark:hover:text-whatsapp-400 transition-colors">
                   Solar & Power Installers
                 </Link>

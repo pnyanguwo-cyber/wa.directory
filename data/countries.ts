@@ -39,12 +39,32 @@ export const countryCodes: CountryCode[] = [
 export function validatePhone(countryCode: string, phone: string): string | null {
   const country = countryCodes.find(c => c.code === countryCode)
   if (!country) return 'Select a country code'
-  const digits = phone.replace(/[^0-9]/g, '')
+  let digits = phone.replace(/[^0-9]/g, '')
   if (!digits) return 'Enter a phone number'
-  if (digits.length < country.length) return `Must be ${country.length} digits for ${country.country}`
-  if (digits.length > country.length) return `Must be ${country.length} digits for ${country.country}`
+  // Forgive the common ways people type numbers: 00 international prefix,
+  // the full country code already included, or a local trunk 0 (077…).
+  const cc = countryCode.replace(/[^0-9]/g, '')
+  if (digits.startsWith('00')) digits = digits.slice(2)
+  if (cc && digits.startsWith(cc) && digits.length > cc.length) {
+    digits = digits.slice(cc.length)
+  } else if (digits.startsWith('0')) {
+    digits = digits.slice(1)
+  }
+  // Short hotline / emergency number (999, 994, 112, 393…). Can't be a
+  // WhatsApp number — the listing form only allows these on voice listings.
+  if (digits.length >= 3 && digits.length <= 5) {
+    return null
+  }
+  if (digits.length !== country.length) {
+    return `Must be ${country.length} digits for ${country.country} (e.g. ${country.prefix || ''}${'X'.repeat(Math.max(country.length - (country.prefix || '').length, 1))})`
+  }
   if (country.prefix && !digits.startsWith(country.prefix)) {
-    return `Must start with ${country.prefix} for ${country.country} mobile`
+    // Landline allowance: African landlines start with their area code
+    // (Zimbabwe 024 Harare, 029 Bulawayo, 054 Gweru…) — digits 2/5/6/8.
+    const isLandline = /^[2568]/.test(digits)
+    if (!isLandline) {
+      return `Must start with ${country.prefix} for ${country.country} mobile`
+    }
   }
   return null
 }

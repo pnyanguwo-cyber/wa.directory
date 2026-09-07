@@ -11,6 +11,7 @@ import MultiSearchSelect from '@/components/multi-search-select'
 import QrCard from '@/components/qr-card'
 import RequestConfirmModal from '@/components/request-confirm-modal'
 import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
+import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 
 interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
@@ -20,6 +21,12 @@ const countryOptions = countryCodes.map(c => ({
   value: c.code,
   label: `${c.flag} ${c.code} ${c.country}`,
 }))
+
+// Yellow Pages (special) submissions get a priority alert sent server-side
+// from /api/businesses/create — skip the generic notification to avoid doubles.
+const SPECIAL_CATEGORIES = new Set(
+  staticCategories.filter(c => c.special).map(c => c.name)
+)
 
 type LogoMode = 'url' | 'upload'
 type FeatureRequest = { type: 'category' | 'area' | 'city'; name: string; city?: string }
@@ -76,6 +83,10 @@ export default function ListBusinessForm({
   const [requestModal, setRequestModal] = useState<{ open: boolean; type: 'city' | 'area' | 'category'; name: string }>({ open: false, type: 'category', name: '' })
   const [pendingCities, setPendingCities] = useState<string[]>([])
   const [confirmPassword, setConfirmPassword] = useState('')
+  // 'whatsapp' = normal mobile (default). 'voice' = landline or hotline
+  // (police stations, council switchboards…) — stored in national format and
+  // shown to customers as a Call button instead of a WhatsApp chat.
+  const [phoneType, setPhoneType] = useState<'whatsapp' | 'voice'>('whatsapp')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
@@ -83,7 +94,13 @@ export default function ListBusinessForm({
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
-  const phoneError = form.phone ? validatePhone(form.countryCode, form.phone) : null
+  const rawPhoneDigits = form.phone.replace(/\D/g, '')
+  const isHotline = rawPhoneDigits.length > 0 && rawPhoneDigits.length <= 5
+  const phoneError = form.phone
+    ? isHotline && phoneType !== 'voice'
+      ? 'Short hotline numbers (999, 393…) can\u2019t use WhatsApp — select “Landline or hotline” below'
+      : validatePhone(form.countryCode, form.phone)
+    : null
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
 
   const allCategoryOptions = (() => {
@@ -285,7 +302,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
       }
 
       // Listing creation happens server-side (validated + service role).
-      const fullPhone = (form.countryCode + form.phone).replace(/[^0-9]/g, '')
+      // Accepts 077…, 26377… etc. — normalized to full international digits.
+      const fullPhone = phoneType === 'voice'
+        ? normalizeVoicePhone(form.phone)
+        : toFullPhone(form.countryCode, form.phone)
       const hasPendingCity = pendingCities.includes(form.city)
       let createRes: Response
       try {
@@ -308,8 +328,12 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             price_range: form.price_range,
             website: form.website.trim(),
             address: form.address.trim(),
+            lat: addressStatus === 'valid' ? (addressResult?.lat ?? null) : null,
+            lng: addressStatus === 'valid' ? (addressResult?.lng ?? null) : null,
+            address_verified: addressStatus === 'valid',
             show_location: form.show_location,
             is_remote: form.isRemote,
+            phone_type: phoneType,
           }),
         })
       } catch (fetchErr) {
@@ -334,11 +358,13 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           body: JSON.stringify({ edit_token: created.edit_token, phone: fullPhone, password: form.password }),
         }).catch(() => {})
       }
-      fetch('/api/admin/notify-new-business', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.isPhysical ? form.city : '', phone: fullPhone, id: created.id } }),
-      }).catch(() => {})
+      if (!categories.some(c => SPECIAL_CATEGORIES.has(c))) {
+        fetch('/api/admin/notify-new-business', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ business: { name: form.name, category: categories.join(', '), city: form.isPhysical ? form.city : '', phone: fullPhone, id: created.id } }),
+        }).catch(() => {})
+      }
     } catch (err) {
       const msg =
         (err as { message?: string })?.message ||
@@ -502,9 +528,43 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 value={form.phone}
                 onChange={e => setForm(f => ({ ...f, phone: e.target.value.replace(/[^0-9]/g, '') }))}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); if (isValidStep1) setStep(2) } }}
-                placeholder={selectedCountry ? `e.g. 71 234 5678` : 'Phone number'}
+                placeholder={selectedCountry ? `e.g. ${selectedCountry.prefix || ''}71 234 5678` : 'Phone number'}
                 className="input-field"
               />
+              {form.phone && !phoneError && selectedCountry && phoneType === 'whatsapp' && (
+                <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+                  Will be saved as +{toFullPhone(form.countryCode, form.phone)}
+                </p>
+              )}
+              {form.phone && phoneType === 'voice' && (
+                <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+                  Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} — customers see a Call button
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 mt-2">
+                <button
+                  type="button"
+                  onClick={() => setPhoneType('whatsapp')}
+                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
+                    phoneType === 'whatsapp'
+                      ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
+                      : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                  }`}
+                >
+                  📱 WhatsApp mobile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPhoneType('voice')}
+                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
+                    phoneType === 'voice'
+                      ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
+                      : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                  }`}
+                >
+                  ☎️ Landline or hotline (voice only)
+                </button>
+              </div>
               <p className="text-xs text-whatsapp-600 mt-1">Customers will chat with this number</p>
               {phoneError && (
                 <p className="text-xs text-danger mt-1 animate-fade-in">{phoneError}</p>

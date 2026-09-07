@@ -15,6 +15,8 @@ import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
+import { isYellowPages } from '@/lib/category-style'
+import CategoryDoodle from '@/components/category-doodle'
 
 import ReviewSection from '@/components/review-section'
 
@@ -194,8 +196,20 @@ async function BusinessContent({ slug }: { slug: string }) {
 
   const shareSlug = business.slug || business.id
   const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const yellow = isYellowPages(business.category)
+  // Voice listings (landlines & hotlines) have no WhatsApp chat — a Call button replaces it.
+  const voice = business.phone_type === 'voice'
   const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
-  const qrUrl = phoneClean ? `https://wa.me/${phoneClean}?text=${qrMessage}` : (business.whatsapp_link || '')
+  const qrUrl = !voice && phoneClean ? `https://wa.me/${phoneClean}?text=${qrMessage}` : (business.whatsapp_link || '')
+  // One-tap turn-by-turn directions when the address was Google-verified;
+  // falls back to a text search otherwise.
+  const hasCoords = typeof business.lat === 'number' && typeof business.lng === 'number'
+  const directionsHref = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${business.lat},${business.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address + ', ' + (business.city || 'Zimbabwe') + ', Zimbabwe')}`
+  const areaDirectionsHref = hasCoords
+    ? directionsHref
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((businessAreas.length ? businessAreas[0] + ', ' : '') + (business.city || 'Zimbabwe'))}`
 
   return (
     <>
@@ -205,7 +219,11 @@ async function BusinessContent({ slug }: { slug: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/70 dark:border-gray-800 shadow-soft-lift p-3 sm:p-6">
+        <div className={`bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border shadow-soft-lift p-3 sm:p-6 ${
+          yellow
+            ? 'from-amber-50/90 via-amber-50/70 to-amber-100/30 dark:from-amber-950/40 dark:via-gray-900/90 dark:to-amber-950/20 border-amber-300/60 dark:border-amber-800/50'
+            : 'from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 border-white/70 dark:border-gray-800'
+        }`}>
           <div className="flex items-center justify-between mb-4">
             <Link
               href="/"
@@ -220,7 +238,24 @@ async function BusinessContent({ slug }: { slug: string }) {
           </div>
 
           <div className="card overflow-hidden">
-            <div className="h-20 sm:h-40 bg-gradient-to-r from-whatsapp-100 to-whatsapp-200 relative" />
+            <div className={`h-20 sm:h-40 bg-gradient-to-r relative overflow-hidden ${
+              yellow
+                ? 'from-amber-100 via-amber-200 to-yellow-200 dark:from-amber-950/60 dark:via-amber-900/50 dark:to-yellow-950/50'
+                : 'from-whatsapp-100 to-whatsapp-200'
+            }`}>
+              <CategoryDoodle
+                categories={business.category}
+                strokeWidth={0.9}
+                className={`absolute right-3 bottom-0 translate-y-3 w-24 h-24 sm:w-40 sm:h-40 ${
+                  yellow
+                    ? 'text-amber-700/40 dark:text-amber-300/30'
+                    : 'text-whatsapp-700/20 dark:text-whatsapp-300/20'
+                }`}
+              />
+              {yellow && (
+                <span className="badge-yellow-pages absolute left-3 top-3">★ Yellow Pages</span>
+              )}
+            </div>
 
             <div className="px-4 sm:px-6">
               <LogoDisplay name={business.name} url={business.logo_url} />
@@ -351,7 +386,9 @@ async function BusinessContent({ slug }: { slug: string }) {
                           className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm border ${
                             isPending
                               ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
-                              : 'bg-whatsapp-50 dark:bg-whatsapp-950/40 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50'
+                              : isYellowPages([cat])
+                                ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/50'
+                                : 'bg-whatsapp-50 dark:bg-whatsapp-950/40 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50'
                           }`}
                         >
                           {cat}
@@ -461,11 +498,13 @@ async function BusinessContent({ slug }: { slug: string }) {
                             </svg>
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider leading-none mb-1">Address</p>
+                            <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider leading-none mb-1">
+                              Address{business.address_verified ? ' · Map-verified' : ''}
+                            </p>
                             <p className="text-xs sm:text-sm font-bold text-text-primary truncate">{business.address}</p>
                           </div>
                           <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address + ', ' + (business.city || 'Zimbabwe') + ', Zimbabwe')}`}
+                            href={directionsHref}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="shrink-0 h-8 px-3 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
@@ -479,7 +518,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                       )}
                       {!business.address && business.show_location !== false && (
                         <a
-                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((businessAreas.length ? businessAreas[0] + ', ' : '') + (business.city || 'Zimbabwe') + ', Zimbabwe')}`}
+                          href={areaDirectionsHref}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block rounded-2xl bg-surface/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 p-3 sm:p-3.5 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
@@ -539,7 +578,21 @@ async function BusinessContent({ slug }: { slug: string }) {
               </div>
 
               <div className="hidden sm:block">
-                <WhatsAppButton phone={business.phone} businessId={business.id} />
+                {voice ? (
+                  <TrackLink
+                    href={`tel:${business.phone}`}
+                    businessId={business.id}
+                    type="click_call"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                    </svg>
+                    Call {business.name}
+                  </TrackLink>
+                ) : (
+                  <WhatsAppButton phone={business.phone} businessId={business.id} />
+                )}
               </div>
 
               <div className="mt-4 text-center">

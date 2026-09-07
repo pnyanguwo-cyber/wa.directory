@@ -1,4 +1,4 @@
-﻿export interface Business {
+export interface Business {
   id: string
   name: string
   slug: string
@@ -10,6 +10,9 @@
   area: string
   areas?: string[]
   phone: string
+  // 'whatsapp' (default) = number is WhatsApp-reachable; 'voice' = landline or
+  // hotline stored in national format — renders a Call button, not wa.me.
+  phone_type?: 'whatsapp' | 'voice'
   whatsapp_username?: string
   whatsapp_link?: string
   verified: boolean
@@ -20,6 +23,10 @@
   price_range: string
   website?: string
   address?: string
+  // Google-geocoded coordinates + whether the address was map-verified.
+  lat?: number | null
+  lng?: number | null
+  address_verified?: boolean
   show_location?: boolean
   is_remote?: boolean
   featured_eligible?: boolean

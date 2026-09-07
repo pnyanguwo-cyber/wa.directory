@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location, is_remote } = body
+    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location, is_remote, phone_type, lat, lng, address_verified } = body
 
     if (!edit_token) {
       return NextResponse.json({ error: 'Edit token is required' }, { status: 400 })
@@ -34,8 +35,17 @@ export async function POST(request: Request) {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '')
 
-    const fullPhone = phone.replace(/[^0-9]/g, '')
-    const whatsappLink = `https://wa.me/${fullPhone}?text=Hi%2C%20I%20found%20you%20on%20WA%20Directory`
+    // Voice listings (landlines & hotlines) keep national format + Call button.
+    const isVoice = phone_type === 'voice'
+    const fullPhone = isVoice
+      ? normalizeVoicePhone(String(phone))
+      : toFullPhone(
+          typeof country_code === 'string' && country_code ? country_code : '+263',
+          String(phone)
+        )
+    const whatsappLink = isVoice
+      ? null
+      : `https://wa.me/${fullPhone}?text=Hi%2C%20I%20found%20you%20on%20WA%20Directory`
 
     const isRemote = body.is_remote === true || city === 'remote' || city === '*'
     const cityPhysical = isRemote ? '' : (typeof city === 'string' ? city : '')
@@ -52,7 +62,8 @@ export async function POST(request: Request) {
         bio: bio || null,
         category: typeof category === 'string' ? [category] : category,
         phone: fullPhone,
-        country_code: country_code || null,
+        phone_type: isVoice ? 'voice' : 'whatsapp',
+        country_code: isVoice ? null : (country_code || null),
         city: cityPhysical || null,
         area: primaryArea || null,
         areas: areaList,
@@ -66,6 +77,9 @@ export async function POST(request: Request) {
         website: website || null,
         whatsapp_link: whatsappLink,
         address: address || '',
+        lat: typeof lat === 'number' && Number.isFinite(lat) ? lat : null,
+        lng: typeof lng === 'number' && Number.isFinite(lng) ? lng : null,
+        address_verified: address_verified === true,
         show_location: show_location !== false,
       })
       .eq('edit_token', edit_token)

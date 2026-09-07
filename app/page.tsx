@@ -10,6 +10,7 @@ import CountUp from '@/components/count-up'
 import CategoryChips from '@/components/category-chips'
 import ExploreCategories from '@/components/explore-categories'
 import FaqSection from '@/components/faq-section'
+import EmergencyStrip from '@/components/emergency-strip'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -42,7 +43,7 @@ const ALL_BUSINESSES_INITIAL = 24
 export default async function HomePage() {
   const supabase = getSupabase()
 
-  const [{ data: scrollBusinesses }, { data: topRated }, { count }] = await Promise.all([
+  const [{ data: scrollBusinesses }, { data: topRated }, { count }, { data: emergencyServices }] = await Promise.all([
     supabase
       .from('businesses')
       .select(BUSINESS_CARD_COLUMNS)
@@ -60,6 +61,14 @@ export default async function HomePage() {
       .from('businesses')
       .select('id', { count: 'exact', head: true })
       .eq('verified', true),
+    // Yellow Pages: verified emergency / public-service listings for the hotline strip
+    supabase
+      .from('businesses')
+      .select(BUSINESS_CARD_COLUMNS)
+      .eq('verified', true)
+      .overlaps('category', ['Emergency Services', 'Government Services'])
+      .order('rating', { ascending: false })
+      .limit(10),
   ])
 
   const featured = (topRated || []).slice(0, 3)
@@ -154,6 +163,9 @@ export default async function HomePage() {
 
       {/* Main Content Container */}
       <div className="max-w-6xl mx-auto px-4 py-6 sm:py-10 space-y-8 sm:space-y-12">
+        {/* Emergency Hotlines (Yellow Pages) — first thing after the hero */}
+        <EmergencyStrip businesses={emergencyServices || []} />
+
         {/* Recently Added Marquee Strip */}
         {scrollBusinesses && scrollBusinesses.length > 0 && (
           <section aria-label="Recent listings" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-4 sm:p-6">
