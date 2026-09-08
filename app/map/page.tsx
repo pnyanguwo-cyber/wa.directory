@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
-import dynamic from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
 import { getSupabase } from '@/lib/supabase-server'
 
-const BusinessMap = dynamic(() => import('@/components/business-map'), { ssr: false })
+const BusinessMap = dynamicImport(() => import('@/components/business-map'), { ssr: false })
 
 export const metadata: Metadata = {
   title: 'Business Map | WA Directory',
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/map' },
 }
 
-export const dynamic_page = 'force-dynamic'
+export const dynamic = 'force-dynamic'
 
 export default async function MapPage() {
   const supabase = getSupabase()
