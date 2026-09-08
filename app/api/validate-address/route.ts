@@ -1,35 +1,36 @@
 import { NextResponse } from 'next/server'
 
-const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search'
 
 export async function POST(request: Request) {
   try {
-    if (!GOOGLE_MAPS_API_KEY) {
-      return NextResponse.json({ error: 'Google Maps API key not configured' }, { status: 500 })
-    }
-
     const { address } = await request.json()
     if (!address || typeof address !== 'string') {
       return NextResponse.json({ error: 'Address is required' }, { status: 400 })
     }
 
     const query = encodeURIComponent(address + ', Zimbabwe')
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${GOOGLE_MAPS_API_KEY}`
+    const url = `${NOMINATIM_URL}?q=${query}&format=json&countrycodes=zw&limit=1&addressdetails=1`
 
-    const res = await fetch(url)
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'WADirectory/1.0 (https://wa.directory)',
+      },
+    })
     const data = await res.json()
 
-    if (data.status === 'OK' && data.results && data.results.length > 0) {
-      const result = data.results[0]
-      const formatted = result.formatted_address || address
-      const location = result.geometry?.location
+    if (Array.isArray(data) && data.length > 0) {
+      const result = data[0]
+      const lat = parseFloat(result.lat)
+      const lng = parseFloat(result.lon)
+      const formatted = result.display_name || address
 
       return NextResponse.json({
         valid: true,
         formatted_address: formatted,
-        lat: location?.lat,
-        lng: location?.lng,
-        partial_match: result.partial_match || false,
+        lat,
+        lng,
+        partial_match: false,
       })
     }
 

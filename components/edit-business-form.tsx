@@ -434,7 +434,7 @@ export default function EditBusinessForm({
           {addressStatus === 'checking' && (
             <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
-              Checking address on Google Maps...
+              Checking address...
             </p>
           )}
           {addressStatus === 'valid' && addressResult && (
@@ -460,7 +460,7 @@ export default function EditBusinessForm({
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
               </svg>
-              Address not found on Google Maps. Please double-check the spelling.
+              Address not found. Please double-check the spelling.
             </p>
           )}
         </div>
