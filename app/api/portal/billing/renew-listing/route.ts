@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getBusinessId } from '@/lib/business-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import type { PlanType } from '@/types'
 
 function getSupabase() {
   return createClient(
@@ -15,6 +17,14 @@ export async function POST(request: Request) {
   if (!businessId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   try {
+    const body = await request.json().catch(() => ({}))
+    const plan: PlanType = body.plan || '1m'
+    const hasProAssistance: boolean = body.hasProAssistance || false
+
+    if (!PLAN_CONFIG[plan]) {
+      return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
+    }
+
     const supabase = getSupabase()
 
     // Get business info
@@ -45,6 +55,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Yellow Pages listings are free' }, { status: 400 })
     }
 
+    const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
+
     // Check for existing pending subscription
     const { data: existing } = await supabase
       .from('listing_subscriptions')
@@ -54,14 +66,20 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (!existing) {
-      // Create new pending subscription
       await supabase
         .from('listing_subscriptions')
         .insert({
           business_id: businessId,
           status: 'pending',
-          amount: 1.00,
+          amount,
+          plan,
+          pro_assistance: hasProAssistance,
         })
+    } else {
+      await supabase
+        .from('listing_subscriptions')
+        .update({ amount, plan, pro_assistance: hasProAssistance })
+        .eq('id', existing.id)
     }
 
     // Update payment_status
@@ -73,6 +91,7 @@ export async function POST(request: Request) {
     // Notify admin
     if (process.env.ADMIN_WHATSAPP) {
       const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const planLabel = PLAN_CONFIG[plan].label
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [
@@ -80,17 +99,19 @@ export async function POST(request: Request) {
           '',
           `Business: ${business.name}`,
           `Username: @${business.username || 'N/A'}`,
-          `Amount: USD 1.00`,
+          `Plan: ${planLabel}`,
+          `Amount: USD ${amount.toFixed(2)}`,
+          hasProAssistance ? 'Add-on: Pro WhatsApp catalog setup' : '',
           '',
           `Owner requesting renewal from portal.`,
           `Review: ${siteUrl}/admin`,
-        ].join('\n')
+        ].filter(Boolean).join('\n')
       ).catch(() => {})
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Renewal request submitted. Pay USD 1 via EcoCash at /pay or let the admin know.',
+      message: `Renewal request (${PLAN_CONFIG[plan].label}) submitted. Pay USD ${amount.toFixed(2)} via EcoCash at /pay or let the admin know.`,
     })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

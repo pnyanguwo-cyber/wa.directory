@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { isValidBusinessId } from '@/lib/business-id'
 import { normalizeForSearch, usernameMatches } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import type { PlanType } from '@/types'
 
 function getSupabase() {
   return createClient(
@@ -77,7 +79,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { business_id, payer_phone } = body || {}
+    const { business_id, payer_phone, plan: rawPlan, hasProAssistance } = body || {}
+    const plan: PlanType = rawPlan && PLAN_CONFIG[rawPlan as PlanType] ? rawPlan : '1m'
 
     if (!business_id || !payer_phone) {
       return NextResponse.json({ error: 'Business ID and payer phone are required' }, { status: 400 })
@@ -128,20 +131,22 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (existing) {
-      // Update payer phone on existing
+      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
       await supabase
         .from('listing_subscriptions')
-        .update({ payer_phone: payerClean })
+        .update({ payer_phone: payerClean, amount, plan, pro_assistance: !!hasProAssistance })
         .eq('id', existing.id)
     } else {
-      // Create new pending subscription
+      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
       await supabase
         .from('listing_subscriptions')
         .insert({
           business_id: business.id,
           status: 'pending',
-          amount: 1.00,
+          amount,
           payer_phone: payerClean,
+          plan,
+          pro_assistance: !!hasProAssistance,
         })
     }
 
@@ -154,6 +159,7 @@ export async function POST(request: Request) {
     // Notify admin via WhatsApp
     if (process.env.ADMIN_WHATSAPP) {
       const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [
@@ -161,12 +167,14 @@ export async function POST(request: Request) {
           '',
           `Business: ${business.name}`,
           `Username: @${business.username || 'N/A'}`,
-          `Amount: USD 1.00`,
+          `Plan: ${PLAN_CONFIG[plan].label}`,
+          `Amount: USD ${amount.toFixed(2)}`,
+          hasProAssistance ? 'Add-on: Pro WhatsApp catalog setup' : '',
           `Payer EcoCash: +${payerClean}`,
           '',
           `Check EcoCash for transaction from +${payerClean}`,
           `Review: ${siteUrl}/admin`,
-        ].join('\n')
+        ].filter(Boolean).join('\n')
       ).catch(() => {})
     }
 

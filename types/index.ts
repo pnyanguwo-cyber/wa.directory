@@ -37,3 +37,13 @@ export interface Business {
   payment_status?: 'unpaid' | 'pending' | 'active' | 'expired'
   listing_activated_at?: string
 }
+
+export type PlanType = '1m' | '6m' | '12m'
+
+export const PLAN_CONFIG: Record<PlanType, { label: string; months: number; days: number; price: number; perMonth: number }> = {
+  '1m': { label: '1 Month', months: 1, days: 30, price: 1.0, perMonth: 1.0 },
+  '6m': { label: '6 Months', months: 6, days: 180, price: 5.0, perMonth: 0.83 },
+  '12m': { label: '12 Months', months: 12, days: 360, price: 9.0, perMonth: 0.75 },
+}
+
+export const PRO_ASSISTANCE_PRICE = 2.0

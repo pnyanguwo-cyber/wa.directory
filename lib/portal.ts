@@ -37,16 +37,25 @@ export async function getListingSubscription(businessId: string): Promise<{
   expiresAt: string | null
   amount: number
   payerPhone: string
+  plan: string
+  proAssistance: boolean
 } | null> {
   const { data } = await getSupabase()
     .from('listing_subscriptions')
-    .select('status, expires_at, amount, payer_phone')
+    .select('status, expires_at, amount, payer_phone, plan, pro_assistance')
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   if (!data) return null
-  return { status: data.status, expiresAt: data.expires_at, amount: data.amount, payerPhone: data.payer_phone }
+  return {
+    status: data.status,
+    expiresAt: data.expires_at,
+    amount: data.amount,
+    payerPhone: data.payer_phone,
+    plan: data.plan || '1m',
+    proAssistance: data.pro_assistance || false,
+  }
 }
 
 const RANGES = { '7': 7, '30': 30, '90': 90 } as const

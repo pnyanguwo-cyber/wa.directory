@@ -3,17 +3,21 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import PaymentPlanModal from '@/components/payment-plan-modal'
+import type { PlanType } from '@/types'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 
 export default function PortalBilling({ businessId, businessName, sub, listingSub }: {
   businessId: string
   businessName: string
   sub: { status: string; expiresAt: string | null; amount: number; adminNote: string } | null
-  listingSub: { status: string; expiresAt: string | null; amount: number; payerPhone: string } | null
+  listingSub: { status: string; expiresAt: string | null; amount: number; payerPhone: string; plan: string; proAssistance: boolean } | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [showPlanModal, setShowPlanModal] = useState(false)
 
   const premiumStatus = sub?.status || 'none'
   const premiumActive = premiumStatus === 'active' && (!sub!.expiresAt || new Date(sub!.expiresAt) > new Date())
@@ -24,33 +28,22 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   const listingPending = listingStatus === 'pending'
   const listingExpired = listingStatus === 'expired'
 
-  async function requestUpgrade() {
-    setBusy(true)
-    setError('')
-    setNotice('')
-    const res = await fetch('/api/portal/billing/upgrade', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ businessId }),
-    })
-    const data = await res.json()
-    setBusy(false)
-    if (!res.ok) {
-      setError(data.error || 'Could not request upgrade')
-      return
-    }
-    setNotice('Upgrade request sent. An admin will confirm your payment, usually within a day.')
-    router.refresh()
-  }
+  // Due date + remaining days
+  const now = new Date()
+  const expiresAt = listingSub?.expiresAt ? new Date(listingSub.expiresAt) : null
+  const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / 86400000) : null
+  const isUrgent = daysRemaining !== null && daysRemaining <= 7 && daysRemaining > 0
+  const isWarning = daysRemaining !== null && daysRemaining <= 14 && daysRemaining > 7
 
-  async function requestRenewal() {
+  async function handlePlanProceed(payload: { plan: PlanType; hasProAssistance: boolean }) {
     setBusy(true)
     setError('')
     setNotice('')
+    setShowPlanModal(false)
     const res = await fetch('/api/portal/billing/renew-listing', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ plan: payload.plan, hasProAssistance: payload.hasProAssistance }),
     })
     const data = await res.json()
     setBusy(false)
@@ -58,7 +51,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
       setError(data.error || 'Could not request renewal')
       return
     }
-    setNotice('Renewal request sent. Pay USD 1 via EcoCash at /pay or let the admin know.')
+    setNotice(data.message || 'Renewal request sent. Pay via EcoCash at /pay or let the admin know.')
     router.refresh()
   }
 
@@ -70,8 +63,12 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
     none: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
   }
 
+  const planLabel = listingSub?.plan ? PLAN_CONFIG[listingSub.plan as PlanType]?.label || '1 Month' : '1 Month'
+
   return (
     <div className="space-y-6">
+      <PaymentPlanModal open={showPlanModal} onClose={() => setShowPlanModal(false)} onProceed={handlePlanProceed} />
+
       <div>
         <h2 className="text-lg font-bold text-text-primary">Billing & subscription</h2>
         <p className="text-xs text-text-secondary mt-0.5">Manage your listing subscription and premium features.</p>
@@ -93,14 +90,43 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
         {listingSub && (
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
             <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
-              <p className="text-text-secondary font-medium">Monthly fee</p>
-              <p className="text-base font-extrabold text-text-primary mt-0.5">${Number(listingSub.amount || 0).toFixed(2)}</p>
+              <p className="text-text-secondary font-medium">Plan</p>
+              <p className="text-base font-extrabold text-text-primary mt-0.5">{planLabel}</p>
             </div>
             <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
-              <p className="text-text-secondary font-medium">Expires</p>
-              <p className="text-base font-extrabold text-text-primary mt-0.5">
-                {listingSub.expiresAt ? new Date(listingSub.expiresAt).toLocaleDateString() : '—'}
-              </p>
+              <p className="text-text-secondary font-medium">Amount</p>
+              <p className="text-base font-extrabold text-text-primary mt-0.5">${Number(listingSub.amount || 0).toFixed(2)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Due date & remaining days */}
+        {listingActive && listingSub && expiresAt && (
+          <div className={`mt-3 rounded-xl px-4 py-3 border ${
+            isUrgent
+              ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50'
+              : isWarning
+                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50'
+                : 'bg-whatsapp-50 dark:bg-whatsapp-950/30 border-whatsapp-200 dark:border-whatsapp-800/50'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className={`text-xs font-semibold ${isUrgent ? 'text-red-700 dark:text-red-400' : isWarning ? 'text-amber-700 dark:text-amber-400' : 'text-whatsapp-700 dark:text-whatsapp-400'}`}>
+                  Due: {expiresAt.toLocaleDateString('en-ZW', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </p>
+                {listingSub.proAssistance && (
+                  <p className="text-[10px] text-text-secondary mt-0.5">Includes pro WhatsApp catalog setup</p>
+                )}
+              </div>
+              <span className={`text-lg font-extrabold ${isUrgent ? 'text-red-700 dark:text-red-400' : isWarning ? 'text-amber-700 dark:text-amber-400' : 'text-whatsapp-700 dark:text-whatsapp-400'}`}>
+                {daysRemaining}d
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${isUrgent ? 'bg-red-500' : isWarning ? 'bg-amber-500' : 'bg-whatsapp-500'}`}
+                style={{ width: `${Math.min(100, Math.max(5, ((daysRemaining || 0) / 30) * 100))}%` }}
+              />
             </div>
           </div>
         )}
@@ -122,7 +148,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
             </p>
           ) : listingPending ? (
             <p className="text-xs text-amber-700 font-semibold">
-              Payment pending. Pay USD 1 via EcoCash at <Link href="/pay" className="underline">/pay</Link> or let the admin know.
+              Payment pending. Pay via EcoCash at <Link href="/pay" className="underline">/pay</Link> or let the admin know.
             </p>
           ) : (
             <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border border-amber-200 dark:border-amber-800/50 p-4">
@@ -130,14 +156,14 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
                 {listingExpired ? 'Your listing is hidden' : 'Keep your listing visible'}
               </p>
               <p className="text-xs text-text-secondary mt-1">
-                Pay USD 1/month to stay in the directory. Anyone can pay for you at <Link href="/pay" className="text-whatsapp-600 font-semibold hover:underline">/pay</Link>.
+                Choose a plan to stay in the directory. Anyone can pay for you at <Link href="/pay" className="text-whatsapp-600 font-semibold hover:underline">/pay</Link>.
               </p>
               <button
-                onClick={requestRenewal}
+                onClick={() => setShowPlanModal(true)}
                 disabled={busy}
                 className="mt-3 px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs font-semibold rounded-2xl hover:from-amber-600 hover:to-amber-700 transition-all inline-flex items-center gap-1.5"
               >
-                {busy ? 'Sending...' : 'Request Renewal'}
+                {busy ? 'Sending...' : 'Choose a Plan'}
               </button>
             </div>
           )}
@@ -199,7 +225,24 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
                 <li>• Competitor insights and the complete improvement analysis</li>
               </ul>
               <button
-                onClick={requestUpgrade}
+                onClick={async () => {
+                  setBusy(true)
+                  setError('')
+                  setNotice('')
+                  const res = await fetch('/api/portal/billing/upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ businessId }),
+                  })
+                  const data = await res.json()
+                  setBusy(false)
+                  if (!res.ok) {
+                    setError(data.error || 'Could not request upgrade')
+                    return
+                  }
+                  setNotice('Upgrade request sent. An admin will confirm your payment, usually within a day.')
+                  router.refresh()
+                }}
                 disabled={busy}
                 className="btn-primary mt-4 px-5 py-2.5 text-xs font-semibold rounded-2xl inline-flex items-center gap-1.5"
               >
