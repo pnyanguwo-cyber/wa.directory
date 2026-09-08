@@ -165,7 +165,7 @@ export default function LoginPage() {
                 autoFocus
               />
               <p className="text-[11px] text-text-secondary mt-1">
-                077…, 26377… or +26377… all work — we recognise them as the same number.
+                077…, 26377… or +26377… all work (we recognise them as the same number).
               </p>
             </div>
             <div>

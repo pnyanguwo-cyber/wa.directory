@@ -21,6 +21,7 @@ export async function GET(request: Request) {
     .from('businesses')
     .select(BUSINESS_CARD_COLUMNS)
     .eq('verified', true)
+    .eq('payment_status', 'active')
 
   if (sort === 'newest') {
     query = query.order('created_at', { ascending: false })

@@ -188,7 +188,7 @@ export default function AdminRankings() {
                       onChange={e => setOverrideDays(e.target.value)}
                       className="input-field text-sm"
                     />
-                    <p className="text-[11px] text-text-secondary mt-1">Days from today — default is 30.</p>
+                    <p className="text-[11px] text-text-secondary mt-1">Days from today (default is 30).</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
@@ -217,7 +217,7 @@ export default function AdminRankings() {
           <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
             <h2 className="text-lg font-bold text-text-primary">Reject bid</h2>
             <p className="text-xs text-text-secondary">
-              {rejecting.business?.name} — #{rejecting.position} in {rejecting.category}{rejecting.city ? `, ${rejecting.city}` : ''} for ${Number(rejecting.amount).toFixed(2)}
+              {rejecting.business?.name}: #{rejecting.position} in {rejecting.category}{rejecting.city ? `, ${rejecting.city}` : ''} for ${Number(rejecting.amount).toFixed(2)}
               {rejecting.fallback_position && <span className="ml-1 text-amber-600">(fallback #{rejecting.fallback_position} will be auto-submitted)</span>}
             </p>
             <textarea
@@ -242,7 +242,7 @@ export default function AdminRankings() {
           <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
             <h2 className="text-lg font-bold text-text-primary">Confirm payment & activate</h2>
             <p className="text-xs text-text-secondary">
-              {payingBid.business?.name} — #{payingBid.position} in {payingBid.category}{payingBid.city ? `, ${payingBid.city}` : ''} for {payingBid.period}
+              {payingBid.business?.name}: #{payingBid.position} in {payingBid.category}{payingBid.city ? `, ${payingBid.city}` : ''} for {payingBid.period}
             </p>
             <div>
               <label className="text-xs font-medium text-text-secondary mb-1 block">Monthly fee (defaults to bid amount)</label>

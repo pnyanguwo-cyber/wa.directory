@@ -32,9 +32,9 @@ interface Bid {
 }
 
 const POSITION_INFO = [
-  { pos: 1, label: 'Gold', subtitle: 'Top of search — outbid the current #1 fee' },
-  { pos: 2, label: 'Silver', subtitle: 'Second spot — must be less than the #1 fee' },
-  { pos: 3, label: 'Bronze', subtitle: 'Third spot — must be less than the #2 fee' },
+  { pos: 1, label: 'Gold', subtitle: 'Top of search: outbid the current #1 fee' },
+  { pos: 2, label: 'Silver', subtitle: 'Second spot: must be less than the #1 fee' },
+  { pos: 3, label: 'Bronze', subtitle: 'Third spot: must be less than the #2 fee' },
 ]
 
 export default function PortalRanking({
@@ -92,7 +92,7 @@ export default function PortalRanking({
         setCurrentFees(d.currentFees || { one: null, two: null, three: null })
       }
     } catch {
-      setLoadError('Could not load ranking data — check your connection.')
+      setLoadError('Could not load ranking data: check your connection.')
     }
     setLoaded(true)
   }, [])
@@ -128,7 +128,7 @@ export default function PortalRanking({
       setError(data.error || 'Could not submit bid')
       return
     }
-    setNotice(`Bid submitted for position #${selectedPos} — ${category}${city ? ` in ${city}` : ' (nationwide)'}. An admin will review it.`)
+    setNotice(`Bid submitted for position #${selectedPos}: ${category}${city ? ` in ${city}` : ' (nationwide)'}. An admin will review it.`)
     setAmount('')
     setSelectedPos(null)
     reloadBoard()
@@ -148,7 +148,7 @@ export default function PortalRanking({
   }, [competition])
 
   const feeHint = (pos: number): string => {
-    if (pos === 1) return currentFees.one ? `Must be above $${currentFees.one.toFixed(2)} (current #1)` : 'You set the first fee — bid anything'
+    if (pos === 1) return currentFees.one ? `Must be above $${currentFees.one.toFixed(2)} (current #1)` : 'You set the first fee: bid anything'
     if (pos === 2) return `Must be below $${(currentFees.one ?? 0).toFixed(2)} (#1 fee)`
     if (pos === 3) return `Must be below $${(currentFees.two ?? currentFees.one ?? 0).toFixed(2)} (#2 fee)`
     return ''
@@ -219,12 +219,12 @@ export default function PortalRanking({
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
               </svg>
               {myCity || 'Nationwide'}
-              <span className="font-normal text-text-secondary">— your listing&rsquo;s location</span>
+              <span className="font-normal text-text-secondary">: your listing&rsquo;s location</span>
             </span>
           )}
           {isRemote && (
             <p className="text-[11px] text-text-secondary mt-1.5">
-              Your listing serves the whole country — pick a location above to see its board, then bid in each one separately.
+              Your listing serves the whole country: pick a location above to see its board, then bid in each one separately.
             </p>
           )}
         </div>
@@ -259,7 +259,7 @@ export default function PortalRanking({
                 {spot ? (spot.mine ? 'Your business 🎉' : spot.businessName) : 'No holder yet'}
               </p>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                {spot ? `Held until ${spot.periodEnd}${spot.mine ? ' — this is you' : ''}` : p.subtitle}
+                {spot ? `Held until ${spot.periodEnd}${spot.mine ? ': this is you' : ''}` : p.subtitle}
               </p>
             </div>
           )
@@ -280,7 +280,7 @@ export default function PortalRanking({
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{loadError}</p>
         ) : competition.length === 0 ? (
           <p className="text-xs text-text-secondary py-3">
-            No bids yet for this category{city ? ` in ${city}` : ''} next month — the first bid leads the board.
+            No bids yet for this category{city ? ` in ${city}` : ''} next month: the first bid leads the board.
           </p>
         ) : (
           <div className="space-y-2">
@@ -345,7 +345,7 @@ export default function PortalRanking({
         <form onSubmit={submitBid} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card space-y-4">
           <div>
             <p className="text-sm font-bold text-text-primary">
-              Bid for next month — {category}{city ? `, ${city}` : ' (nationwide)'}
+              Bid for next month: {category}{city ? `, ${city}` : ' (nationwide)'}
             </p>
             <p className="text-xs text-text-secondary mt-0.5">
               Choose a position and set your monthly fee. Your bid stays pending until an admin approves it.
@@ -396,7 +396,7 @@ export default function PortalRanking({
               )}
               <div>
                 <label className="block text-sm font-medium text-text-primary mb-1.5">
-                  Monthly fee (USD) — {feeHint(selectedPos)}
+                  Monthly fee (USD): {feeHint(selectedPos)}
                 </label>
                 <input
                   type="number"

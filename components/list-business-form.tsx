@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { countryCodes, validatePhone } from '@/data/countries'
@@ -12,6 +12,7 @@ import QrCard from '@/components/qr-card'
 import RequestConfirmModal from '@/components/request-confirm-modal'
 import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+import { normalizeUsername } from '@/lib/username'
 
 interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
@@ -45,6 +46,9 @@ export default function ListBusinessForm({
   const [bioLoading, setBioLoading] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
   const [editToken, setEditToken] = useState('')
+  const [businessId, setBusinessId] = useState('')
+  const [submittedUsername, setSubmittedUsername] = useState('')
+  const [isPaidListings, setIsPaidListings] = useState(false)
   const [logoMode, setLogoMode] = useState<LogoMode>('url')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -63,6 +67,7 @@ export default function ListBusinessForm({
     countryCode: '+263',
     phone: '',
     whatsapp_username: '',
+    username: '',
     description: '',
     bio: '',
     city: '',
@@ -79,10 +84,12 @@ export default function ListBusinessForm({
   const [categories, setCategories] = useState<string[]>([])
   const [areas, setAreas] = useState<string[]>([])
   const [requests, setRequests] = useState<FeatureRequest[]>([])
-  const [errors, setErrors] = useState<{ password?: string; logo?: string; submit?: string }>({})
+  const [errors, setErrors] = useState<{ password?: string; logo?: string; submit?: string; username?: string }>({})
   const [requestModal, setRequestModal] = useState<{ open: boolean; type: 'city' | 'area' | 'category'; name: string }>({ open: false, type: 'category', name: '' })
   const [pendingCities, setPendingCities] = useState<string[]>([])
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
+  const [usernameSuggestion, setUsernameSuggestion] = useState('')
   // 'whatsapp' = normal mobile (default). 'voice' = landline or hotline
   // (police stations, council switchboards…) — stored in national format and
   // shown to customers as a Call button instead of a WhatsApp chat.
@@ -98,7 +105,7 @@ export default function ListBusinessForm({
   const isHotline = rawPhoneDigits.length > 0 && rawPhoneDigits.length <= 5
   const phoneError = form.phone
     ? isHotline && phoneType !== 'voice'
-      ? 'Short hotline numbers (999, 393…) can\u2019t use WhatsApp — select “Landline or hotline” below'
+      ? 'Short hotline numbers (999, 393…) can\u2019t use WhatsApp (select “Landline or hotline” below'
       : validatePhone(form.countryCode, form.phone)
     : null
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
@@ -274,6 +281,29 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
     setRequestModal({ open: false, type: 'category', name: '' })
   }
 
+  const checkUsername = useCallback(async (value: string) => {
+    const normalized = normalizeUsername(value)
+    if (normalized.length < 3) {
+      setUsernameStatus('idle')
+      setUsernameSuggestion('')
+      return
+    }
+    setUsernameStatus('checking')
+    try {
+      const res = await fetch(`/api/username/check?username=${encodeURIComponent(normalized)}`)
+      const data = await res.json()
+      if (data.available) {
+        setUsernameStatus('available')
+        setUsernameSuggestion('')
+      } else {
+        setUsernameStatus('taken')
+        setUsernameSuggestion(data.suggestion || '')
+      }
+    } catch {
+      setUsernameStatus('idle')
+    }
+  }, [])
+
   async function handleSubmit() {
     const pwError = form.password ? validatePassword(form.password) : null
     if (pwError) {
@@ -317,6 +347,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             countryCode: form.countryCode,
             phone: form.phone,
             whatsapp_username: form.whatsapp_username.trim(),
+            username: form.username.trim() || undefined,
             description: form.description,
             bio: form.bio,
             categories,
@@ -346,8 +377,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         const payload = await createRes.json().catch(() => null)
         throw new Error(payload?.error || 'Could not create your listing. Please try again.')
       }
-      const created = await createRes.json() as { id: string; slug: string; edit_token: string }
+      const created = await createRes.json() as { id: string; slug: string; edit_token: string; business_id: string; username: string; payment_status: string }
 
+      setBusinessId(created.business_id || '')
+      setSubmittedUsername(created.username || '')
+      setIsPaidListings(created.payment_status !== 'active')
       setEditToken(created.edit_token)
       setSubmittedId(created.slug || created.id)
       submitFeatureRequests(created.id)
@@ -390,9 +424,46 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             />
           </svg>
         </div>
-        <h2 className="text-2xl font-bold text-text-primary mb-1">Submitted for Approval!</h2>
-        <p className="text-text-secondary mb-2">{form.name} is pending approval.</p>
-        <p className="text-sm text-text-secondary mb-6">Once approved, customers will find you on WA Directory.</p>
+        {isPaidListings ? (
+          <>
+            <h2 className="text-2xl font-bold text-text-primary mb-1">Listing Created!</h2>
+            <p className="text-text-secondary mb-1">{form.name} is ready, but needs payment to go live.</p>
+            <p className="text-xs text-text-secondary mb-4">Business ID: <span className="font-mono font-bold">{businessId}</span></p>
+            <p className="text-xs text-text-secondary mb-1">Username: <span className="font-bold">@{submittedUsername}</span></p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold text-text-primary mb-1">Submitted for Approval!</h2>
+            <p className="text-text-secondary mb-2">{form.name} is pending approval.</p>
+            <p className="text-sm text-text-secondary mb-6">Once approved, customers will find you on WA Directory.</p>
+          </>
+        )}
+
+        {isPaidListings && (
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5 mb-6 text-left">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Pay USD 1 to go live</p>
+            </div>
+            <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
+              Anyone can pay for you — friend, family, or employee. They just need your Business ID or username.
+            </p>
+            <div className="bg-white dark:bg-gray-900 rounded-xl p-3 mb-3 border border-amber-200/50">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wide mb-1">Payment Page</p>
+              <p className="text-sm font-bold text-text-primary font-mono">
+                {typeof window !== 'undefined' ? `${window.location.origin}/pay` : ''}
+              </p>
+            </div>
+            <ol className="text-xs text-amber-800 dark:text-amber-300 space-y-1.5 list-decimal list-inside">
+              <li>Go to <strong>/pay</strong> and search for <strong>@{submittedUsername}</strong> or <strong>{businessId}</strong></li>
+              <li>Enter the EcoCash number paying from</li>
+              <li>Admin verifies the transaction and activates your listing</li>
+            </ol>
+          </div>
+        )}
+
         {requests.length > 0 && (
           <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-6 text-left">
             <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Your requests are in review:</p>
@@ -417,15 +488,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           />
         </div>
         <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card mb-6">
-          <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once approved)</p>
+          <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once {isPaidListings ? 'paid and ' : ''}approved)</p>
           <p className="text-xs text-text-secondary mb-4">
-            Print these and place them on your counter, shelves and packaging — customers scan to chat with you directly.
+            Print these and place them on your counter, shelves and packaging: customers scan to chat with you directly.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <QrCard
               value={typeof window !== 'undefined' ? `${window.location.origin}/qr/${submittedId}` : ''}
               title="Customer chat QR"
-              subtitle="Opens WhatsApp chat with you — tracked"
+              subtitle="Opens WhatsApp chat with you (tracked)"
               size={130}
               downloadName={`${submittedId}-customer-chat-qr.png`}
             />
@@ -439,6 +510,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           </div>
         </div>
         <div className="flex flex-col gap-3">
+          {isPaidListings && (
+            <Link href="/pay" className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-amber-600 hover:to-amber-700 transition-all">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              Pay USD 1 to Go Live
+            </Link>
+          )}
           <Link href={`/`} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -495,6 +574,68 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
           </div>
           <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Directory Username <span className="text-text-secondary font-normal">(your unique handle)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-sm">@</span>
+              <input
+                type="text"
+                value={form.username}
+                onChange={e => {
+                  const val = e.target.value.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase()
+                  setForm(f => ({ ...f, username: val }))
+                  if (val.length >= 3) {
+                    const timer = setTimeout(() => checkUsername(val), 500)
+                    return () => clearTimeout(timer)
+                  } else {
+                    setUsernameStatus('idle')
+                    setUsernameSuggestion('')
+                  }
+                }}
+                placeholder="e.g. johns_plumbing"
+                className="input-field pl-7"
+              />
+            </div>
+            <p className="text-xs text-whatsapp-600 mt-1">Your unique WA Directory handle (letters, numbers, underscores)</p>
+            {usernameStatus === 'checking' && (
+              <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
+                <span className="w-3 h-3 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
+                Checking availability...
+              </p>
+            )}
+            {usernameStatus === 'available' && form.username && (
+              <p className="text-xs text-whatsapp-700 mt-1 flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+                @{form.username} is available!
+              </p>
+            )}
+            {usernameStatus === 'taken' && (
+              <div className="mt-1 space-y-1">
+                <p className="text-xs text-red-600 flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+                  @{form.username} is already taken
+                </p>
+                {usernameSuggestion && (
+                  <button
+                    type="button"
+                    onClick={() => { setForm(f => ({ ...f, username: usernameSuggestion })); setUsernameStatus('available'); setUsernameSuggestion('') }}
+                    className="text-xs text-whatsapp-600 font-medium hover:underline"
+                  >
+                    Use @{usernameSuggestion} instead
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setRequestModal({ open: true, type: 'category', name: form.username })}
+                  className="text-xs text-amber-600 font-medium hover:underline block"
+                >
+                  Contest this name
+                </button>
+              </div>
+            )}
+          </div>
+          <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">Business Username on WhatsApp</label>
             <input
               ref={usernameRef}
@@ -538,7 +679,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               )}
               {form.phone && phoneType === 'voice' && (
                 <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
-                  Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} — customers see a Call button
+                  Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} (customers see a Call button)
                 </p>
               )}
               <div className="flex flex-wrap gap-2 mt-2">
@@ -722,7 +863,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               value={form.city}
               onChange={v => setForm(f => ({ ...f, city: v }))}
               onEnterNext={() => (form.city ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
-              placeholder={form.isRemote && !form.isPhysical ? 'Optional — remote covers whole country' : 'Select city'}
+              placeholder={form.isRemote && !form.isPhysical ? 'Optional (remote covers whole country)' : 'Select city'}
               label="Town/city your business is based in"
               onRequestName={(name) => setRequestModal({ open: true, type: 'city', name })}
             />
@@ -756,7 +897,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country online</p>
           )}
           {form.isRemote && form.isPhysical && form.city && (
-            <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city} — serves the whole country</p>
+            <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city}: serves the whole country</p>
           )}
           {locationMissing && (
             <p className="text-xs text-danger">Select at least one option above, and a city/area if you have a physical location.</p>
@@ -1081,7 +1222,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               {form.isRemote && !form.isPhysical
                 ? 'Serves whole country (online)'
                 : form.isRemote && form.isPhysical
-                  ? `Based in ${form.city || '—'} — serves whole country`
+                  ? `Based in ${form.city || '—'}: serves whole country`
                   : [areas.join(', '), form.city, 'Zimbabwe'].filter(Boolean).join(', ')}
             </p>
             <p className="text-sm text-text-secondary">

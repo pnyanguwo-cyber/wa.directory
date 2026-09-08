@@ -5,7 +5,7 @@ import { useState } from 'react'
 const FAQ_ITEMS = [
   {
     q: 'What is WA Directory?',
-    a: "WA Directory is Zimbabwe's AI-powered business directory. We help you discover verified local shops, compare real-time prices, and connect directly on WhatsApp — all in one place.",
+    a: "WA Directory is Zimbabwe's AI-powered business directory. We help you discover verified local shops, compare real-time prices, and connect directly on WhatsApp: all in one place.",
   },
   {
     q: 'How do I list my business?',

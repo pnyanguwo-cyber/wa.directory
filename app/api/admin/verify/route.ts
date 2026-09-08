@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         sendWhatsAppMessage(
           to,
           [
-            `⚠️ *LISTING UPDATE — ${business.name}*`,
+            `⚠️ *LISTING UPDATE: ${business.name}*`,
             '',
             'Your listing on WA Directory is currently NOT verified.',
             note ? `Admin note: ${note}` : '',

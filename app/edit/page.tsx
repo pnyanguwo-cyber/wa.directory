@@ -52,6 +52,33 @@ export default async function EditPage({
   return (
     <main className="min-h-screen py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-4">
+        {/* Payment Status Banner */}
+        {business.payment_status === 'pending' && (
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Payment pending</p>
+            </div>
+            <p className="text-xs text-amber-800 dark:text-amber-300">
+              Your listing needs USD 1 to go live. Anyone can pay at <Link href="/pay" className="font-semibold underline">/pay</Link> using your Business ID: <span className="font-mono font-bold">{business.business_id}</span>
+            </p>
+          </div>
+        )}
+        {business.payment_status === 'expired' && (
+          <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 rounded-2xl p-4">
+            <div className="flex items-center gap-2 mb-1">
+              <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+              </svg>
+              <p className="text-sm font-bold text-red-800 dark:text-red-300">Listing hidden</p>
+            </div>
+            <p className="text-xs text-red-800 dark:text-red-300">
+              Your subscription expired. Your listing is not visible to customers. Pay USD 1 to restore it at <Link href="/pay" className="font-semibold underline">/pay</Link> using Business ID: <span className="font-mono font-bold">{business.business_id}</span>
+            </p>
+          </div>
+        )}
         {!existingAccount && (
           <div className="bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 backdrop-blur-xl rounded-3xl border border-whatsapp-200 dark:border-whatsapp-800/50 shadow-soft-lift p-6 flex items-center justify-between gap-4 flex-wrap">
             <div>

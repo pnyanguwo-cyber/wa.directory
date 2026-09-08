@@ -52,8 +52,8 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
     })
   }
 
-  let dataQuery = supabase.from('businesses').select(BUSINESS_CARD_COLUMNS)
-  let countQuery = supabase.from('businesses').select('id', { count: 'exact', head: true })
+  let dataQuery = supabase.from('businesses').select(BUSINESS_CARD_COLUMNS).eq('payment_status', 'active')
+  let countQuery = supabase.from('businesses').select('id', { count: 'exact', head: true }).eq('payment_status', 'active')
 
   if (verified) {
     dataQuery = dataQuery.eq('verified', true)

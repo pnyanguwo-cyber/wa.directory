@@ -14,6 +14,8 @@ interface DayRow {
   total: number
 }
 
+const EVENT_TYPES = Object.keys(STAT_EVENT_LABELS) as (keyof typeof STAT_EVENT_LABELS)[]
+
 export default function PortalOverview({ businessId, businessName, businessSlug, paid, rows, lifetime }: {
   businessId: string
   businessName: string
@@ -43,6 +45,12 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
   const maxDay = Math.max(1, ...visible.map(d => d.total))
   const maxLifetime = Math.max(1, ...Object.values(lifetime))
 
+  // Y-axis grid line values (4 lines)
+  const gridValues = useMemo(() => {
+    const step = Math.ceil(maxDay / 4)
+    return [0, step, step * 2, step * 3, step * 4].filter(v => v <= maxDay * 1.1)
+  }, [maxDay])
+
   function exportCsv() {
     const header = ['Date', ...Object.keys(STAT_EVENT_LABELS), 'Total']
     const lines = visible.map(d => [
@@ -59,13 +67,17 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
     URL.revokeObjectURL(a.href)
   }
 
-  const chartHeight = 160
+  const chartHeight = 180
   const chartWidth = 640
+  const paddingTop = 20
+  const paddingBottom = 24
+  const paddingLeft = 36
+  const paddingRight = 8
+  const innerHeight = chartHeight - paddingTop - paddingBottom
+  const innerWidth = chartWidth - paddingLeft - paddingRight
 
-  const bars = visible.map((d, i) => {
-    const h = Math.max(2, Math.round((d.total / maxDay) * (chartHeight - 8)))
-    return { ...d, i, h }
-  })
+  // Date label interval: show every Nth label to avoid overlap
+  const labelInterval = visible.length <= 7 ? 1 : visible.length <= 14 ? 2 : visible.length <= 31 ? 5 : visible.length <= 90 ? 15 : 30
 
   return (
     <div className="space-y-6" id={`portal-overview-${businessId}`}>
@@ -115,7 +127,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
 
       {grandTotal === 0 && (
         <div className="bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-2xl p-5 shadow-card">
-          <p className="text-sm font-bold text-whatsapp-800">Get found — share your QR codes</p>
+          <p className="text-sm font-bold text-whatsapp-800">Get found: share your QR codes</p>
           <p className="text-xs text-text-secondary mt-1">
             Print these and place them on your counter, shelves and packaging. Customers scan to chat with you directly.
           </p>
@@ -123,14 +135,14 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
             <QrCard
               value={`https://wadirectory.co.zw/qr/${businessSlug}`}
               title="Customer chat QR"
-              subtitle="Scans open a chat with you — tracked as QR scans"
+              subtitle="Scans open a chat with you (tracked as QR scans)"
               size={130}
               downloadName={`${businessSlug}-customer-chat-qr.png`}
             />
             <QrCard
               value={`https://wadirectory.co.zw/portal`}
               title="Portal QR"
-              subtitle="Scans open your private portal — stats & settings"
+              subtitle="Scans open your private portal (stats & settings)"
               size={130}
               downloadName={`${businessSlug}-portal-qr.png`}
             />
@@ -155,31 +167,99 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
           </p>
         ) : (
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="w-full h-auto" role="img" aria-label="Daily activity chart">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <line key={i} x1="0" x2={chartWidth} y1={i * (chartHeight / 4)} y2={i * (chartHeight / 4)} stroke="currentColor" className="text-gray-100 dark:text-gray-800" strokeWidth="1" />
-            ))}
-            {bars.map(b => (
-              <g key={b.date}>
-                <rect
-                  x={(b.i * chartWidth) / bars.length + 2}
-                  y={chartHeight - b.h}
-                  width={Math.max(2, chartWidth / bars.length - 6)}
-                  height={b.h}
-                  rx="3"
-                  fill="#25d366"
-                  className="hover:opacity-80 transition-opacity"
-                >
-                  <title>{`${b.date}: ${b.total} events`}</title>
-                </rect>
-              </g>
-            ))}
+            {/* Y-axis grid lines and labels */}
+            {gridValues.map((val, i) => {
+              const y = paddingTop + innerHeight - (val / (gridValues[gridValues.length - 1] || 1)) * innerHeight
+              return (
+                <g key={i}>
+                  <line
+                    x1={paddingLeft}
+                    x2={chartWidth - paddingRight}
+                    y1={y}
+                    y2={y}
+                    stroke="currentColor"
+                    className="text-gray-100 dark:text-gray-800"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={paddingLeft - 6}
+                    y={y + 3}
+                    textAnchor="end"
+                    className="fill-current text-text-secondary"
+                    fontSize="9"
+                  >
+                    {val}
+                  </text>
+                </g>
+              )
+            })}
+
+            {/* Stacked bars */}
+            {visible.map((day, i) => {
+              const barWidth = Math.max(3, (innerWidth / visible.length) - 2)
+              const x = paddingLeft + (i * innerWidth) / visible.length + 1
+              let yOffset = 0
+
+              return (
+                <g key={day.date}>
+                  {EVENT_TYPES.map(type => {
+                    const val = day.values[type] || 0
+                    if (val === 0) return null
+                    const segHeight = (val / (gridValues[gridValues.length - 1] || 1)) * innerHeight
+                    const y = paddingTop + innerHeight - yOffset - segHeight
+                    yOffset += segHeight
+
+                    return (
+                      <rect
+                        key={type}
+                        x={x}
+                        y={y}
+                        width={barWidth}
+                        height={segHeight}
+                        fill={STAT_EVENT_COLORS[type] || '#999'}
+                        rx={i === 0 || EVENT_TYPES.indexOf(type) === 0 ? 2 : 0}
+                        className="hover:opacity-80 transition-opacity"
+                      >
+                        <title>{`${day.label}: ${val} ${getEventLabel(type)}`}</title>
+                      </rect>
+                    )
+                  })}
+                  {/* Total label on top of bar */}
+                  {day.total > 0 && (
+                    <text
+                      x={x + barWidth / 2}
+                      y={paddingTop + innerHeight - ((day.total / (gridValues[gridValues.length - 1] || 1)) * innerHeight) - 4}
+                      textAnchor="middle"
+                      className="fill-current text-text-secondary"
+                      fontSize="8"
+                      fontWeight="600"
+                    >
+                      {day.total}
+                    </text>
+                  )}
+                  {/* X-axis date label */}
+                  {i % labelInterval === 0 && (
+                    <text
+                      x={x + barWidth / 2}
+                      y={chartHeight - 4}
+                      textAnchor="middle"
+                      className="fill-current text-text-secondary"
+                      fontSize="8"
+                    >
+                      {day.label}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
           </svg>
         )}
+        {/* Legend */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3">
-          {Object.entries(totals).filter(([, v]) => v > 0).map(([type, count]) => (
+          {EVENT_TYPES.filter(type => (totals[type] || 0) > 0).map(type => (
             <span key={type} className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary">
               <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STAT_EVENT_COLORS[type] || '#999' }} />
-              {getEventLabel(type)}: <b className="text-text-primary">{count}</b>
+              {getEventLabel(type)}: <b className="text-text-primary">{totals[type]}</b>
             </span>
           ))}
           {Object.keys(totals).length === 0 && (

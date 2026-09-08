@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       sendWhatsAppMessage(
         '+' + digits,
         [
-          `🗑️ *LISTING REMOVED — ${b.name}*`,
+          `🗑️ *LISTING REMOVED: ${b.name}*`,
           '',
           'Your listing on WA Directory has been removed by our team.',
           '',

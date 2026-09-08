@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import Image from 'next/image'
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase-server'
@@ -7,6 +8,7 @@ import BusinessCard from '@/components/business-card'
 import SkeletonCard from '@/components/skeleton-card'
 import ImpressionPing from '@/components/impression-ping'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { CATEGORY_IMAGES } from '@/data/category-images'
 import { generateSEOBlurb } from '@/lib/gemini'
 import { getApprovedCategories, matchCategoryAgainst } from '@/lib/approved-data'
 import { orderSearchResults } from '@/lib/ranking'
@@ -91,6 +93,7 @@ async function CategoryResults({ category, location }: { category: string; locat
     .from('businesses')
     .select(BUSINESS_CARD_COLUMNS)
     .contains('category', [matchedCategory])
+    .eq('payment_status', 'active')
 
   const filtered = query.or(
     `city.ilike.%${location}%,location.ilike.%${location}%`
@@ -135,6 +138,18 @@ async function CategoryResults({ category, location }: { category: string; locat
       />
 
       <div className="mb-8">
+        {CATEGORY_IMAGES[matchedCategory] && (
+          <div className="relative w-full h-32 sm:h-48 rounded-2xl overflow-hidden mb-4">
+            <Image
+              src={CATEGORY_IMAGES[matchedCategory]}
+              alt=""
+              fill
+              sizes="(max-width: 640px) 100vw, 768px"
+              className="object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+          </div>
+        )}
         <h1 className="text-2xl sm:text-3xl font-bold text-text-primary mb-3">
           Best {matchedCategory} in {location}
         </h1>

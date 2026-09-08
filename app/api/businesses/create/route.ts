@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories as staticCategories } from '@/data/categories'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+import { generateBusinessId } from '@/lib/business-id'
+import { normalizeUsername, suggestUsername } from '@/lib/username'
 
 // Yellow Pages (special public-service) categories get a priority admin alert
 // so councils/police/fire listings are verified fast.
@@ -27,6 +29,7 @@ export async function POST(request: Request) {
       countryCode,
       phone,
       whatsapp_username,
+      username: requestedUsername,
       description,
       bio,
       categories,
@@ -113,9 +116,40 @@ export async function POST(request: Request) {
     // Only ever generated here — a client-supplied edit_token is ignored.
     const editToken = crypto.randomUUID()
 
+    // Generate unique business ID (WA-XXXXXX) with collision retry
+    let businessId = generateBusinessId()
+    for (let i = 0; i < 5; i++) {
+      const { data: existing } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('business_id', businessId)
+        .maybeSingle()
+      if (!existing) break
+      businessId = generateBusinessId()
+    }
+
+    // Normalize username or generate from business name
+    let normalizedUsername = requestedUsername
+      ? normalizeUsername(requestedUsername)
+      : suggestUsername(name.trim())
+    // Ensure username uniqueness
+    for (let i = 0; i < 10; i++) {
+      const { data: existing } = await supabase
+        .from('businesses')
+        .select('id')
+        .eq('username', normalizedUsername)
+        .maybeSingle()
+      if (!existing) break
+      normalizedUsername = normalizedUsername.replace(/_\d+$/, '') + '_' + (i + 2)
+    }
+
     // Slug collisions are rare (random suffix), but retry a few times regardless.
     let inserted: { id: string; slug: string | null } | null = null
     let lastError: string | null = null
+
+    // Check if this is a Yellow Pages (free) listing
+    const isYellowPages = cleanCategories.some(c => SPECIAL_CATEGORIES.has(c))
+
     for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
       const slug = generateSlug(name)
       const { data, error } = await supabase
@@ -123,6 +157,8 @@ export async function POST(request: Request) {
         .insert({
           name: name.trim(),
           slug,
+          business_id: businessId,
+          username: normalizedUsername,
           whatsapp_username: typeof whatsapp_username === 'string' ? whatsapp_username.trim() : '',
           bio: (typeof bio === 'string' && bio.trim()) ||
             `Professional ${typeof description === 'string' ? description.trim() : ''} services.`.replace('Professional  ', 'Professional '),
@@ -149,6 +185,7 @@ export async function POST(request: Request) {
           verified: false,
           rating: 0,
           review_count: 0,
+          payment_status: isYellowPages ? 'active' : 'pending',
         })
         .select('id, slug')
         .single()
@@ -162,14 +199,13 @@ export async function POST(request: Request) {
 
     // Yellow Pages submission: priority WhatsApp to the admin (authoritative —
     // sent server-side so it fires even if the client never does).
-    const isYellowPages = cleanCategories.some(c => SPECIAL_CATEGORIES.has(c))
     if (isYellowPages && process.env.ADMIN_WHATSAPP) {
       const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
       const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [
-          '🚨 *YELLOW PAGES SUBMISSION — VERIFY FAST*',
+          '🚨 *YELLOW PAGES SUBMISSION: VERIFY FAST*',
           '',
           'A public-service listing was just submitted and needs priority verification.',
           '',
@@ -194,29 +230,51 @@ export async function POST(request: Request) {
     {
       const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
       const editLink = `${siteUrl}/edit?token=${editToken}`
-      const statusText = isYellowPages
-        ? 'received — public-service listings get priority review'
-        : 'received — an admin will review it shortly'
+      const payLink = `${siteUrl}/pay`
       const { sendWhatsAppMessage, sendWhatsAppTemplate } = await import('@/lib/whatsapp')
-      const tpl = process.env.WHATSAPP_TEMPLATE_SUBMITTED
-      if (tpl) {
-        sendWhatsAppTemplate(fullPhone, tpl, [name.trim(), statusText, editLink]).catch(() => {})
+
+      if (isYellowPages) {
+        // Yellow Pages: free, priority review
+        const statusText = 'received: public-service listings get priority review'
+        const tpl = process.env.WHATSAPP_TEMPLATE_SUBMITTED
+        if (tpl) {
+          sendWhatsAppTemplate(fullPhone, tpl, [name.trim(), statusText, editLink]).catch(() => {})
+        } else {
+          sendWhatsAppMessage(
+            fullPhone,
+            [
+              `✅ *LISTING RECEIVED: ${name.trim()}*`,
+              '',
+              `Your listing on WA Directory is ${statusText}.`,
+              '',
+              'Verification status: ⏳ Pending review',
+              'Public-service listings are prioritized by our team.',
+              '',
+              'Edit your listing anytime with your private link:',
+              editLink,
+              '',
+              'Keep this link safe: anyone with it can edit your listing.',
+            ].join('\n')
+          ).catch(() => {})
+        }
       } else {
+        // Paid listing: needs payment to go live
         sendWhatsAppMessage(
           fullPhone,
           [
-            `✅ *LISTING RECEIVED — ${name.trim()}*`,
+            `✅ *LISTING CREATED: ${name.trim()}*`,
             '',
-            `Your listing on WA Directory is ${statusText}.`,
+            `Business ID: ${businessId}`,
+            `Username: @${normalizedUsername}`,
             '',
-            'Verification status: ⏳ Pending review',
-            isYellowPages ? 'Public-service listings are prioritized by our team.' : '',
+            `Pay USD 1 via EcoCash to go live.`,
+            `Anyone can pay for you at: ${payLink}`,
+            '',
+            'Your listing will appear once admin confirms the payment.',
             '',
             'Edit your listing anytime with your private link:',
             editLink,
-            '',
-            'Keep this link safe — anyone with it can edit your listing.',
-          ].filter(Boolean).join('\n')
+          ].join('\n')
         ).catch(() => {})
       }
     }
@@ -225,6 +283,9 @@ export async function POST(request: Request) {
       id: inserted.id,
       slug: inserted.slug,
       edit_token: editToken,
+      business_id: businessId,
+      username: normalizedUsername,
+      payment_status: isYellowPages ? 'active' : 'pending',
     })
   } catch {
     return NextResponse.json({ error: 'Invalid request. Please check your details and try again.' }, { status: 400 })

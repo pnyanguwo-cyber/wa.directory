@@ -48,24 +48,28 @@ export default async function HomePage() {
       .from('businesses')
       .select(BUSINESS_CARD_COLUMNS)
       .eq('verified', true)
+      .eq('payment_status', 'active')
       .order('created_at', { ascending: false })
       .limit(12),
     supabase
       .from('businesses')
       .select(BUSINESS_CARD_COLUMNS)
       .eq('verified', true)
+      .eq('payment_status', 'active')
       .eq('featured_eligible', true)
       .order('rating', { ascending: false })
       .limit(ALL_BUSINESSES_INITIAL + 3),
     supabase
       .from('businesses')
       .select('id', { count: 'exact', head: true })
-      .eq('verified', true),
+      .eq('verified', true)
+      .eq('payment_status', 'active'),
     // Yellow Pages: verified emergency / public-service listings for the hotline strip
     supabase
       .from('businesses')
       .select(BUSINESS_CARD_COLUMNS)
       .eq('verified', true)
+      .eq('payment_status', 'active')
       .overlaps('category', ['Emergency Services', 'Government Services'])
       .order('rating', { ascending: false })
       .limit(10),
@@ -249,7 +253,7 @@ export default async function HomePage() {
               </p>
             </div>
             <Link
-              href="/search"
+              href="/categories"
               className="text-xs sm:text-sm font-bold text-whatsapp-700 dark:text-whatsapp-400 hover:text-whatsapp-800 flex items-center gap-1 shrink-0 group"
             >
               <span>View All Categories</span>

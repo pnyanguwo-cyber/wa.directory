@@ -149,7 +149,7 @@ export default async function PortalImprovePage() {
           </div>
           <p className="text-xs text-text-secondary mt-3">
             You are <b className="text-text-primary">#{comparison.rank} of {comparison.count}</b> in profile views in this category.
-            {comparison.mine < comparison.median ? ' Share your QR code and profile link to catch up.' : ' Great work — you are above the category median.'}
+            {comparison.mine < comparison.median ? ' Share your QR code and profile link to catch up.' : ' Great work: you are above the category median.'}
           </p>
         </div>
       )}

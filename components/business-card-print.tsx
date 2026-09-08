@@ -672,7 +672,7 @@ function FrontLandscapeSvg({
         <line x1="0" y1="0" x2={CARD_W} y2="0" stroke={theme.footerBorder} strokeWidth="1" />
 
         <text x="45" y="38" fill={theme.mutedText} fontSize="13" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.8">
-          WA DIRECTORY — ZIMBABWE'S PREMIER VERIFIED BUSINESS PLATFORM
+          WA DIRECTORY: ZIMBABWE'S PREMIER VERIFIED BUSINESS PLATFORM
         </text>
 
         <text x={CARD_W - 45} y="38" textAnchor="end" fill={theme.accentColor} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
@@ -1483,7 +1483,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       ctx.fillStyle = '#FFFFFF'
       ctx.font = `bold ${30 * scale}px system-ui, -apple-system, sans-serif`
       ctx.textAlign = 'center'
-      ctx.fillText(`${business.name.toUpperCase()} — OFFICIAL BUSINESS CARD`, totalW / 2, 52 * scale)
+      ctx.fillText(`${business.name.toUpperCase()}: OFFICIAL BUSINESS CARD`, totalW / 2, 52 * scale)
 
       ctx.fillStyle = '#25D366'
       ctx.font = `600 ${16 * scale}px system-ui, -apple-system, sans-serif`
@@ -1660,7 +1660,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       </head>
       <body>
         <div class="header">
-          <h1 class="title">${business.name} — Official Business Cards</h1>
+          <h1 class="title">${business.name}: Official Business Cards</h1>
           <p class="subtitle">Standard ${orientation === 'landscape' ? '3.5" × 2.0"' : '2.0" × 3.5"'} Print Template • WA Directory Zimbabwe (wadirectory.co.zw)</p>
         </div>
 
@@ -1861,7 +1861,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-                Front Side — Executive Brand
+                Front Side: Executive Brand
               </span>
               <button onClick={() => downloadSidePng('front')} className="text-xs text-whatsapp-600 font-semibold hover:underline">
                 Download Front (HD)
@@ -1898,7 +1898,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
           <div className="space-y-2">
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-bold text-text-secondary uppercase tracking-wider">
-                Back Side — WhatsApp QR Scan
+                Back Side: WhatsApp QR Scan
               </span>
               <button onClick={() => downloadSidePng('back')} className="text-xs text-whatsapp-600 font-semibold hover:underline">
                 Download Back (HD)

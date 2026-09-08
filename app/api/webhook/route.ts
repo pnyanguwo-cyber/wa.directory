@@ -406,7 +406,7 @@ async function publishBusiness(from: string, session: ChatSession) {
       `🔐 Create your portal account (stats, conversations, ranking):`,
       `${SITE_URL}/account-setup?token=${token}`,
       '',
-      `📱 Your QR codes (chat + portal) — print them for customers:`,
+      `📱 Your QR codes (chat + portal): print them for customers:`,
       `${SITE_URL}/my-qr/${slug}`,
       '',
       'Reply *help* anytime.',

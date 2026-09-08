@@ -155,7 +155,10 @@ export default function AdminListings() {
         b.name.toLowerCase().includes(q) ||
         b.category?.some(c => c.toLowerCase().includes(q)) ||
         (b.city || '').toLowerCase().includes(q) ||
-        (b.location || '').toLowerCase().includes(q)
+        (b.location || '').toLowerCase().includes(q) ||
+        (b as { business_id?: string }).business_id?.toLowerCase().includes(q) ||
+        (b as { username?: string }).username?.toLowerCase().includes(q) ||
+        (b.phone || '').includes(q)
       )
     }
     list = [...list].sort((a, b) => {
@@ -722,6 +725,21 @@ export default function AdminListings() {
                       <span>{b.category?.slice(0, 2).join(', ')}</span>
                       <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
                       <span>{b.city || b.location}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-text-secondary mt-0.5">
+                      {(b as { business_id?: string }).business_id && (
+                        <span className="font-mono">{(b as { business_id: string }).business_id}</span>
+                      )}
+                      {(b as { username?: string }).username && (
+                        <span>@{(b as { username: string }).username}</span>
+                      )}
+                      {(b as { payment_status?: string }).payment_status && (b as { payment_status: string }).payment_status !== 'active' && (
+                        <span className={`px-1.5 py-0.5 rounded-full font-bold ${
+                          (b as { payment_status: string }).payment_status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {(b as { payment_status: string }).payment_status}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

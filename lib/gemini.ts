@@ -18,7 +18,7 @@ export async function generateSEOBlurb(category: string, location: string): Prom
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: `Write a 200-word SEO paragraph about the best ${category} businesses in ${location}, Zimbabwe. Structure it as a helpful guide for customers looking for ${category.toLowerCase()} services on WhatsApp. Include: benefits of using local providers, what to look for in a quality service, and how WA Directory helps customers connect with verified businesses. Write naturally, no fluff, no title. Just the paragraph.`,
+            text: `Write a 200-word SEO paragraph about the best ${category} businesses in ${location}, Zimbabwe. Structure it as a helpful guide for customers looking for ${category.toLowerCase()} services on WhatsApp. Include: benefits of using local providers, what to look for in a quality service, and how WA Directory helps customers connect with verified businesses. Write naturally, no fluff, no title. Just the paragraph. Do not use em-dashes (—), use commas or colons instead.`,
           }],
         }],
       }),

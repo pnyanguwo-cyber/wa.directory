@@ -1,11 +1,14 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Business } from '@/types'
 import LogoImage from '@/components/logo-image'
 import CategoryDoodle from '@/components/category-doodle'
 import TrackLink from '@/components/track-link'
 import { isYellowPages } from '@/lib/category-style'
+import { getCategoryImage } from '@/data/category-images'
+import { cleanBio } from '@/lib/utils'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
@@ -63,10 +66,24 @@ export default function BusinessCard({ business }: { business: Business }) {
   const phoneDigits = (business.phone || '').replace(/[^0-9]/g, '')
   const yellow = isYellowPages(business.category)
 
+  const coverImage = getCategoryImage(business.category)
+
   return (
     <div className={`neo-card p-2 sm:p-5 flex flex-col justify-between h-full group hover:-translate-y-1 transition-all duration-300 relative block cursor-pointer ${yellow ? 'yellow-pages-card' : ''}`}>
       <Link href={profilePath} className="relative block" aria-label={`View profile of ${business.name}`}>
         <div className="relative">
+          {coverImage && (
+            <div className="relative w-full h-20 sm:h-28 rounded-xl overflow-hidden mb-3 -mt-1 -mx-1">
+              <Image
+                src={coverImage}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 100vw, 33vw"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+            </div>
+          )}
           <CategoryDoodle
             categories={business.category}
             className={`absolute -bottom-3 -right-2 w-20 h-20 sm:w-28 sm:h-28 ${
@@ -130,7 +147,7 @@ export default function BusinessCard({ business }: { business: Business }) {
           </div>
 
           {business.bio && (
-            <p className="text-text-secondary dark:text-gray-400 text-xs sm:text-base mt-1.5 mb-1 sm:mt-2.5 sm:mb-2 line-clamp-1 sm:line-clamp-2 leading-relaxed">{business.bio}</p>
+            <p className="text-text-secondary dark:text-gray-400 text-xs sm:text-base mt-1.5 mb-1 sm:mt-2.5 sm:mb-2 line-clamp-1 sm:line-clamp-2 leading-relaxed">{cleanBio(business.bio)}</p>
           )}              {business.category && business.category.length > 0 && (
                 <div className="flex flex-wrap gap-1 sm:gap-1.5 my-1 sm:my-3">
                   {business.category.slice(0, 3).map((cat, i) => (

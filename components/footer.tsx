@@ -50,7 +50,7 @@ export default function Footer() {
               </li>
               <li>
                 <Link href="/yellow-pages" className="text-amber-700 dark:text-amber-400 hover:underline font-semibold">
-                  ★ Yellow Pages — Emergency &amp; Government
+                  ★ Yellow Pages: Emergency &amp; Government
                 </Link>
               </li>
               <li>

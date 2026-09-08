@@ -12,9 +12,10 @@ import AdminStats from '@/components/admin/admin-stats'
 import AdminRankings from '@/components/admin/admin-rankings'
 import AdminSubscriptions from '@/components/admin/admin-subscriptions'
 import AdminAccounts from '@/components/admin/admin-accounts'
+import AdminNameContests from '@/components/admin/admin-name-contests'
 import Splash from '@/components/splash'
 
-type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'banners' | 'chat' | 'stats' | 'rankings' | 'subscriptions' | 'accounts'
+type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'banners' | 'chat' | 'stats' | 'rankings' | 'subscriptions' | 'accounts' | 'contests'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'stats', label: 'Statistics', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z' },
@@ -27,6 +28,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'requests', label: 'Requests', icon: 'M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75' },
   { id: 'banners', label: 'Banners', icon: 'M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z' },
   { id: 'chat', label: 'Chat Sessions', icon: 'M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z' },
+  { id: 'contests', label: 'Name Contests', icon: 'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z' },
 ]
 
 export default function AdminPage() {
@@ -97,6 +99,7 @@ export default function AdminPage() {
         {tab === 'requests' && <AdminRequests />}
         {tab === 'banners' && <AdminBanners />}
         {tab === 'chat' && <AdminChatSessions />}
+        {tab === 'contests' && <AdminNameContests />}
       </div>
     </div>
   )

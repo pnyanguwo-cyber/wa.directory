@@ -6,6 +6,7 @@ import type { Business } from '@/types'
 import CategoryDoodle from '@/components/category-doodle'
 import TrackLink from '@/components/track-link'
 import { isYellowPages } from '@/lib/category-style'
+import { cleanBio } from '@/lib/utils'
 
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
@@ -26,7 +27,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
             </h2>
           </div>
           <p className="text-text-secondary text-xs sm:text-sm mt-1">
-            Verified public-service providers — tap to chat instantly on WhatsApp.{' '}
+            Verified public-service providers: tap to chat instantly on WhatsApp.{' '}
             <Link href="/yellow-pages" className="text-amber-700 dark:text-amber-400 font-semibold hover:underline whitespace-nowrap">
               View all →
             </Link>
@@ -69,7 +70,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
               </div>
 
               {b.bio && (
-                <p className="text-[11px] text-text-secondary mt-2 line-clamp-2 leading-relaxed">{b.bio}</p>
+                <p className="text-[11px] text-text-secondary mt-2 line-clamp-2 leading-relaxed">{cleanBio(b.bio)}</p>
               )}
 
               <div className="flex flex-wrap gap-1 my-2">
@@ -123,7 +124,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
       </div>
 
       <p className="text-[10px] text-text-secondary/80 mt-2">
-        In a life-threatening emergency, always call your national emergency number first — these are verified directory listings, not official hotlines.
+        In a life-threatening emergency, always call your national emergency number first. These are verified directory listings, not official hotlines.
       </p>
     </section>
   )

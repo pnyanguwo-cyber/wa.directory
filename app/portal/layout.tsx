@@ -24,19 +24,11 @@ export default async function PortalLayout({ children }: { children: React.React
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 font-medium text-text-secondary">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Free plan — 7 days of history, 3 tips
+                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Free plan: 7 days of history, 3 tips
                 </span>
               )}
             </p>
           </div>
-          <form action="/api/account/logout" method="POST" className="shrink-0">
-            <button type="submit" className="btn-secondary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5">
-              <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
-              </svg>
-              <span>Logout</span>
-            </button>
-          </form>
         </div>
 
         <PortalTabs />
@@ -50,7 +42,7 @@ export default async function PortalLayout({ children }: { children: React.React
               Your listing is pending approval
             </p>
             <p className="text-xs text-amber-800 dark:text-amber-300/90 leading-relaxed">
-              Customers can't find you yet. An admin will review your listing shortly — you'll be notified here once you're live.
+              Customers can't find you yet. An admin will review your listing shortly: you'll be notified here once you're live.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               <Link

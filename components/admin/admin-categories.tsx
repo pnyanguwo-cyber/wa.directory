@@ -171,7 +171,7 @@ export default function AdminCategories() {
                   className="w-4 h-4 accent-amber-500"
                 />
                 <span className="text-sm font-medium text-text-primary">★ Yellow Pages</span>
-                <span className="text-[11px] text-text-secondary">Special public-service listing (police, fire, government…) — renders with the yellow card treatment</span>
+                <span className="text-[11px] text-text-secondary">Special public-service listing (police, fire, government…): renders with the yellow card treatment</span>
               </label>
               <div className="flex gap-2.5 justify-end pt-2">
                 <button type="button" onClick={() => setEditing(null)} className="btn-secondary h-10 px-4 text-xs font-semibold">Cancel</button>

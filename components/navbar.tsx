@@ -141,17 +141,19 @@ export default function Navbar() {
             <div className="h-10 w-10 sm:w-24 bg-gray-200/60 rounded-xl animate-pulse" />
           ) : loggedIn ? (
             <>
-              <Link
-                href="/portal"
-                title="My Portal"
-                className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
-              >
-                <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625z" />
-                </svg>
-                <span className="hidden sm:inline">My Portal</span>
-                <span className="inline sm:hidden">Portal</span>
-              </Link>
+              {!pathname.startsWith('/portal') && (
+                <Link
+                  href="/portal"
+                  title="My Portal"
+                  className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625z" />
+                  </svg>
+                  <span className="hidden sm:inline">My Portal</span>
+                  <span className="inline sm:hidden">Portal</span>
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={logout}

@@ -84,7 +84,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
           businessSlug={key}
           location={locationText}
           verified={business.verified}
-          title={`${business.name} — Customer Chat`}
+          title={`${business.name}: Customer Chat`}
           subtitle="Point your phone camera to chat on WhatsApp"
           interactive={true}
           fullPage={true}

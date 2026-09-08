@@ -266,7 +266,7 @@ export default function EditBusinessForm({
             className="input-field"
           />
           <p className="text-[11px] text-text-secondary mt-1">
-            077…, 26377… or full international — the country code is added automatically if you forget it.
+            077…, 26377… or full international (the country code is added automatically if you forget it).
           </p>
           <div className="flex flex-wrap gap-2 mt-2">
             <button
@@ -294,7 +294,7 @@ export default function EditBusinessForm({
           </div>
           {phoneType === 'voice' && (
             <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
-              Saved exactly as entered (e.g. 024 2123456 or 999) — customers see a Call button instead of WhatsApp.
+              Saved exactly as entered (e.g. 024 2123456 or 999): customers see a Call button instead of WhatsApp.
             </p>
           )}
         </div>
@@ -384,7 +384,7 @@ export default function EditBusinessForm({
             options={cityOptions}
             value={form.city}
             onChange={v => setForm(f => ({ ...f, city: v }))}
-            placeholder={form.isRemote && !form.isPhysical ? 'Optional — remote covers whole country' : 'Select city'}
+            placeholder={form.isRemote && !form.isPhysical ? 'Optional (remote covers whole country)' : 'Select city'}
             label="Town/city your business is based in"
           />
           {form.city ? (
@@ -415,7 +415,7 @@ export default function EditBusinessForm({
           <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country online</p>
         )}
         {form.isRemote && form.isPhysical && form.city && (
-          <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city} — serves the whole country</p>
+          <p className="text-xs text-whatsapp-600 -mt-2">Based in {form.city}: serves the whole country</p>
         )}
 
         <div>

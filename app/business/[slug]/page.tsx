@@ -1,6 +1,7 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
 import Link from 'next/link'
+import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
@@ -16,6 +17,8 @@ import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 import { isYellowPages } from '@/lib/category-style'
+import { getCategoryImage } from '@/data/category-images'
+import { cleanBio } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
 
 import ReviewSection from '@/components/review-section'
@@ -238,11 +241,22 @@ async function BusinessContent({ slug }: { slug: string }) {
           </div>
 
           <div className="card overflow-hidden">
-            <div className={`h-20 sm:h-40 bg-gradient-to-r relative overflow-hidden ${
-              yellow
-                ? 'from-amber-100 via-amber-200 to-yellow-200 dark:from-amber-950/60 dark:via-amber-900/50 dark:to-yellow-950/50'
-                : 'from-whatsapp-100 to-whatsapp-200'
-            }`}>
+            <div className="h-20 sm:h-40 relative overflow-hidden">
+              {getCategoryImage(business.category) ? (
+                <Image
+                  src={getCategoryImage(business.category)!}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 100vw, 768px"
+                  className="object-cover"
+                />
+              ) : (
+                <div className={`w-full h-full bg-gradient-to-r ${
+                  yellow
+                    ? 'from-amber-100 via-amber-200 to-yellow-200 dark:from-amber-950/60 dark:via-amber-900/50 dark:to-yellow-950/50'
+                    : 'from-whatsapp-100 to-whatsapp-200'
+                }`} />
+              )}
               <CategoryDoodle
                 categories={business.category}
                 strokeWidth={0.9}
@@ -273,6 +287,17 @@ async function BusinessContent({ slug }: { slug: string }) {
                   </span>
                 )}
               </div>
+              {(business as { username?: string }).username && (
+                <p className="text-xs sm:text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-1">
+                  @{(business as { username: string }).username}
+                  <span className="text-text-secondary text-[10px] font-normal">WA Directory handle</span>
+                </p>
+              )}
+              {(business as { business_id?: string }).business_id && (
+                <p className="text-[10px] sm:text-xs text-text-secondary font-mono mb-1.5">
+                  Business ID: {(business as { business_id: string }).business_id}
+                </p>
+              )}
               {business.whatsapp_username && (
                 <p className="text-xs sm:text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-1.5 sm:mb-2">
                   @{business.whatsapp_username}
@@ -370,7 +395,7 @@ async function BusinessContent({ slug }: { slug: string }) {
               {business.bio && (
                 <div className="mb-3 sm:mb-6">
                   <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-1.5 sm:mb-2">About</h2>
-                  <p className="text-text-secondary leading-relaxed text-xs sm:text-sm">{business.bio}</p>
+                  <p className="text-text-secondary leading-relaxed text-xs sm:text-sm">{cleanBio(business.bio)}</p>
                 </div>
               )}
 

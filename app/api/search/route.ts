@@ -25,6 +25,7 @@ export async function GET(request: Request) {
     .from('businesses')
     .select('name')
     .or(conditions.join(','))
+    .eq('payment_status', 'active')
     .limit(5)
 
   return NextResponse.json({

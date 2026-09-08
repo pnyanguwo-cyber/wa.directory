@@ -147,7 +147,7 @@ export default function AdminAccounts() {
       { account_ids: ids, delete_listings: mode === 'listings' },
       mode === 'listings'
         ? `Deleted ${ids.length} account${ids.length === 1 ? '' : 's'} and their business listings.`
-        : `Removed ${ids.length} portal login${ids.length === 1 ? '' : 's'} — public listings untouched.`
+        : `Removed ${ids.length} portal login${ids.length === 1 ? '' : 's'}: public listings untouched.`
     )
     setBulkDeleting(false)
     if (okResult) setConfirmMode(null)

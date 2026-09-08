@@ -24,7 +24,7 @@ export async function POST(request: Request) {
           {
             parts: [
               {
-                text: `Write a 1-2 sentence professional bio for a business that does: ${description}. Be concise, direct, no fluff. Just the bio, no introduction.`,
+                text: `Write a 1-2 sentence professional bio for a business that does: ${description}. Be concise, direct, no fluff. Just the bio, no introduction. Do not use em-dashes (—), use commas or colons instead.`,
               },
             ],
           },

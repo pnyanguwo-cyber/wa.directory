@@ -32,4 +32,8 @@ export interface Business {
   featured_eligible?: boolean
   created_at: string
   edit_token?: string
+  business_id?: string
+  username?: string
+  payment_status?: 'unpaid' | 'pending' | 'active' | 'expired'
+  listing_activated_at?: string
 }

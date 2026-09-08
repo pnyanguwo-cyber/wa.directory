@@ -234,7 +234,7 @@ export async function PATCH(request: Request) {
           let message = [
             'ℹ️ *Your bid was not approved*',
             '',
-            `Bid: ${bid.category}${bid.city ? ` in ${bid.city}` : ''} — position #${bid.position}`,
+            `Bid: ${bid.category}${bid.city ? ` in ${bid.city}` : ''}, position #${bid.position}`,
             feedback ? `Reason: ${feedback}` : 'Reason: not specified',
           ].join('\n')
 
