@@ -173,6 +173,57 @@
     background-color: rgba(113, 89, 8, 0.3);
     color: #fde047;
   }
+
+  /* Pay flow (/pay steps 2-5): livelier buttons — gradient fill, inner
+     highlight and a raised glow, since the generic buttons read flat here. */
+  .pay-flow .btn-primary {
+    background-image: linear-gradient(to bottom, #2ee06f 0%, #1db95e 100%);
+  }
+  .pay-flow .btn-primary:not(:disabled) {
+    box-shadow:
+      0 10px 24px -6px rgba(37, 211, 102, 0.55),
+      0 2px 6px -1px rgba(11, 20, 26, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+  .pay-flow .btn-primary:not(:disabled):hover {
+    background-image: linear-gradient(to bottom, #25d366 0%, #149e58 100%);
+    box-shadow:
+      0 14px 30px -6px rgba(37, 211, 102, 0.6),
+      0 3px 8px -1px rgba(11, 20, 26, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+  }
+  .pay-flow .btn-primary:disabled {
+    background-image: none;
+  }
+
+  .pay-flow .btn-secondary {
+    background-image: linear-gradient(to bottom, rgb(255 255 255), rgb(240 242 245));
+    box-shadow:
+      0 3px 10px -2px rgba(11, 20, 26, 0.10),
+      0 1px 3px rgba(11, 20, 26, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+  .pay-flow .btn-secondary:not(:disabled):hover {
+    border-color: rgba(18, 140, 126, 0.35);
+    box-shadow:
+      0 6px 16px -3px rgba(11, 20, 26, 0.14),
+      0 2px 5px rgba(11, 20, 26, 0.08),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-1px);
+  }
+  .dark .pay-flow .btn-secondary {
+    background-image: linear-gradient(to bottom, rgb(32 44 51), rgb(24 36 43));
+    box-shadow:
+      0 3px 10px -2px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+  .dark .pay-flow .btn-secondary:not(:disabled):hover {
+    border-color: rgba(37, 211, 102, 0.4);
+    box-shadow:
+      0 6px 16px -3px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
 }
 
 @layer utilities {
