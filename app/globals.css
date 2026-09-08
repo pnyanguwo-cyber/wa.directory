@@ -84,6 +84,17 @@
     border-color: rgb(var(--border-color));
   }
 
+  .btn-loading {
+    @apply pointer-events-none relative overflow-hidden;
+    opacity: 0.7;
+  }
+  .btn-loading::after {
+    content: '';
+    @apply absolute inset-0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    animation: btn-shimmer 1.5s infinite;
+  }
+
   .card {
     @apply backdrop-blur-md rounded-2xl shadow-card transition-all duration-200;
     background-color: rgba(var(--bg-card), 0.9);
@@ -310,6 +321,11 @@
     transform: scale(2.4);
     opacity: 0;
   }
+}
+
+@keyframes btn-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @keyframes marquee {

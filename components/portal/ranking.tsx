@@ -411,7 +411,12 @@ export default function PortalRanking({
                 />
               </div>
               <button type="submit" disabled={busy} className="btn-primary w-full py-3 text-sm font-semibold">
-                {busy ? 'Submitting...' : `Submit bid for position #${selectedPos}`}
+                {busy ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Submitting...
+                  </span>
+                ) : `Submit bid for position #${selectedPos}`}
               </button>
             </>
           )}

@@ -526,7 +526,12 @@ export default function PayPage() {
                   disabled={loading || !payerPhone.trim() || payerPhone.replace(/\D/g, '').length < 9}
                   className="btn-primary flex-1"
                 >
-                  {loading ? 'Submitting...' : 'Submit Payment Request'}
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Submitting...
+                    </span>
+                  ) : 'Submit Payment Request'}
                 </button>
               </div>
             </div>
