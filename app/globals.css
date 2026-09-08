@@ -270,6 +270,35 @@
   }
 }
 
+/* Emergency strip auto-scroll for mobile: pans cards left, pauses on hover/touch */
+@keyframes emergency-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 639px) {
+  .emergency-scroll-container {
+    animation: emergency-scroll 20s linear infinite;
+    width: max-content;
+  }
+  .emergency-scroll-container:hover {
+    animation-play-state: paused;
+  }
+}
+
+/* Hide scrollbar on category chips mobile scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 @keyframes bounce-slow {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }

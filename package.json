@@ -11,6 +11,7 @@
     "backfill-usernames": "node scripts/backfill-usernames.mjs"
   },
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "@supabase/supabase-js": "^2.45.0",
     "@vercel/og": "^0.11.1",
     "bcryptjs": "^3.0.3",

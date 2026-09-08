@@ -113,7 +113,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
             aria-autocomplete="list"
             aria-controls="search-suggestions"
             aria-expanded={showDropdown}
-            className={`w-full pl-11 sm:pl-13 ${large ? 'pr-24 sm:pr-32 h-14 sm:h-16 text-base sm:text-lg' : 'pr-20 h-12 text-sm sm:text-base'} rounded-2xl border border-gray-200/90 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 text-text-primary dark:text-gray-100 placeholder:text-text-secondary/70 dark:placeholder:text-gray-400 backdrop-blur-md focus:border-whatsapp-500 dark:focus:border-whatsapp-400 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_24px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(0,0,0,0.02)]`}
+            className={`w-full pl-11 sm:pl-[52px] ${large ? 'pr-24 sm:pr-32 h-14 sm:h-16 text-base sm:text-lg' : 'pr-20 h-12 text-sm sm:text-base'} rounded-2xl border border-gray-200/90 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 text-text-primary dark:text-gray-100 placeholder:text-text-secondary/70 dark:placeholder:text-gray-400 backdrop-blur-md focus:border-whatsapp-500 dark:focus:border-whatsapp-400 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_24px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(0,0,0,0.02)]`}
           />
 
           {/* Action / Clear / Spinner inside search bar */}

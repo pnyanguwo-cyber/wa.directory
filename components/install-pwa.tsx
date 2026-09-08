@@ -55,28 +55,22 @@ export default function InstallPWA() {
       {deferred ? (
         <button
           onClick={install}
-          className="flex items-center gap-2 bg-text-primary text-white rounded-2xl pl-2 pr-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.25)] hover:bg-black/80 transition-all active:scale-95"
+          className="flex items-center gap-1.5 bg-black/50 dark:bg-white/15 backdrop-blur-md text-white rounded-full pl-2.5 pr-3.5 py-1.5 shadow-lg hover:bg-black/60 dark:hover:bg-white/20 transition-all active:scale-95"
         >
-          <svg className="w-8 h-8 rounded-xl bg-white/15 p-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v10.5m0 0-3.75-3.75M12 13.5l3.75-3.75M4.5 16.5v1.5A2.25 2.25 0 0 0 6.75 20.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-1.5" />
           </svg>
-          <span className="text-xs font-semibold text-left leading-tight">
-            Install App
-            <span className="block font-normal text-white/70">Add WA Directory to your screen</span>
-          </span>
+          <span className="text-[11px] font-semibold whitespace-nowrap">Install to home</span>
         </button>
       ) : (
         <button
           onClick={() => setShowIOS(false)}
-          className="flex items-center gap-2 bg-text-primary text-white rounded-2xl pl-2 pr-4 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.25)] active:scale-95 transition-all"
+          className="flex items-center gap-1.5 bg-black/50 dark:bg-white/15 backdrop-blur-md text-white rounded-full pl-2.5 pr-3.5 py-1.5 shadow-lg active:scale-95 transition-all"
         >
-          <svg className="w-8 h-8 rounded-xl bg-white/15 p-1.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v10.5m0 0-3.75-3.75M12 13.5l3.75-3.75M4.5 16.5v1.5A2.25 2.25 0 0 0 6.75 20.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-1.5" />
           </svg>
-          <span className="text-xs font-semibold text-left leading-tight">
-            Install App
-            <span className="block font-normal text-white/70">Tap Share → Add to Home Screen</span>
-          </span>
+          <span className="text-[11px] font-semibold whitespace-nowrap">Install to home</span>
         </button>
       )}
     </div>

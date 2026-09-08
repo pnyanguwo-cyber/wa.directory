@@ -85,7 +85,7 @@ export default async function HomePage() {
         {/* Left Flank Image: wad1 fading seamlessly into white/background towards the middle */}
         <div
           aria-hidden="true"
-          className="absolute left-0 top-0 bottom-0 w-[20%] sm:w-[35%] md:w-[40%] lg:w-[45%] max-w-[520px] h-full pointer-events-none select-none z-0 overflow-hidden"
+          className="absolute left-0 top-0 bottom-0 hidden sm:block w-[35%] md:w-[40%] lg:w-[45%] max-w-[520px] h-full pointer-events-none select-none z-0 overflow-hidden"
           style={{
             maskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
             WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
@@ -95,7 +95,7 @@ export default async function HomePage() {
             src="/wad1.webp"
             alt=""
             fill
-            sizes="(max-width: 640px) 20vw, 45vw"
+            sizes="(max-width: 640px) 0vw, 45vw"
             className="object-cover object-left"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-white/60 dark:to-gray-900/80" />
@@ -105,7 +105,7 @@ export default async function HomePage() {
         {/* Right Flank Image: wad2 fading seamlessly into white/background towards the middle */}
         <div
           aria-hidden="true"
-          className="absolute right-0 top-0 bottom-0 w-[20%] sm:w-[35%] md:w-[40%] lg:w-[45%] max-w-[520px] h-full pointer-events-none select-none z-0 overflow-hidden"
+          className="absolute right-0 top-0 bottom-0 hidden sm:block w-[35%] md:w-[40%] lg:w-[45%] max-w-[520px] h-full pointer-events-none select-none z-0 overflow-hidden"
           style={{
             maskImage: 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
             WebkitMaskImage: 'linear-gradient(to left, rgba(0,0,0,1) 0%, rgba(0,0,0,1) 55%, rgba(0,0,0,0.7) 80%, rgba(0,0,0,0) 100%)',
@@ -115,7 +115,7 @@ export default async function HomePage() {
             src="/wad2.webp"
             alt=""
             fill
-            sizes="(max-width: 640px) 20vw, 45vw"
+            sizes="(max-width: 640px) 0vw, 45vw"
             className="object-cover object-right"
           />
           <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-white/60 dark:to-gray-900/80" />

@@ -12,6 +12,7 @@ import Image from 'next/image'
 const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
 const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
 const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
+const MobileFloatingActions = dynamic(() => import('@/components/mobile-floating-actions'), { ssr: false })
 
 const inter = Inter({
   subsets: ['latin'],
@@ -61,6 +62,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BannerStrip />
           <PWARegistration />
           <InstallPWA />
+          <MobileFloatingActions />
           {/* Global Floor / Background Wallpaper */}
           <div
             aria-hidden="true"

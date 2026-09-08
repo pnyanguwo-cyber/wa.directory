@@ -94,6 +94,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/pay" className="hover:text-whatsapp-600 dark:hover:text-whatsapp-400 transition-colors">
+                  Pay for a Listing
+                </Link>
+              </li>
+              <li>
                 <Link href="/admin-login" className="hover:text-whatsapp-600 dark:hover:text-whatsapp-400 transition-colors">
                   Admin Login
                 </Link>
