@@ -34,7 +34,7 @@ function FlyToBusiness({ business }: { business: Business | null }) {
   const map = useMap()
   useEffect(() => {
     if (business?.lat && business?.lng) {
-      map.flyTo([business.lat, business.lng], 15, { duration: 1.2 })
+      map.flyTo([business.lat, business.lng], 14, { duration: 1.2 })
     }
   }, [business, map])
   return null
@@ -66,7 +66,7 @@ export default function BusinessMap({ businesses }: Props) {
     <div className="relative w-full h-full">
       <MapContainer
         center={ZIMBABWE_CENTER}
-        zoom={6}
+        zoom={10}
         className="w-full h-full z-0"
         zoomControl={false}
       >
