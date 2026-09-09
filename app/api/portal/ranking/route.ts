@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
+import { logPaymentEvent } from '@/lib/payment-events'
 
 // Minimum gap over the current #1 fee (10 cents).
 const MIN_BID_GAP = 0.1
@@ -156,23 +157,36 @@ export async function POST(request: Request) {
 
   const { category, city, amount, payer_phone } = await request.json().catch(() => ({}))
   if (!category) {
+    await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'missing_category' }, request })
     return NextResponse.json({ error: 'Category is required' }, { status: 400 })
   }
   const fee = Number(amount)
   if (!Number.isFinite(fee) || fee <= 0) {
+    await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'invalid_amount', amount }, request })
     return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
   }
   const payerClean = String(payer_phone || '').replace(/\D/g, '')
   if (payerClean.length < 9) {
+    await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'invalid_payer_phone' }, request })
     return NextResponse.json({ error: 'Enter the EcoCash number making the payment' }, { status: 400 })
   }
 
   const supabase = getSupabase()
   const scope = await loadScope(supabase, businessId)
-  if (!scope) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+  if (!scope) {
+    await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'business_not_found' }, request })
+    return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+  }
 
   // Hard scope enforcement: own categories only; own city unless nationwide.
   if (!scope.allows(category, city || '')) {
+    await logPaymentEvent({
+      eventType: 'bid_rejected',
+      outcome: 'rejected',
+      businessId,
+      detail: { reason: 'out_of_scope', category, city: city || '', myCategories: scope.myCategories, myCity: scope.myCity },
+      request,
+    })
     return NextResponse.json(
       {
         error: scope.myCategories.includes(category)
@@ -229,6 +243,13 @@ export async function POST(request: Request) {
   // equal to or below the holder. An open spot starts at 10 cents.
   const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
   if (fee < minBid) {
+    await logPaymentEvent({
+      eventType: 'bid_rejected',
+      outcome: 'rejected',
+      businessId,
+      detail: { reason: 'below_min_bid', amount: fee, currentFee, minBid, category, city: city || '' },
+      request,
+    })
     return NextResponse.json(
       {
         error: currentFee > 0
@@ -284,12 +305,35 @@ export async function POST(request: Request) {
         .update({ paynow_poll_url: init.pollUrl, paynow_reference: init.paynowReference || null })
         .eq('id', bidId)
       instructions = init.instructions || ''
+      await logPaymentEvent({
+        eventType: 'payment_initiated',
+        businessId,
+        bidId,
+        detail: { amount: fee, category, city: city || '', payer: payerClean, paynowRef: init.paynowReference || null, reusedPendingBid: !!existing },
+        request,
+      })
     } else {
       // Bid stays pending — the business can retry the payment.
       paymentError = init.error || 'Could not start the EcoCash payment.'
+      await logPaymentEvent({
+        eventType: 'payment_init_failed',
+        outcome: 'error',
+        businessId,
+        bidId,
+        detail: { amount: fee, category, city: city || '', payer: payerClean, error: paymentError, paynowConfigured: paynowConfigured() },
+        request,
+      })
     }
   } else {
     paymentError = 'Online payments are not enabled yet: the admin will confirm your bid manually.'
+    await logPaymentEvent({
+      eventType: 'payment_init_failed',
+      outcome: 'error',
+      businessId,
+      bidId,
+      detail: { reason: 'paynow_not_configured', amount: fee, category, city: city || '' },
+      request,
+    })
   }
 
   // Notify admin via WhatsApp

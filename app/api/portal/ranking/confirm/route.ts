@@ -3,6 +3,7 @@ import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import { pollTransactionStatus } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
+import { logPaymentEvent } from '@/lib/payment-events'
 
 // Front-end polls this while the EcoCash PIN prompt is on the payer's phone.
 // Paynow reporting the transaction as paid flips the bid to `paid` and
@@ -53,15 +54,37 @@ export async function POST(request: Request) {
   }
 
   if (poll.paid) {
+    await logPaymentEvent({
+      eventType: 'payment_confirmed',
+      businessId,
+      bidId: bid_id,
+      detail: { via: 'polling', paynowStatus: poll.status, paynowRef: bid.paynow_reference },
+      request,
+    })
+
     const flipped = await markBidPaid(supabase, bid_id)
-    if (flipped.error) return NextResponse.json({ error: flipped.error }, { status: 500 })
+    if (flipped.error) {
+      await logPaymentEvent({ eventType: 'activation_failed', outcome: 'error', businessId, bidId: bid_id, detail: { stage: 'mark_paid', error: flipped.error }, request })
+      return NextResponse.json({ error: flipped.error }, { status: 500 })
+    }
 
     const result = await activateBidAsNumberOne(supabase, bid_id)
-    if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+    if (result.error) {
+      await logPaymentEvent({ eventType: 'activation_failed', outcome: 'error', businessId, bidId: bid_id, detail: { stage: 'activate', error: result.error }, request })
+      return NextResponse.json({ error: result.error }, { status: 500 })
+    }
 
     if (flipped.flipped) await notifyAdminTakeover(bid)
     return NextResponse.json({ status: 'approved', activated: true })
   }
 
+  await logPaymentEvent({
+    eventType: 'payment_pending',
+    outcome: 'pending',
+    businessId,
+    bidId: bid_id,
+    detail: { via: 'polling', paynowStatus: poll.status, bidStatus: bid.status },
+    request,
+  })
   return NextResponse.json({ status: bid.status, paid: false, paynow_status: poll.status })
 }

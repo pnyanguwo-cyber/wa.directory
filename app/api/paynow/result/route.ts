@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
 import { pollTransactionStatus } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
+import { logPaymentEvent } from '@/lib/payment-events'
 
 // Paynow server-to-server result update (configured as the integration's
 // "result url"). Paynow POSTs an application/x-www-form-urlencoded body here
@@ -53,12 +54,19 @@ export async function POST(request: Request) {
   const body = await request.text()
   const values = parseUrlencoded(body)
   if (!values.hash || !verifyPaynowHash(values, integrationKey)) {
+    await logPaymentEvent({
+      eventType: 'webhook_rejected',
+      outcome: 'rejected',
+      detail: { reason: 'invalid_hash', reference: values.reference || null, postedStatus: values.status || null },
+      request,
+    })
     return NextResponse.json({ error: 'Invalid hash' }, { status: 401 })
   }
 
   const reference = values.reference || ''
   if (!reference.startsWith('BID-')) {
     // Not a ranking bid (e.g. future other product) — acknowledge and ignore.
+    await logPaymentEvent({ eventType: 'webhook_rejected', outcome: 'rejected', detail: { reason: 'unknown_reference', reference }, request })
     return NextResponse.json({ ok: true, ignored: true })
   }
   const bidId = reference.slice(4)
@@ -71,11 +79,22 @@ export async function POST(request: Request) {
     .eq('id', bidId)
     .maybeSingle()
 
-  if (!bid) return NextResponse.json({ error: 'Bid not found' }, { status: 404 })
+  if (!bid) {
+    await logPaymentEvent({ eventType: 'webhook_rejected', outcome: 'rejected', bidId, detail: { reason: 'bid_not_found', reference }, request })
+    return NextResponse.json({ error: 'Bid not found' }, { status: 404 })
+  }
 
   // Match the stored poll URL against the one Paynow posted (defence in depth:
   // a hash-valid but replayed update for a different transaction won't match).
   if (bid.paynow_poll_url && values.pollurl && bid.paynow_poll_url !== values.pollurl) {
+    await logPaymentEvent({
+      eventType: 'webhook_rejected',
+      outcome: 'rejected',
+      bidId,
+      businessId: bid.business_id,
+      detail: { reason: 'poll_url_mismatch', reference },
+      request,
+    })
     return NextResponse.json({ error: 'Poll URL mismatch' }, { status: 409 })
   }
 
@@ -99,11 +118,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, paynow_status: poll.status })
   }
 
+  await logPaymentEvent({
+    eventType: 'payment_confirmed',
+    businessId: bid.business_id,
+    bidId,
+    detail: { via: 'webhook', paynowStatus: poll.status, paynowRef: bid.paynow_reference },
+    request,
+  })
+
   const flipped = await markBidPaid(supabase, bidId)
-  if (flipped.error) return NextResponse.json({ error: flipped.error }, { status: 500 })
+  if (flipped.error) {
+    await logPaymentEvent({ eventType: 'activation_failed', outcome: 'error', businessId: bid.business_id, bidId, detail: { stage: 'mark_paid', error: flipped.error }, request })
+    return NextResponse.json({ error: flipped.error }, { status: 500 })
+  }
 
   const result = await activateBidAsNumberOne(supabase, bidId)
-  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 })
+  if (result.error) {
+    await logPaymentEvent({ eventType: 'activation_failed', outcome: 'error', businessId: bid.business_id, bidId, detail: { stage: 'activate', error: result.error }, request })
+    return NextResponse.json({ error: result.error }, { status: 500 })
+  }
 
   if (flipped.flipped) await notifyAdminTakeover(bid)
 
