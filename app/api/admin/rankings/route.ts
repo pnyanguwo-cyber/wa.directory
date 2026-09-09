@@ -23,7 +23,7 @@ export async function GET() {
       .limit(300),
     supabase
       .from('bids')
-      .select('id, business_id, category, city, position, amount, period, status, admin_feedback, fallback_position, created_at')
+      .select('id, business_id, category, city, position, amount, period, status, admin_feedback, fallback_position, payer_phone, paynow_paid_at, paynow_reference, created_at')
       .order('created_at', { ascending: false })
       .limit(200),
   ])

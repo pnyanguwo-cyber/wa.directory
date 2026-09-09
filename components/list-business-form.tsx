@@ -49,6 +49,11 @@ export default function ListBusinessForm({
   const [businessId, setBusinessId] = useState('')
   const [submittedUsername, setSubmittedUsername] = useState('')
   const [isPaidListings, setIsPaidListings] = useState(false)
+  // Going-live splash: EcoCash number entry on the success screen.
+  const [splashStage, setSplashStage] = useState<'entry' | 'done'>('entry')
+  const [splashPhone, setSplashPhone] = useState('')
+  const [splashLoading, setSplashLoading] = useState(false)
+  const [splashError, setSplashError] = useState('')
   const [logoMode, setLogoMode] = useState<LogoMode>('url')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -440,27 +445,103 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         )}
 
         {isPaidListings && (
-          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5 mb-6 text-left">
-            <div className="flex items-center gap-2 mb-3">
-              <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-              </svg>
-              <p className="text-sm font-bold text-amber-800 dark:text-amber-300">Pay USD 1 to go live</p>
+          <div className="bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800/50 rounded-3xl p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
+            {/* Splash card header */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shrink-0">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-base font-extrabold text-text-primary leading-tight">Go live: pay USD 1</p>
+                <p className="text-xs text-text-secondary">Secure EcoCash payment · {form.name}</p>
+              </div>
             </div>
-            <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
-              Anyone can pay for you — friend, family, or employee. They just need your Business ID or username.
+
+            {splashStage === 'entry' ? (
+              <form
+                onSubmit={async e => {
+                  e.preventDefault()
+                  if (!businessId) return
+                  setSplashLoading(true)
+                  setSplashError('')
+                  try {
+                    const res = await fetch('/api/pay', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        business_id: businessId,
+                        payer_phone: splashPhone.trim(),
+                        plan: '1m',
+                      }),
+                    })
+                    const data = await res.json()
+                    if (!res.ok) {
+                      setSplashError(data.error || 'Could not submit your payment')
+                      return
+                    }
+                    setSplashStage('done')
+                  } catch {
+                    setSplashError('Could not submit your payment. Please try again.')
+                  } finally {
+                    setSplashLoading(false)
+                  }
+                }}
+                className="space-y-3"
+              >
+                <div>
+                  <label className="block text-sm font-semibold text-text-primary mb-1">Your EcoCash number</label>
+                  <p className="text-xs text-text-secondary mb-2">
+                    Enter the number paying from — admin will verify the transaction from this number.
+                  </p>
+                  <input
+                    type="tel"
+                    value={splashPhone}
+                    onChange={e => { setSplashPhone(e.target.value.replace(/[^0-9+ ]/g, '')); setSplashError('') }}
+                    placeholder="e.g. 0771234567"
+                    className="input-field"
+                    autoFocus
+                    required
+                  />
+                </div>
+                {splashError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{splashError}</p>
+                )}
+                <button type="submit" disabled={splashLoading} className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-60">
+                  {splashLoading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Submitting…
+                    </span>
+                  ) : 'Pay USD 1 & Go Live'}
+                </button>
+              </form>
+            ) : (
+              <div className="text-center space-y-3 py-2 animate-fade-in">
+                <div className="relative w-14 h-14 mx-auto">
+                  <div className="absolute inset-0 bg-whatsapp-400/20 rounded-full blur-xl animate-pulse" />
+                  <div className="relative w-14 h-14 rounded-full bg-whatsapp-100 dark:bg-whatsapp-900/40 flex items-center justify-center">
+                    <svg className="w-7 h-7 text-whatsapp-600 dark:text-whatsapp-400 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-sm font-bold text-text-primary">Verifying your payment…</p>
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  You will be verified within <strong className="text-text-primary">15 minutes</strong> and given feedback on your EcoCash number (+{splashPhone.replace(/\D/g, '')}). Once confirmed, your listing goes live.
+                </p>
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Awaiting admin approval
+                </div>
+              </div>
+            )}
+
+            <p className="text-[11px] text-text-secondary mt-4 text-center">
+              Anyone can pay for you — they just need your Business ID <span className="font-mono font-bold">{businessId}</span> at <span className="font-mono">/pay</span>
             </p>
-            <div className="bg-white dark:bg-gray-900 rounded-xl p-3 mb-3 border border-amber-200/50">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wide mb-1">Payment Page</p>
-              <p className="text-sm font-bold text-text-primary font-mono">
-                {typeof window !== 'undefined' ? `${window.location.origin}/pay` : ''}
-              </p>
-            </div>
-            <ol className="text-xs text-amber-800 dark:text-amber-300 space-y-1.5 list-decimal list-inside">
-              <li>Go to <strong>/pay</strong> and search for <strong>@{submittedUsername}</strong> or <strong>{businessId}</strong></li>
-              <li>Enter the EcoCash number paying from</li>
-              <li>Admin verifies the transaction and activates your listing</li>
-            </ol>
           </div>
         )}
 

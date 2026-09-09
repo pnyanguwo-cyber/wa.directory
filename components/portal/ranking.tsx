@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 interface Spot {
   position: number
@@ -28,14 +28,12 @@ interface Bid {
   period: string
   status: string
   admin_feedback: string
+  payer_phone?: string | null
+  paynow_paid_at?: string | null
   created_at: string
 }
 
-const POSITION_INFO = [
-  { pos: 1, label: 'Gold', subtitle: 'Top of search: outbid the current #1 fee' },
-  { pos: 2, label: 'Silver', subtitle: 'Second spot: must be less than the #1 fee' },
-  { pos: 3, label: 'Bronze', subtitle: 'Third spot: must be less than the #2 fee' },
-]
+const MIN_GAP = 0.1
 
 export default function PortalRanking({
   businessId,
@@ -53,20 +51,30 @@ export default function PortalRanking({
   // Scope state: which of MY categories + which location I'm looking at.
   // Non-nationwide businesses are pinned to their own city.
   const [category, setCategory] = useState(myCategories[0] || '')
-  const [city, setCity] = useState(isRemote ? myCity : myCity)
+  const [city, setCity] = useState(myCity)
 
   const [spots, setSpots] = useState<Spot[]>([])
   const [competition, setCompetition] = useState<CompetitionBid[]>([])
   const [bids, setBids] = useState<Bid[]>([])
-  const [currentFees, setCurrentFees] = useState<{ one: number | null; two: number | null; three: number | null }>({ one: null, two: null, three: null })
+  const [minBid, setMinBid] = useState<number>(MIN_GAP)
+  const [paymentsConfigured, setPaymentsConfigured] = useState(true)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
-  const [selectedPos, setSelectedPos] = useState<number | null>(null)
   const [amount, setAmount] = useState('')
-  const [fallbackPos, setFallbackPos] = useState<number | null>(null)
+  const [payerPhone, setPayerPhone] = useState('')
+
+  // Payment modal state: shown as a card in the middle of the screen with the
+  // page blurred behind it.
+  const [payBid, setPayBid] = useState<{ id: string; amount: number } | null>(null)
+  const [payPhone, setPayPhone] = useState('')
+  const [payStage, setPayStage] = useState<'entry' | 'waiting'>('entry')
+  const [payInstructions, setPayInstructions] = useState('')
+  const [payError, setPayError] = useState('')
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollCountRef = useRef(0)
 
   const canBid = myCategories.length > 0
 
@@ -84,12 +92,13 @@ export default function PortalRanking({
         setSpots([])
         setCompetition([])
         setBids([])
-        setCurrentFees({ one: null, two: null, three: null })
+        setMinBid(MIN_GAP)
       } else {
         setSpots(d.spots || [])
         setCompetition(d.competition || [])
         setBids(d.bids || [])
-        setCurrentFees(d.currentFees || { one: null, two: null, three: null })
+        setMinBid(typeof d.minBid === 'number' ? d.minBid : MIN_GAP)
+        setPaymentsConfigured(d.paymentsConfigured !== false)
       }
     } catch {
       setLoadError('Could not load ranking data: check your connection.')
@@ -101,58 +110,100 @@ export default function PortalRanking({
     load(category, city)
   }, [category, city, load])
 
-  async function reloadBoard() {
-    await load(category, city)
+  // Stop polling when the modal closes.
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }, [])
+
+  useEffect(() => stopPolling, [stopPolling])
+
+  function openPaymentModal(bid: { id: string; amount: number }) {
+    setPayBid(bid)
+    setPayStage('entry')
+    setPayPhone('')
+    setPayInstructions('')
+    setPayError('')
   }
 
-  async function submitBid(e: React.FormEvent) {
+  function closePaymentModal() {
+    stopPolling()
+    setPayBid(null)
+    load(category, city)
+  }
+
+  // Submit the EcoCash number → Paynow pushes a PIN prompt → start polling.
+  async function submitPayment(e: React.FormEvent) {
     e.preventDefault()
-    if (!selectedPos) return
+    if (!payBid) return
     setBusy(true)
-    setError('')
-    setNotice('')
-    const res = await fetch('/api/portal/ranking', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        category,
-        city,
-        position: selectedPos,
-        amount,
-        fallback_position: selectedPos === 1 ? fallbackPos : null,
-      }),
-    })
-    const data = await res.json()
-    setBusy(false)
-    if (!res.ok) {
-      setError(data.error || 'Could not submit bid')
-      return
+    setPayError('')
+    try {
+      const res = await fetch('/api/portal/ranking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          city,
+          amount: payBid.amount,
+          payer_phone: payPhone.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPayError(data.error || 'Could not start the payment')
+        return
+      }
+      if (data.payment_error) {
+        setPayError(data.payment_error)
+        return
+      }
+      setPayInstructions(data.instructions || '')
+      setPayStage('waiting')
+      // Poll for payment confirmation every 4 seconds, up to ~5 minutes.
+      pollCountRef.current = 0
+      stopPolling()
+      pollRef.current = setInterval(async () => {
+        pollCountRef.current += 1
+        if (pollCountRef.current > 75) {
+          stopPolling()
+          setPayError('Payment is still pending. Check back in a few minutes.')
+          return
+        }
+        try {
+          const cres = await fetch('/api/portal/ranking/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bid_id: data.bid_id }),
+          })
+          const cdata = await cres.json()
+          if (cres.ok && cdata.activated) {
+            stopPolling()
+            setPayBid(null)
+            setNotice('Payment confirmed! You are now the #1 spot holder. 🎉')
+            load(category, city)
+          }
+        } catch {
+          // transient network error: keep polling
+        }
+      }, 4000)
+    } catch {
+      setPayError('Could not start the payment. Please try again.')
+    } finally {
+      setBusy(false)
     }
-    setNotice(`Bid submitted for position #${selectedPos}: ${category}${city ? ` in ${city}` : ' (nationwide)'}. An admin will review it.`)
-    setAmount('')
-    setSelectedPos(null)
-    reloadBoard()
   }
 
   const myPending = bids.filter(b => b.status === 'pending')
 
-  // Competition board: next month's bids grouped per position, highest first.
-  const competitionByPos = useMemo(() => {
-    const map = new Map<number, CompetitionBid[]>()
-    for (const b of competition) {
-      if (!map.has(b.position)) map.set(b.position, [])
-      map.get(b.position)!.push(b)
-    }
-    for (const list of map.values()) list.sort((a, b) => b.amount - a.amount)
-    return map
-  }, [competition])
-
-  const feeHint = (pos: number): string => {
-    if (pos === 1) return currentFees.one ? `Must be above $${currentFees.one.toFixed(2)} (current #1)` : 'You set the first fee: bid anything'
-    if (pos === 2) return `Must be below $${(currentFees.one ?? 0).toFixed(2)} (#1 fee)`
-    if (pos === 3) return `Must be below $${(currentFees.two ?? currentFees.one ?? 0).toFixed(2)} (#2 fee)`
-    return ''
-  }
+  // Live auction board: bids grouped by status, highest first.
+  const competitionSorted = useMemo(
+    () => [...competition].sort((a, b) => b.amount - a.amount),
+    [competition]
+  )
+  const leader = competitionSorted[0] || null
 
   if (myCategories.length === 0) {
     return (
@@ -170,7 +221,7 @@ export default function PortalRanking({
       <div>
         <h2 className="text-lg font-bold text-text-primary">Ranking & bidding</h2>
         <p className="text-xs text-text-secondary mt-0.5">
-          Top 3 spots per category and location, sold monthly by bid. You compete only against businesses in the same category and location as you.
+          One auction, one prize: the #1 search spot for your category and location. Outbid the current holder by at least ${MIN_GAP.toFixed(2)}, pay with EcoCash, and you take #1 instantly.
         </p>
       </div>
 
@@ -230,46 +281,35 @@ export default function PortalRanking({
         </div>
       </div>
 
-      {/* Current top-3 holders for the selected scope */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {POSITION_INFO.map(p => {
-          const spot = spots.find(s => s.position === p.pos)
+      {/* Current #1 holder */}
+      <div className="rounded-2xl border p-5 shadow-card bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border-amber-200 dark:border-amber-800/50">
+        {(() => {
+          const spot = spots.find(s => s.position === 1)
           return (
-            <div
-              key={p.pos}
-              className={`rounded-2xl border p-4 shadow-card ${
-                spot?.mine
-                  ? 'bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border-whatsapp-400 dark:border-whatsapp-600'
-                  : p.pos === 1
-                    ? 'bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border-amber-200 dark:border-amber-800/50'
-                    : p.pos === 2
-                      ? 'bg-gradient-to-br from-gray-50 to-white dark:from-gray-800 dark:to-gray-900 border-gray-200 dark:border-gray-700'
-                      : 'bg-gradient-to-br from-orange-50 to-white dark:from-orange-950/40 dark:to-gray-900 border-orange-200 dark:border-orange-800/50'
-              }`}
-            >
+            <>
               <div className="flex items-center justify-between">
-                <p className={`text-sm font-extrabold ${p.pos === 1 ? 'text-amber-600 dark:text-amber-400' : p.pos === 2 ? 'text-gray-500 dark:text-gray-400' : 'text-orange-700 dark:text-orange-400'}`}>
-                  #{p.pos} {p.label}
-                </p>
+                <p className="text-sm font-extrabold text-amber-600 dark:text-amber-400">#1 Gold — current holder</p>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">
                   {spot ? `$${spot.monthlyFee.toFixed(2)}/mo` : 'Open'}
                 </span>
               </div>
-              <p className="text-sm font-bold text-text-primary mt-2 truncate">
+              <p className="text-base font-bold text-text-primary mt-2 truncate">
                 {spot ? (spot.mine ? 'Your business 🎉' : spot.businessName) : 'No holder yet'}
               </p>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                {spot ? `Held until ${spot.periodEnd}${spot.mine ? ': this is you' : ''}` : p.subtitle}
+                {spot
+                  ? `Held until ${spot.periodEnd}${spot.mine ? ': this is you — outbid yourself to raise the bar' : ' — outbid them by at least $' + MIN_GAP.toFixed(2) + ' to take the spot'}`
+                  : `Minimum bid: $${MIN_GAP.toFixed(2)}`}
               </p>
-            </div>
+            </>
           )
-        })}
+        })()}
       </div>
 
-      {/* Competition board: who else is bidding for next month in this scope */}
+      {/* Live auction board */}
       <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card">
         <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-bold text-text-primary">Next month&rsquo;s bids</p>
+          <p className="text-sm font-bold text-text-primary">Live auction board</p>
           <span className="text-[11px] text-text-secondary">
             {category}{city ? ` · ${city}` : ' · Nationwide'}
           </span>
@@ -280,55 +320,50 @@ export default function PortalRanking({
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{loadError}</p>
         ) : competition.length === 0 ? (
           <p className="text-xs text-text-secondary py-3">
-            No bids yet for this category{city ? ` in ${city}` : ''} next month: the first bid leads the board.
+            No bids yet for this category{city ? ` in ${city}` : ''}: the first paid bid takes #1.
           </p>
         ) : (
-          <div className="space-y-2">
-            {POSITION_INFO.map(p => {
-              const list = competitionByPos.get(p.pos) || []
-              if (list.length === 0) return null
-              return (
-                <div key={p.pos}>
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary mb-1.5">
-                    Position #{p.pos}
+          <div className="space-y-1.5">
+            {competitionSorted.map((b, i) => (
+              <div
+                key={b.id}
+                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                  b.mine
+                    ? 'bg-whatsapp-50 dark:bg-whatsapp-950/30 border-whatsapp-300 dark:border-whatsapp-700'
+                    : 'bg-surface/60 dark:bg-gray-800/60 border-gray-200/70 dark:border-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
+                    i === 0 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                  }`}>
+                    {i + 1}
+                  </span>
+                  <p className="text-sm font-semibold text-text-primary truncate">
+                    {b.mine ? 'Your business' : b.businessName}
                   </p>
-                  <div className="space-y-1.5">
-                    {list.map((b, i) => (
-                      <div
-                        key={b.id}
-                        className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
-                          b.mine
-                            ? 'bg-whatsapp-50 dark:bg-whatsapp-950/30 border-whatsapp-300 dark:border-whatsapp-700'
-                            : 'bg-surface/60 dark:bg-gray-800/60 border-gray-200/70 dark:border-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
-                            i === 0 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-                          }`}>
-                            {i + 1}
-                          </span>
-                          <p className="text-sm font-semibold text-text-primary truncate">
-                            {b.mine ? 'Your business' : b.businessName}
-                          </p>
-                          {b.mine && (
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 dark:text-whatsapp-300 shrink-0">You</span>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-sm font-bold text-text-primary">${b.amount.toFixed(2)}</p>
-                          <p className={`text-[10px] font-semibold capitalize ${b.status === 'approved' ? 'text-whatsapp-700 dark:text-whatsapp-300' : 'text-amber-600 dark:text-amber-400'}`}>
-                            {b.status}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  {b.mine && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 dark:text-whatsapp-300 shrink-0">You</span>
+                  )}
                 </div>
-              )
-            })}
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-bold text-text-primary">${b.amount.toFixed(2)}</p>
+                  <p className={`text-[10px] font-semibold capitalize ${
+                    b.status === 'approved' || b.status === 'paid'
+                      ? 'text-whatsapp-700 dark:text-whatsapp-300'
+                      : b.status === 'outbid'
+                        ? 'text-gray-400'
+                        : 'text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {b.status === 'pending' ? 'awaiting payment' : b.status}
+                  </p>
+                </div>
+              </div>
+            ))}
             <p className="text-[11px] text-text-secondary pt-1">
-              Higher bids win #1; the ladder fills #2 and #3 below it. Bids are confirmed by an admin near month-end.
+              {leader
+                ? `${leader.mine ? 'You lead' : `${leader.businessName} leads`} with $${leader.amount.toFixed(2)}. Bid at least $${(leader.amount + MIN_GAP).toFixed(2)} to take the lead.`
+                : ''}
             </p>
           </div>
         )}
@@ -341,114 +376,171 @@ export default function PortalRanking({
         <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>
       )}
 
+      {/* Bid form: amount only — payment happens in the modal card */}
       {canBid && (
-        <form onSubmit={submitBid} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card space-y-4">
+        <form
+          onSubmit={e => {
+            e.preventDefault()
+            const fee = Number(amount)
+            setError('')
+            if (!Number.isFinite(fee) || fee < minBid) {
+              setError(minBid > MIN_GAP
+                ? `Your bid must be at least $${minBid.toFixed(2)} to beat the current #1.`
+                : `Minimum bid is $${minBid.toFixed(2)}.`)
+              return
+            }
+            openPaymentModal({ id: '', amount: fee })
+          }}
+          className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card space-y-4"
+        >
           <div>
             <p className="text-sm font-bold text-text-primary">
-              Bid for next month: {category}{city ? `, ${city}` : ' (nationwide)'}
+              Bid for #1: {category}{city ? `, ${city}` : ' (nationwide)'}
             </p>
             <p className="text-xs text-text-secondary mt-0.5">
-              Choose a position and set your monthly fee. Your bid stays pending until an admin approves it.
+              {minBid > MIN_GAP
+                ? `Current #1 fee is $${(minBid - MIN_GAP).toFixed(2)} — you must bid at least $${minBid.toFixed(2)}.`
+                : `This spot is open — minimum bid is $${minBid.toFixed(2)}.`}
+              {' '}You&rsquo;ll pay with EcoCash right after this.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {POSITION_INFO.map(p => (
-              <button
-                key={p.pos}
-                type="button"
-                onClick={() => {
-                  setSelectedPos(p.pos)
-                  setFallbackPos(null)
-                  setError('')
-                }}
-                className={`h-10 px-4 rounded-2xl text-xs font-semibold border transition-all ${
-                  selectedPos === p.pos
-                    ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                    : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
-                }`}
-              >
-                Position #{p.pos}
-              </button>
-            ))}
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Your monthly fee (USD)
+            </label>
+            <input
+              type="number"
+              min={minBid.toFixed(2)}
+              step="0.05"
+              required
+              value={amount}
+              onChange={e => setAmount(e.target.value)}
+              className="input-field"
+              placeholder={minBid.toFixed(2)}
+              autoFocus
+            />
+            <p className="text-[11px] text-text-secondary mt-1.5">
+              Must exceed the #1 fee by at least ${MIN_GAP.toFixed(2)} (10 cents). Bids equal to or below the current #1 are not allowed.
+            </p>
           </div>
-          {selectedPos && (
-            <>
-              {selectedPos === 1 && (
-                <div>
-                  <p className="text-xs text-text-secondary mb-2">If I don&rsquo;t get #1, I&rsquo;d like:</p>
-                  <div className="flex gap-2">
-                    {[null, 2, 3].map(pos => (
-                      <button
-                        key={String(pos)}
-                        type="button"
-                        onClick={() => setFallbackPos(pos)}
-                        className={`h-9 px-4 rounded-2xl text-xs font-semibold border transition-all ${
-                          fallbackPos === pos
-                            ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                            : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
-                        }`}
-                      >
-                        {pos === null ? 'None' : `#${pos}`}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-text-primary mb-1.5">
-                  Monthly fee (USD): {feeHint(selectedPos)}
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  step="0.5"
-                  required
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  className="input-field"
-                  placeholder="e.g. 15"
-                  autoFocus
-                />
-              </div>
-              <button type="submit" disabled={busy} className="btn-primary w-full py-3 text-sm font-semibold">
-                {busy ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Submitting...
-                  </span>
-                ) : `Submit bid for position #${selectedPos}`}
-              </button>
-            </>
-          )}
+          <button type="submit" className="btn-primary w-full py-3 text-sm font-semibold">
+            Bid &amp; pay with EcoCash
+          </button>
         </form>
       )}
 
+      {/* My bids with payment retry */}
       {myPending.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm font-bold text-text-primary">My bids for next month</p>
-          {bids.map(b => (
-            <div key={b.id} className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-bold text-text-primary">My unpaid bids</p>
+          {myPending.map(b => (
+            <div key={b.id} className="bg-white dark:bg-gray-900 border border-amber-200/70 dark:border-amber-800/40 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className={`w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold ${
-                  b.position === 1 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300' : b.position === 2 ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300' : 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300'
-                }`}>
-                  #{b.position}
+                <span className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+                  #1
                 </span>
                 <div>
                   <p className="text-sm font-bold text-text-primary">${Number(b.amount).toFixed(2)}/month</p>
-                  <p className="text-[11px] text-text-secondary">
-                    Period: {b.period} · Status:{' '}
-                    <span className={`font-semibold capitalize ${b.status === 'pending' ? 'text-amber-600' : b.status === 'approved' ? 'text-whatsapp-700' : b.status === 'rejected' ? 'text-red-600' : 'text-text-secondary'}`}>
-                      {b.status}
-                    </span>
-                  </p>
-                  {b.admin_feedback && (
-                    <p className="text-[11px] text-text-secondary mt-0.5">Admin: {b.admin_feedback}</p>
-                  )}
+                  <p className="text-[11px] text-text-secondary">Awaiting EcoCash payment · {b.period}</p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => openPaymentModal({ id: b.id, amount: Number(b.amount) })}
+                className="h-9 px-4 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-2xl"
+              >
+                Pay now
+              </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* ===== Payment modal: card centered, background blurred ===== */}
+      {payBid && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-md animate-fade-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label="EcoCash payment"
+        >
+          <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white dark:border-gray-700">
+            <div className="text-center">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 flex items-center justify-center shadow-lg mb-3">
+                <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                </svg>
+              </div>
+              <h2 className="text-lg font-bold text-text-primary">Pay to claim #1</h2>
+              <p className="text-xs text-text-secondary mt-1">
+                {category}{city ? ` · ${city}` : ' · Nationwide'} · <span className="font-bold text-text-primary">${payBid.amount.toFixed(2)}/month</span>
+              </p>
+            </div>
+
+            {!paymentsConfigured && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+                Online payments are not enabled yet: your bid will be confirmed manually by an admin.
+              </p>
+            )}
+
+            {payStage === 'entry' ? (
+              <form onSubmit={submitPayment} className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-text-primary mb-1">
+                    Your EcoCash number
+                  </label>
+                  <p className="text-[11px] text-text-secondary mb-2">
+                    You&rsquo;ll get a PIN prompt on this phone — enter it to approve the payment. Payment is attached to your bid: once it goes through you become #1 instantly (if you outbid the current holder).
+                  </p>
+                  <input
+                    type="tel"
+                    value={payPhone}
+                    onChange={e => { setPayPhone(e.target.value.replace(/[^0-9+ ]/g, '')); setPayError('') }}
+                    placeholder="e.g. 0771234567"
+                    className="input-field"
+                    autoFocus
+                    required
+                  />
+                </div>
+                {payError && (
+                  <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{payError}</p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button type="button" onClick={closePaymentModal} className="btn-secondary flex-1">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={busy} className="btn-primary flex-1">
+                    {busy ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Starting…
+                      </span>
+                    ) : `Pay $${payBid.amount.toFixed(2)}`}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-3 text-center">
+                <div className="relative w-16 h-16 mx-auto">
+                  <div className="absolute inset-0 bg-whatsapp-400/20 rounded-full blur-xl animate-pulse" />
+                  <div className="relative w-16 h-16 rounded-full border-4 border-whatsapp-100 dark:border-whatsapp-900 border-t-whatsapp-500 animate-spin" />
+                </div>
+                <p className="text-sm font-bold text-text-primary">Waiting for your EcoCash PIN…</p>
+                {payInstructions && (
+                  <p className="text-xs text-text-secondary bg-surface dark:bg-gray-800 rounded-xl px-4 py-2.5 leading-relaxed">{payInstructions}</p>
+                )}
+                <p className="text-[11px] text-text-secondary">
+                  Approve the prompt on your phone. This page updates automatically — you&rsquo;ll become #1 the moment the payment lands.
+                </p>
+                {payError && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">{payError}</p>
+                )}
+                <button type="button" onClick={closePaymentModal} className="btn-secondary w-full">
+                  Close and check later
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

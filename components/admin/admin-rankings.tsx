@@ -37,6 +37,8 @@ interface Bid {
   status: string
   admin_feedback: string
   fallback_position: number | null
+  payer_phone?: string | null
+  paynow_paid_at?: string | null
   created_at: string
   business: BizRef | null
 }
@@ -109,6 +111,7 @@ export default function AdminRankings() {
   }, {})
 
   const pendingBids = bids.filter(b => b.status === 'pending')
+  const paidBids = bids.filter(b => b.status === 'paid')
   const statusStyle = (status: string) =>
     status === 'active' ? 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
     : status === 'pending' ? 'bg-amber-50 text-amber-700 border-amber-200'
@@ -260,7 +263,7 @@ export default function AdminRankings() {
 
       <AdminSectionHeader
         title="Rankings & Bids"
-        subtitle={`${spots.length} spots · ${pendingBids.length} pending bids`}
+        subtitle={`${spots.length} spots · ${pendingBids.length} pending · ${paidBids.length} paid bids`}
         action={
           <button onClick={() => setShowOverride(true)} className="btn-primary h-10 px-4 text-xs font-semibold">
             Place manually
@@ -294,6 +297,9 @@ export default function AdminRankings() {
                       </p>
                     </div>
                     <span className="text-sm font-extrabold text-whatsapp-700">${Number(b.amount).toFixed(2)}/mo</span>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-gray-100 text-gray-500 border-gray-200">
+                      Awaiting payment
+                    </span>
                     <div className="flex gap-2">
                       <button onClick={() => { setPayingBid(b); setPayFee(String(Number(b.amount).toFixed(2))) }} className="h-9 px-3.5 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-2xl">
                         Approve & mark paid
@@ -307,6 +313,37 @@ export default function AdminRankings() {
                         </svg>
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="neo-card p-4">
+            <h3 className="text-sm font-bold text-text-primary mb-1">Paid bids — awaiting activation</h3>
+            <p className="text-[11px] text-text-secondary mb-3">
+              EcoCash payments confirmed automatically via Paynow. The #1 takeover already happened — this is the audit trail.
+            </p>
+            {paidBids.length === 0 ? (
+              <p className="text-xs text-text-secondary">No paid bids.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {paidBids.map(b => (
+                  <div key={b.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-whatsapp-200/70 bg-whatsapp-50/50 dark:border-whatsapp-800/40 dark:bg-whatsapp-950/20 px-3.5 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-text-primary truncate">{b.business?.name || 'Unknown'}</p>
+                      <p className="text-[11px] text-text-secondary">
+                        #{b.position} · {b.category}{b.city ? `, ${b.city}` : ' · nationwide'} · period {b.period}
+                        {b.payer_phone && <span className="ml-1">· EcoCash +{b.payer_phone}</span>}
+                      </p>
+                    </div>
+                    <span className="text-sm font-extrabold text-whatsapp-700">${Number(b.amount).toFixed(2)}/mo</span>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200">
+                      Paid ✓
+                    </span>
+                    <button onClick={() => act('place', { bid_paid: true, bid_id: b.id, monthly_fee: Number(b.amount) })} className="h-9 px-3.5 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-2xl">
+                      Activate spot
+                    </button>
                   </div>
                 ))}
               </div>

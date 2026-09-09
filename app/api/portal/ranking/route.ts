@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
+import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 
-function nextMonthStart(): string {
+// Minimum gap over the current #1 fee (10 cents).
+const MIN_BID_GAP = 0.1
+
+// The #1 auction is live: a paid bid takes over the spot immediately, so all
+// bids are grouped under the current month's period.
+function currentPeriodStart(): string {
   const now = new Date()
-  const d = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  return d.toISOString().slice(0, 10)
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
 }
 
 // Businesses only ever compete inside their own categories, and inside their
@@ -61,30 +66,32 @@ export async function GET(request: Request) {
     )
   }
 
-  const period = nextMonthStart()
+  const period = currentPeriodStart()
 
   const [spotsRes, allBidsRes, myBidsRes] = await Promise.all([
-    // Current month's paid holders for this (category, city)
+    // Current #1 holder for this (category, city)
     supabase
       .from('rank_spots')
       .select('id, business_id, position, monthly_fee, period_start, period_end')
       .eq('category', category)
       .eq('city', city)
+      .eq('position', 1)
       .eq('status', 'active')
-      .order('position', { ascending: true }),
-    // Next month's competition: every pending/approved bid in this scope
+      .order('period_start', { ascending: false })
+      .limit(1),
+    // Live competition: every pending/paid/approved bid in this scope, highest first
     supabase
       .from('bids')
       .select('id, business_id, position, amount, status, created_at')
       .eq('category', category)
       .eq('city', city)
       .eq('period', period)
-      .in('status', ['pending', 'approved'])
+      .in('status', ['pending', 'paid', 'approved'])
       .order('amount', { ascending: false }),
-    // My own bids in this scope (all statuses, incl. admin feedback)
+    // My own bids in this scope (all statuses, incl. payment state + admin feedback)
     supabase
       .from('bids')
-      .select('id, position, amount, period, status, admin_feedback, created_at')
+      .select('id, position, amount, period, status, admin_feedback, payer_phone, paynow_paid_at, created_at')
       .eq('business_id', businessId)
       .eq('category', category)
       .eq('city', city)
@@ -111,8 +118,7 @@ export async function GET(request: Request) {
     mine: b.business_id === businessId,
   }))
 
-  const byPos = new Map<number, { monthly_fee: number; business_id: string }>()
-  for (const s of spotsRes.data || []) byPos.set(s.position, s)
+  const holder = (spotsRes.data || [])[0] || null
 
   return NextResponse.json({
     category,
@@ -121,22 +127,26 @@ export async function GET(request: Request) {
     myCategories: scope.myCategories,
     myCity: scope.myCity,
     isRemote: scope.isRemote,
-    spots: (spotsRes.data || []).map(s => ({
-      position: s.position,
-      businessId: s.business_id,
-      businessName: nameById.get(s.business_id) || 'Business',
-      monthlyFee: Number(s.monthly_fee || 0),
-      periodStart: s.period_start,
-      periodEnd: s.period_end,
-      mine: s.business_id === businessId,
-    })),
+    spots: holder
+      ? [{
+          position: holder.position,
+          businessId: holder.business_id,
+          businessName: nameById.get(holder.business_id) || 'Business',
+          monthlyFee: Number(holder.monthly_fee || 0),
+          periodStart: holder.period_start,
+          periodEnd: holder.period_end,
+          mine: holder.business_id === businessId,
+        }]
+      : [],
     competition,
     bids: myBidsRes.data || [],
     currentFees: {
-      one: byPos.get(1)?.monthly_fee ?? null,
-      two: byPos.get(2)?.monthly_fee ?? null,
-      three: byPos.get(3)?.monthly_fee ?? null,
+      one: holder ? Number(holder.monthly_fee || 0) : null,
+      two: null,
+      three: null,
     },
+    minBid: holder ? Number(holder.monthly_fee || 0) + MIN_BID_GAP : MIN_BID_GAP,
+    paymentsConfigured: paynowConfigured(),
   })
 }
 
@@ -144,22 +154,17 @@ export async function POST(request: Request) {
   const businessId = getBusinessId()
   if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
 
-  const { category, city, position, amount, fallback_position } = await request.json().catch(() => ({}))
-  if (!category || !['1', '2', '3'].includes(String(position))) {
-    return NextResponse.json({ error: 'Category and position are required' }, { status: 400 })
+  const { category, city, amount, payer_phone } = await request.json().catch(() => ({}))
+  if (!category) {
+    return NextResponse.json({ error: 'Category is required' }, { status: 400 })
   }
-  const pos = Number(position)
   const fee = Number(amount)
   if (!Number.isFinite(fee) || fee <= 0) {
     return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
   }
-
-  const fallback = fallback_position != null ? Number(fallback_position) : null
-  if (fallback !== null && ![2, 3].includes(fallback)) {
-    return NextResponse.json({ error: 'Fallback position must be 2 or 3' }, { status: 400 })
-  }
-  if (fallback !== null && pos !== 1) {
-    return NextResponse.json({ error: 'Fallback position is only available when bidding for #1' }, { status: 400 })
+  const payerClean = String(payer_phone || '').replace(/\D/g, '')
+  if (payerClean.length < 9) {
+    return NextResponse.json({ error: 'Enter the EcoCash number making the payment' }, { status: 400 })
   }
 
   const supabase = getSupabase()
@@ -178,66 +183,116 @@ export async function POST(request: Request) {
     )
   }
 
+  const period = currentPeriodStart()
+
+  // One live (unpaid) bid at a time per scope — reuse it when re-bidding.
   const { data: existing } = await supabase
     .from('bids')
-    .select('id, status')
+    .select('id, amount')
     .eq('business_id', businessId)
     .eq('category', category)
     .eq('city', city || '')
-    .eq('position', pos)
-    .eq('period', nextMonthStart())
+    .eq('period', period)
     .eq('status', 'pending')
     .maybeSingle()
 
-  if (existing) {
-    return NextResponse.json({ error: 'You already have a pending bid for this position' }, { status: 400 })
-  }
-
-  const { data: spots } = await supabase
+  // Current #1 holder for this scope, covering the target month (or the
+  // running month when next month has no holder yet).
+  const { data: holderSpot } = await supabase
     .from('rank_spots')
-    .select('position, monthly_fee')
+    .select('monthly_fee, business_id')
     .eq('category', category)
     .eq('city', city || '')
+    .eq('position', 1)
     .eq('status', 'active')
+    .gte('period_end', period)
+    .order('period_start', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
-  const feeByPos = new Map<number, number>()
-  for (const s of spots || []) feeByPos.set(s.position, Number(s.monthly_fee))
+  const { data: fallbackSpot } = holderSpot
+    ? { data: null }
+    : await supabase
+        .from('rank_spots')
+        .select('monthly_fee, business_id')
+        .eq('category', category)
+        .eq('city', city || '')
+        .eq('position', 1)
+        .eq('status', 'active')
+        .order('period_start', { ascending: false })
+        .limit(1)
+        .maybeSingle()
 
-  const minPos1 = feeByPos.get(1) ?? 1
-  if (pos === 1 && fee <= minPos1) {
-    return NextResponse.json({ error: `Position 1 must outbid the current #1 fee of $${minPos1.toFixed(2)}` }, { status: 400 })
+  const currentFee = Number((holderSpot || fallbackSpot)?.monthly_fee ?? 0)
+
+  // Auction rule: outbid the current #1 by at least 10 cents — never bid
+  // equal to or below the holder. An open spot starts at 10 cents.
+  const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
+  if (fee < minBid) {
+    return NextResponse.json(
+      {
+        error: currentFee > 0
+          ? `Your bid must beat the current #1 ($${currentFee.toFixed(2)}) by at least $${MIN_BID_GAP.toFixed(2)}. Minimum bid: $${minBid.toFixed(2)}.`
+          : `Minimum bid for the open #1 spot is $${MIN_BID_GAP.toFixed(2)}.`,
+      },
+      { status: 400 }
+    )
   }
-  if (pos === 2) {
-    const cap = feeByPos.get(1) ?? Infinity
-    if (fee >= cap) {
-      return NextResponse.json({ error: `Position 2 must be less than the #1 fee of $${cap.toFixed(2)}` }, { status: 400 })
+
+  let bidId = existing?.id
+  if (bidId) {
+    const { error } = await supabase
+      .from('bids')
+      .update({ amount: fee, payer_phone: payerClean })
+      .eq('id', bidId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  } else {
+    const { data: inserted, error } = await supabase
+      .from('bids')
+      .insert({
+        business_id: businessId,
+        category,
+        city: city || '',
+        position: 1,
+        amount: fee,
+        period,
+        status: 'pending',
+        payer_phone: payerClean,
+      })
+      .select('id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    bidId = inserted?.[0]?.id
+  }
+
+  // Attach the EcoCash payment: the payer gets a PIN prompt on their phone.
+  let instructions = ''
+  let paymentError = ''
+  if (paynowConfigured()) {
+    const init = await initiateEcoCashPayment({
+      reference: `BID-${bidId}`,
+      amount: fee,
+      phone: payerClean,
+      additionalInfo: `Ranking bid (live auction): ${category}${city ? ` in ${city}` : ''}`,
+      // resultUrl = server-to-server status updates from Paynow (webhook);
+      // returnUrl = where the payer's browser lands if Paynow opens a page.
+      resultUrl: `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/api/paynow/result`,
+      returnUrl: `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/portal/ranking`,
+    })
+    if (init.ok && init.pollUrl) {
+      await supabase
+        .from('bids')
+        .update({ paynow_poll_url: init.pollUrl, paynow_reference: init.paynowReference || null })
+        .eq('id', bidId)
+      instructions = init.instructions || ''
+    } else {
+      // Bid stays pending — the business can retry the payment.
+      paymentError = init.error || 'Could not start the EcoCash payment.'
     }
-  }
-  if (pos === 3) {
-    const cap = feeByPos.get(2) ?? feeByPos.get(1) ?? Infinity
-    if (fee >= cap) {
-      return NextResponse.json(
-        { error: `Position 3 must be less than the #2 fee of $${cap.toFixed(2)}` },
-        { status: 400 }
-      )
-    }
+  } else {
+    paymentError = 'Online payments are not enabled yet: the admin will confirm your bid manually.'
   }
 
-  const { error } = await supabase.from('bids').insert({
-    business_id: businessId,
-    category,
-    city: city || '',
-    position: pos,
-    amount: fee,
-    period: nextMonthStart(),
-    status: 'pending',
-    fallback_position: fallback,
-  })
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
+  // Notify admin via WhatsApp
   const admin = process.env.ADMIN_WHATSAPP
   if (admin) {
     const { data: business } = await supabase
@@ -254,13 +309,20 @@ export async function POST(request: Request) {
         `Business: *${business?.name || 'Unknown'}*`,
         `Category: ${category}`,
         `Location: ${city || 'Nationwide'}`,
-        `Position: #${pos} for next month`,
+        'Bidding for: #1 (live auction)',
         `Bid: $${fee.toFixed(2)}`,
+        currentFee > 0 ? `Outbids current #1 ($${currentFee.toFixed(2)})` : 'Spot was open',
+        `Payer EcoCash: +${payerClean}`,
         '',
         `Review: ${process.env.SITE_URL || 'https://wadirectory.co.zw'}/admin`,
       ].join('\n')
     ).catch(() => {})
   }
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({
+    success: true,
+    bid_id: bidId,
+    instructions,
+    payment_error: paymentError,
+  })
 }
