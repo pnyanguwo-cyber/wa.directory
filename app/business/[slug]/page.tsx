@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
+import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, callHref } from '@/components/contact'
 import ShareButton from '@/components/share-button'
 import QrCard from '@/components/qr-card'
 import StatsPing from '@/components/stats-ping'
@@ -203,7 +204,12 @@ async function BusinessContent({ slug }: { slug: string }) {
   // Voice listings (landlines & hotlines) have no WhatsApp chat — a Call button replaces it.
   const voice = business.phone_type === 'voice'
   const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
-  const qrUrl = !voice && phoneClean ? `https://wa.me/${phoneClean}?text=${qrMessage}` : (business.whatsapp_link || '')
+  // Voice-only listings get a one-tap dial QR instead of a chat QR.
+  const qrUrl = voice
+    ? (callHref(voiceNumber(business)) || business.whatsapp_link || '')
+    : phoneClean
+      ? `https://wa.me/${phoneClean}?text=${qrMessage}`
+      : (business.whatsapp_link || '')
   // One-tap turn-by-turn directions when the address was Google-verified;
   // falls back to a text search otherwise.
   const hasCoords = typeof business.lat === 'number' && typeof business.lng === 'number'
@@ -435,15 +441,15 @@ async function BusinessContent({ slug }: { slug: string }) {
               <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6 items-start">
                 {(qrUrl || business.whatsapp_link) && (
                   <div className="w-full md:w-[280px] lg:w-[310px] shrink-0">
-                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Scan to chat</h2>
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">{voice ? 'Scan to call' : 'Scan to chat'}</h2>
                     <QrCard
                       value={qrUrl}
                       businessName={business.name}
                       businessSlug={business.slug || business.id}
                       location={[businessAreas.length ? businessAreas[0] : '', business.city, 'Zimbabwe'].filter(Boolean).join(', ')}
                       verified={business.verified}
-                      title="Scan to chat"
-                      subtitle="Scan with your phone camera to start a chat"
+                      title={voice ? 'Scan to call' : 'Scan to chat'}
+                      subtitle={voice ? 'Scan with your phone camera to call the business' : 'Scan with your phone camera to start a chat'}
                       downloadName={`${business.slug || 'business'}-qr.png`}
                       size={200}
                       interactive={true}
@@ -456,9 +462,9 @@ async function BusinessContent({ slug }: { slug: string }) {
                   <div>
                     <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Quick Contact</h2>
                     <div className="flex flex-wrap gap-2">
-                      {business.whatsapp_link && (
+                      {hasWhatsAppChannel(business) && (
                         <a
-                          href={business.whatsapp_link}
+                          href={business.whatsapp_link || `https://wa.me/${phoneClean}?text=${qrMessage}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-2 px-3 py-2 rounded-xl bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
@@ -467,6 +473,17 @@ async function BusinessContent({ slug }: { slug: string }) {
                             <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2z" />
                           </svg>
                           WhatsApp
+                        </a>
+                      )}
+                      {hasVoiceChannel(business) && (
+                        <a
+                          href={callHref(voiceNumber(business))}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                          </svg>
+                          Call
                         </a>
                       )}
                       {business.website && (
@@ -602,21 +619,22 @@ async function BusinessContent({ slug }: { slug: string }) {
                 <BusinessCardPrint business={business} />
               </div>
 
-              <div className="hidden sm:block">
-                {voice ? (
+              <div className="hidden sm:flex flex-col gap-2">
+                {hasWhatsAppChannel(business) && (
+                  <WhatsAppButton phone={business.phone} businessId={business.id} />
+                )}
+                {hasVoiceChannel(business) && (
                   <TrackLink
-                    href={`tel:${business.phone}`}
+                    href={callHref(voiceNumber(business))}
                     businessId={business.id}
                     type="click_call"
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                    className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
                   >
                     <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
                     </svg>
                     Call {business.name}
                   </TrackLink>
-                ) : (
-                  <WhatsAppButton phone={business.phone} businessId={business.id} />
                 )}
               </div>
 
@@ -642,8 +660,23 @@ async function BusinessContent({ slug }: { slug: string }) {
             </div>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white border-t border-gray-200 sm:hidden z-40">
-            <WhatsAppButton phone={business.phone} businessId={business.id} />
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white border-t border-gray-200 sm:hidden z-40 flex flex-col gap-2">
+            {hasWhatsAppChannel(business) && (
+              <WhatsAppButton phone={business.phone} businessId={business.id} />
+            )}
+            {hasVoiceChannel(business) && (
+              <TrackLink
+                href={callHref(voiceNumber(business))}
+                businessId={business.id}
+                type="click_call"
+                className="inline-flex w-full items-center justify-center gap-2 py-3.5 rounded-full bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-[16px] font-semibold transition-all shadow-xs"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                </svg>
+                Call {business.name}
+              </TrackLink>
+            )}
           </div>
         </div>
       </div>

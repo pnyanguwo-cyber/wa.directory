@@ -18,7 +18,7 @@ export async function GET(
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, phone')
+    .select('id, phone, phone_type')
     .eq('id', params.id)
     .maybeSingle()
 
@@ -68,6 +68,11 @@ export async function GET(
     } catch {
       // attribution is best-effort
     }
+  }
+
+  // Voice-only listings (landlines & hotlines) have no WhatsApp chat — dial instead.
+  if (business.phone_type === 'voice') {
+    redirect(`tel:${business.phone}`)
   }
 
   const phone = (business.phone || '').replace(/[^0-9]/g, '')

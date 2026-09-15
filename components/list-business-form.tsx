@@ -95,10 +95,13 @@ export default function ListBusinessForm({
   const [confirmPassword, setConfirmPassword] = useState('')
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle')
   const [usernameSuggestion, setUsernameSuggestion] = useState('')
-  // 'whatsapp' = normal mobile (default). 'voice' = landline or hotline
-  // (police stations, council switchboards…) — stored in national format and
-  // shown to customers as a Call button instead of a WhatsApp chat.
-  const [phoneType, setPhoneType] = useState<'whatsapp' | 'voice'>('whatsapp')
+  // Phone type is an optional choice: WhatsApp mobile (default), landline or
+  // hotline (voice), or BOTH. Only a voice-only listing stores the number in
+  // national format with a Call button; when both are chosen the mobile
+  // number stays the WhatsApp contact and the landline is saved separately.
+  const [phoneWhatsapp, setPhoneWhatsapp] = useState(true)
+  const [phoneVoice, setPhoneVoice] = useState(false)
+  const [voicePhone, setVoicePhone] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
@@ -108,12 +111,17 @@ export default function ListBusinessForm({
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
   const rawPhoneDigits = form.phone.replace(/\D/g, '')
   const isHotline = rawPhoneDigits.length > 0 && rawPhoneDigits.length <= 5
-  const phoneError = form.phone
-    ? isHotline && phoneType !== 'voice'
-      ? 'Short hotline numbers (999, 393…) can\u2019t use WhatsApp (select “Landline or hotline” below'
-      : validatePhone(form.countryCode, form.phone)
-    : null
+  const phoneError = !form.phone
+    ? null
+    : isHotline && !phoneVoice
+      ? 'Short hotline numbers (999, 393…) can\u2019t be a WhatsApp number — also select “Landline or hotline” below.'
+      : phoneWhatsapp
+        ? validatePhone(form.countryCode, form.phone)
+        : rawPhoneDigits.length >= 6
+          ? null
+          : 'Enter a valid phone number'
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
+  const isWholeCountry = form.city === '*'
 
   const allCategoryOptions = (() => {
     const merged = new Map<string, string>()
@@ -148,7 +156,12 @@ export default function ListBusinessForm({
     return list.sort((a, b) => a.label.localeCompare(b.label))
   })()
 
-  const cityOptions = allCityOptions
+  // "Whole country" covers nationwide businesses: no sub-location needed,
+  // and the server treats '*' as a remote/nationwide listing.
+  const cityOptions = [
+    { value: '*', label: '🌍 Whole country (nationwide)' },
+    ...allCityOptions,
+  ]
 
   const areaOptions = form.city && form.city !== '*'
     ? [
@@ -160,12 +173,16 @@ export default function ListBusinessForm({
       ]
     : []
 
-  const needsPhysical = form.isPhysical && !form.isRemote
+  const needsPhysical = form.isPhysical && !form.isRemote && !isWholeCountry
   const hasPhysical = !!form.city || areas.length > 0
   const hasLocation = form.isRemote || hasPhysical
   const locationMissing = (!form.isPhysical && !form.isRemote) || (needsPhysical && !hasPhysical)
-  const isValidStep1 = form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError
+  const isValidStep1 = !!(form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError)
   const isValidStep2 = !!(form.description.trim() && categories.length > 0 && !locationMissing)
+  const passwordError = !form.password
+    ? 'Create a portal password — it unlocks your statistics portal.'
+    : validatePassword(form.password)
+  const isValidStep3 = !passwordError && form.password === confirmPassword
 
 const pendingAreaNames = requests.filter(r => r.type === 'area').map(r => r.name)
 const pendingCategoryNames = requests.filter(r => r.type === 'category').map(r => r.name)
@@ -310,9 +327,12 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
   }, [])
 
   async function handleSubmit() {
-    const pwError = form.password ? validatePassword(form.password) : null
+    // Portal password is mandatory — it is what unlocks the business portal.
+    const pwError = !form.password
+      ? 'Create a portal password — it unlocks your statistics portal.'
+      : validatePassword(form.password)
     if (pwError) {
-      setErrors(prev => ({ ...prev, password: `${pwError}, or leave it blank to set one later.` }))
+      setErrors(prev => ({ ...prev, password: pwError }))
       setStep(3)
       passwordRef.current?.focus()
       return
@@ -338,7 +358,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
 
       // Listing creation happens server-side (validated + service role).
       // Accepts 077…, 26377… etc. — normalized to full international digits.
-      const fullPhone = phoneType === 'voice'
+      // Voice-only listings store the landline/hotline as the main number;
+      // WhatsApp(+voice) listings keep the mobile as the main number.
+      const voiceOnly = !phoneWhatsapp && phoneVoice
+      const fullPhone = voiceOnly
         ? normalizeVoicePhone(form.phone)
         : toFullPhone(form.countryCode, form.phone)
       const hasPendingCity = pendingCities.includes(form.city)
@@ -358,7 +381,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             categories,
             city: form.isPhysical ? form.city : '',
             pending_city: hasPendingCity,
-            areas: form.isRemote && !form.isPhysical ? [] : areas,
+            // Remote-only businesses may pick the cities they serve — they
+            // travel in the same `areas` field.
+            areas,
+            voice_phone: phoneVoice && phoneWhatsapp ? normalizeVoicePhone(voicePhone) : null,
             catalog_link: form.catalog_link.trim(),
             logo_url: logoUrl,
             price_range: form.price_range,
@@ -369,7 +395,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             address_verified: addressStatus === 'valid',
             show_location: form.show_location,
             is_remote: form.isRemote,
-            phone_type: phoneType,
+            phone_type: voiceOnly ? 'voice' : 'whatsapp',
           }),
         })
       } catch (fetchErr) {
@@ -390,13 +416,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
       setEditToken(created.edit_token)
       setSubmittedId(created.slug || created.id)
       submitFeatureRequests(created.id)
-      if (form.password && form.password.length >= 6) {
-        fetch('/api/account/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ edit_token: created.edit_token, phone: fullPhone, password: form.password }),
-        }).catch(() => {})
-      }
+      fetch('/api/account/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ edit_token: created.edit_token, phone: fullPhone, password: form.password }),
+      }).catch(() => {})
       if (!categories.some(c => SPECIAL_CATEGORIES.has(c))) {
         fetch('/api/admin/notify-new-business', {
           method: 'POST',
@@ -641,23 +665,44 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
 
       {step === 1 && (
         <div className="space-y-4 animate-fade-in">
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">Business Name</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); usernameRef.current?.focus() } }}
-              placeholder="e.g. John's Plumbing"
-              className="input-field"
-              autoFocus
-            />
-            <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Business Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); usernameRef.current?.focus() } }}
+                placeholder="e.g. John's Plumbing"
+                className="input-field"
+                autoFocus
+              />
+              <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                WhatsApp Business Username <span className="text-text-secondary font-normal">(optional)</span>
+              </label>
+              <input
+                ref={usernameRef}
+                type="text"
+                value={form.whatsapp_username}
+                onChange={e => setForm(f => ({ ...f, whatsapp_username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') }))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); phoneRef.current?.focus() } }}
+                placeholder="e.g. johnsplumbing"
+                className="input-field"
+              />
+              <p className="text-xs text-whatsapp-600 mt-1">Your business username on WhatsApp (no spaces)</p>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Directory Username <span className="text-text-secondary font-normal">(your unique handle)</span>
-            </label>
+          <details className="group bg-surface/60 border border-gray-200/70 rounded-2xl px-4 py-3">
+            <summary className="text-sm font-semibold text-text-primary cursor-pointer list-none flex items-center gap-1.5 select-none">
+              <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-whatsapp-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Directory Username <span className="text-text-secondary font-normal">(optional — your unique handle)</span>
+            </summary>
+            <div className="pt-3">
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-sm">@</span>
               <input
@@ -715,34 +760,17 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 </button>
               </div>
             )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">Business Username on WhatsApp</label>
-            <input
-              ref={usernameRef}
-              type="text"
-              value={form.whatsapp_username}
-              onChange={e => setForm(f => ({ ...f, whatsapp_username: e.target.value.replace(/[^a-zA-Z0-9_]/g, '') }))}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); phoneRef.current?.focus() } }}
-              placeholder="e.g. johnsplumbing"
-              className="input-field"
-            />
-            <p className="text-xs text-whatsapp-600 mt-1">Your business username on WhatsApp (no spaces)</p>
-            {form.whatsapp_username && (
-              <p className="text-xs text-whatsapp-600 mt-1">@{form.whatsapp_username}</p>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <div className="w-40 shrink-0">
-              <SearchSelect
-                options={countryOptions}
-                value={form.countryCode}
-                onChange={v => setForm(f => ({ ...f, countryCode: v }))}
-                placeholder="+263"
-                label="Country Code"
-              />
             </div>
-            <div className="flex-1">
+          </details>
+          <div className="grid grid-cols-1 sm:grid-cols-[10rem_1fr] gap-3">
+            <SearchSelect
+              options={countryOptions}
+              value={form.countryCode}
+              onChange={v => setForm(f => ({ ...f, countryCode: v }))}
+              placeholder="+263"
+              label="Country Code"
+            />
+            <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">Phone Number</label>
               <input
                 ref={phoneRef}
@@ -753,22 +781,24 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 placeholder={selectedCountry ? `e.g. ${selectedCountry.prefix || ''}71 234 5678` : 'Phone number'}
                 className="input-field"
               />
-              {form.phone && !phoneError && selectedCountry && phoneType === 'whatsapp' && (
+              {form.phone && !phoneError && selectedCountry && phoneWhatsapp && (
                 <p className="text-[11px] text-whatsapp-700 mt-1">
                   Will be saved as +{toFullPhone(form.countryCode, form.phone)}
                 </p>
               )}
-              {form.phone && phoneType === 'voice' && (
+              {form.phone && !phoneWhatsapp && (
                 <p className="text-[11px] text-whatsapp-700 mt-1">
                   Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} (customers see a Call button)
                 </p>
               )}
+              {/* Optional: WhatsApp mobile, voice, or both. */}
               <div className="flex flex-wrap gap-2 mt-2">
                 <button
                   type="button"
-                  onClick={() => setPhoneType('whatsapp')}
+                  aria-pressed={phoneWhatsapp}
+                  onClick={() => setPhoneWhatsapp(v => !v)}
                   className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
-                    phoneType === 'whatsapp'
+                    phoneWhatsapp
                       ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
                       : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
                   }`}
@@ -777,9 +807,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPhoneType('voice')}
+                  aria-pressed={phoneVoice}
+                  onClick={() => setPhoneVoice(v => !v)}
                   className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
-                    phoneType === 'voice'
+                    phoneVoice
                       ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
                       : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
                   }`}
@@ -787,7 +818,25 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   ☎️ Landline or hotline (voice only)
                 </button>
               </div>
-              <p className="text-xs text-whatsapp-600 mt-1">Customers will chat with this number</p>
+              {!phoneWhatsapp && !phoneVoice && (
+                <p className="text-xs text-danger mt-1">Select at least one phone type (WhatsApp or voice).</p>
+              )}
+              {phoneWhatsapp && <p className="text-xs text-whatsapp-600 mt-1">Customers will chat with this number on WhatsApp</p>}
+              {phoneVoice && !phoneWhatsapp && (
+                <p className="text-xs text-whatsapp-600 mt-1">Customers will get a Call button for this number</p>
+              )}
+              {phoneVoice && phoneWhatsapp && (
+                <div className="mt-2">
+                  <label className="block text-sm font-medium text-text-primary mb-1.5">Landline / hotline number <span className="text-text-secondary font-normal">(optional)</span></label>
+                  <input
+                    type="tel"
+                    value={voicePhone}
+                    onChange={e => setVoicePhone(e.target.value.replace(/[^0-9+ ]/g, ''))}
+                    placeholder="e.g. 024 275 0000 or 999"
+                    className="input-field"
+                  />
+                </div>
+              )}
               {phoneError && (
                 <p className="text-xs text-danger mt-1 animate-fade-in">{phoneError}</p>
               )}
@@ -802,7 +851,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <button onClick={() => router.push('/')} className="btn-secondary flex-1 py-3 text-[16px]">
               Cancel
             </button>
-            <button onClick={() => setStep(2)} disabled={!isValidStep1} className="btn-primary flex-1 py-3 text-[16px]">
+            <button onClick={() => setStep(2)} disabled={!isValidStep1 || (!phoneWhatsapp && !phoneVoice)} className="btn-primary flex-1 py-3 text-[16px]">
               Next
             </button>
           </div>
@@ -902,9 +951,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               </div>
             </div>
           )}
-          <p className="text-xs text-text-secondary">Type what you sell above, then click to generate a professional bio.</p>
           <div className="bg-surface border border-gray-200/60 rounded-xl px-4 py-3 space-y-3">
-            <p className="text-sm font-medium text-text-primary">Where do you operate? <span className="text-text-secondary font-normal">select at least one</span></p>
             <div className="flex gap-3">
               <label className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer">
                 <input
@@ -942,13 +989,17 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <SearchSelect
               options={cityOptions}
               value={form.city}
-              onChange={v => setForm(f => ({ ...f, city: v }))}
-              onEnterNext={() => (form.city ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
-              placeholder={form.isRemote && !form.isPhysical ? 'Optional (remote covers whole country)' : 'Select city'}
+              onChange={v => {
+                setForm(f => ({ ...f, city: v }))
+                // Whole country = nationwide: no sub-location to pick.
+                if (v === '*') setAreas([])
+              }}
+              onEnterNext={() => (form.city && !isWholeCountry ? areaInputRef.current?.focus() : isValidStep2 ? setStep(3) : undefined)}
+              placeholder="Select city or Whole country"
               label="Town/city your business is based in"
               onRequestName={(name) => setRequestModal({ open: true, type: 'city', name })}
             />
-            {form.city ? (
+            {form.city && !isWholeCountry ? (
               <div>
               <MultiSearchSelect
                 options={areaOptions}
@@ -974,7 +1025,25 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <div />
             )}
           </div>
-          {form.isRemote && !form.isPhysical && (
+          {isWholeCountry && (
+            <p className="text-xs text-whatsapp-600 -mt-1">🌍 Whole country selected — no sub-location needed. Customers everywhere can find you.</p>
+          )}
+          {form.isRemote && !form.isPhysical && !isWholeCountry && (
+            <div>
+              <MultiSearchSelect
+                options={allCityOptions}
+                values={areas}
+                onChange={setAreas}
+                pending={pendingAreaNames}
+                onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
+                placeholder="All of Zimbabwe (default)"
+                label="Locations you serve (remote)"
+                hint="Optional: pick the cities/areas you serve. Leave empty to cover all of Zimbabwe."
+              />
+              <p className="text-xs text-whatsapp-600 mt-1">You serve customers remotely — pick the locations you cover.</p>
+            </div>
+          )}
+          {form.isRemote && !form.isPhysical && isWholeCountry && (
             <p className="text-xs text-whatsapp-600 -mt-2">You serve the whole country online</p>
           )}
           {form.isRemote && form.isPhysical && form.city && (
@@ -1060,6 +1129,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
 
       {step === 3 && (
         <div className="space-y-4 animate-fade-in">
+          {/* Optional profile extras (logo, links, price) collapsed by default. */}
+          <details className="group bg-surface/60 border border-gray-200/70 rounded-2xl px-4 py-3">
+            <summary className="text-sm font-semibold text-text-primary cursor-pointer list-none flex items-center gap-1.5 select-none">
+              <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-whatsapp-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Logo &amp; links <span className="text-text-secondary font-normal">(optional)</span>
+            </summary>
+            <div className="pt-3 space-y-4">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
             <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
@@ -1179,22 +1257,26 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             />
             <p className="text-xs text-whatsapp-600 mt-1">Your website or online store link</p>
           </div>
-          <div>
-            <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5">
-              Portal Password <span className="text-text-secondary">(optional)</span>
-            </label>
+            </div>
+          </details>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5">
+                Portal Password <span className="text-danger font-semibold">(required)</span>
+              </label>
             <div className="relative">
               <input
                 ref={passwordRef}
                 id="field-password"
                 type={showPassword ? 'text' : 'password'}
                 minLength={8}
+                required
                 value={form.password}
                 onChange={e => { setForm(f => ({ ...f, password: e.target.value })); if (errors.password) setErrors(prev => ({ ...prev, password: undefined })) }}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('field-confirm-password')?.focus() } }}
                 placeholder="Create a password for your portal account"
                 className="input-field pr-10"
-                aria-invalid={!!errors.password}
+                aria-invalid={!!errors.password || !form.password}
                 aria-describedby={errors.password ? 'field-password-error' : undefined}
               />
               <button
@@ -1220,15 +1302,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               </p>
             ) : (
               <p className="text-xs text-whatsapp-600 mt-1">
-                Set a password now to unlock your statistics portal, or do it later from your edit link.
+                Unlocks your statistics portal. At least 8 characters with letters and numbers.
               </p>
             )}
             <PasswordStrengthMeter password={form.password} />
-          </div>
-          <div>
-            <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5">
-              Confirm Password <span className="text-text-secondary">(optional)</span>
-            </label>
+            </div>
+            <div>
+              <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5">
+                Confirm Password <span className="text-danger font-semibold">(required)</span>
+              </label>
             <div className="relative">
               <input
                 id="field-confirm-password"
@@ -1260,11 +1342,20 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             {confirmPassword && form.password && form.password === confirmPassword && (
               <p className="text-xs text-whatsapp-600 mt-1">Passwords match</p>
             )}
+            </div>
           </div>
+          {passwordError && form.password !== confirmPassword && (
+            <p className="text-xs text-danger">Check the password fields above before going live.</p>
+          )}
+          <details className="group bg-surface/60 border border-gray-200/70 rounded-2xl px-4 py-3">
+            <summary className="text-sm font-semibold text-text-primary cursor-pointer list-none flex items-center gap-1.5 select-none">
+              <svg className="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-whatsapp-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              Average Price <span className="text-text-secondary font-normal">(optional)</span>
+            </summary>
+            <div className="pt-3">
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Average Price <span className="text-text-secondary">(optional)</span>
-            </label>
             <div className="relative">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-secondary font-medium text-sm pointer-events-none">
                 $
@@ -1281,6 +1372,8 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </div>
             <p className="text-xs text-whatsapp-600 mt-1">Average price customers should expect</p>
           </div>
+            </div>
+          </details>
           <div className="bg-surface border border-gray-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-text-primary mb-2">Preview</h3>
             <p className="text-sm text-text-secondary">
@@ -1336,7 +1429,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !isValidStep3}
               className="btn-primary flex-1 py-3 text-[16px]"
             >
               {loading ? (

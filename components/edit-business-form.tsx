@@ -59,9 +59,12 @@ export default function EditBusinessForm({
   const [addressStatus, setAddressStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle')
   const [addressResult, setAddressResult] = useState<{ formatted_address: string; lat?: number; lng?: number } | null>(null)
   // 'whatsapp' = mobile; 'voice' = landline or hotline (Call button, no wa.me).
+  // A both-types listing keeps phone_type='whatsapp' and stores the secondary
+  // landline/hotline in voice_phone.
   const [phoneType, setPhoneType] = useState<'whatsapp' | 'voice'>(
     business.phone_type === 'voice' ? 'voice' : 'whatsapp'
   )
+  const [voicePhone, setVoicePhone] = useState(business.voice_phone || '')
 
   // Coordinates to save: re-validated ones win; otherwise keep whatever was
   // stored before (idle = address untouched, invalid = clear them).
@@ -205,6 +208,7 @@ export default function EditBusinessForm({
           address_verified: effectiveCoords.verified,
           show_location: form.show_location,
           phone_type: phoneType,
+          voice_phone: phoneType === 'whatsapp' ? voicePhone.trim() : '',
         }),
       })
       const data = await res.json()
@@ -296,6 +300,23 @@ export default function EditBusinessForm({
             <p className="text-[11px] text-whatsapp-700 mt-1">
               Saved exactly as entered (e.g. 024 2123456 or 999): customers see a Call button instead of WhatsApp.
             </p>
+          )}
+          {phoneType === 'whatsapp' && (
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Landline / hotline number <span className="text-text-secondary font-normal">(optional)</span>
+              </label>
+              <input
+                type="tel"
+                value={voicePhone}
+                onChange={e => setVoicePhone(e.target.value.replace(/[^0-9+ ]/g, ''))}
+                placeholder="e.g. 024 275 0000 or 999"
+                className="input-field"
+              />
+              <p className="text-[11px] text-whatsapp-700 mt-1">
+                Optional second number: customers get both a WhatsApp chat button and a Call button.
+              </p>
+            </div>
           )}
         </div>
 

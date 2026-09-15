@@ -7,8 +7,7 @@ import L from 'leaflet'
 import { categories } from '@/data/categories'
 import type { Business } from '@/types'
 import 'leaflet/dist/leaflet.css'
-
-const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
+import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, whatsappHref, callHref } from '@/components/contact'
 
 function getCategoryEmoji(businessCategories: string[]): string {
   for (const catName of businessCategories) {
@@ -105,14 +104,22 @@ export default function BusinessMap({ businesses }: Props) {
                 </p>
               )}
               <div className="flex gap-1.5 mt-2">
-                {selected.phone && (
+                {hasWhatsAppChannel(selected) && (
                   <a
-                    href={`https://wa.me/${(selected.phone || '').replace(/[^0-9]/g, '')}?text=${WA_MSG}`}
+                    href={whatsappHref(selected.phone)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-[10px] font-semibold bg-emerald-600 text-white px-2 py-1 rounded-full hover:bg-emerald-700 no-underline"
                   >
                     WhatsApp
+                  </a>
+                )}
+                {hasVoiceChannel(selected) && (
+                  <a
+                    href={callHref(voiceNumber(selected))}
+                    className="text-[10px] font-semibold bg-whatsapp-700 text-white px-2 py-1 rounded-full hover:bg-whatsapp-800 no-underline"
+                  >
+                    Call
                   </a>
                 )}
                 <Link

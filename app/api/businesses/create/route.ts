@@ -73,11 +73,18 @@ export async function POST(request: Request) {
     }
 
     const validCityNames = new Set(zimbabweCities.map(c => c.name))
+    // '*' (or legacy 'remote') = the whole country: a nationwide listing with
+    // no city and no sub-locations. is_remote covers the whole country too.
     const isRemote = body.is_remote === true || (typeof city === 'string' && (city === 'remote' || city === '*'))
     const isPendingCity = pending_city === true && typeof city === 'string' && city.trim().length > 0 && city !== 'remote' && city !== '*'
     const cleanCity = typeof city === 'string'
       ? (isRemote ? '' : validCityNames.has(city) ? city : isPendingCity ? city.trim() : '')
       : ''
+
+    // Optional second number: a landline/hotline saved alongside a WhatsApp
+    // mobile (both-types choice). Stored in national format, voice-style.
+    const voicePhoneInput = typeof body.voice_phone === 'string' ? body.voice_phone.trim() : ''
+    const cleanVoicePhone = voicePhoneInput && !isVoice ? normalizeVoicePhone(voicePhoneInput) : null
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -104,7 +111,10 @@ export async function POST(request: Request) {
         .map(a => a.trim())
         .slice(0, 8)
     }
-    if (isRemote && !cleanCity) cleanAreas = []
+    // Whole-country ('*') listings have no sub-locations. Remote businesses
+    // (no physical presence) keep the areas/cities they picked to serve.
+    if (typeof city === 'string' && (city === '*' || city === 'remote')) cleanAreas = []
+    if (isRemote && !cleanCity && typeof city === 'string' && city === '*') cleanAreas = []
 
     const location = isRemote && !cleanCity
       ? 'Zimbabwe'
@@ -172,6 +182,7 @@ export async function POST(request: Request) {
           phone: fullPhone,
           phone_type: isVoice ? 'voice' : 'whatsapp',
           whatsapp_link: isVoice ? null : `https://wa.me/${fullPhone}?text=${WA_MSG}`,
+          voice_phone: cleanVoicePhone,
           catalog_link: typeof catalog_link === 'string' && catalog_link.trim() ? catalog_link.trim() : null,
           logo_url: typeof logo_url === 'string' && logo_url.trim() ? logo_url.trim() : null,
           price_range: normalizedPrice,

@@ -13,6 +13,8 @@ export interface Business {
   // 'whatsapp' (default) = number is WhatsApp-reachable; 'voice' = landline or
   // hotline stored in national format — renders a Call button, not wa.me.
   phone_type?: 'whatsapp' | 'voice'
+  // Secondary landline/hotline shown alongside WhatsApp for both-types listings.
+  voice_phone?: string | null
   whatsapp_username?: string
   whatsapp_link?: string
   verified: boolean

@@ -398,6 +398,7 @@ function FrontLandscapeSvg({
   locationText,
   profileUrl,
   uid,
+  voiceOnly,
 }: {
   business: Business
   theme: ThemeConfig
@@ -407,6 +408,7 @@ function FrontLandscapeSvg({
   locationText: string
   profileUrl: string
   uid: string
+  voiceOnly: boolean
 }) {
   const nameLength = business.name.length
   const nameFontSize = nameLength > 28 ? 26 : nameLength > 20 ? 30 : 34
@@ -624,10 +626,10 @@ function FrontLandscapeSvg({
           <rect width="40" height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <WhatsAppIconSvg x={8} y={8} size={24} fill={theme.accentColor} />
           <text x="54" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
-            WHATSAPP DIRECT
+            {voiceOnly ? 'VOICE & HOTLINE' : 'WHATSAPP DIRECT'}
           </text>
           <text x="54" y="36" fill={theme.primaryText} fontSize="18" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
-            {formattedPhone || '+263 WhatsApp Direct'}
+            {voiceOnly ? (formattedPhone || business.phone) : (formattedPhone || '+263 WhatsApp Direct')}
           </text>
         </g>
 
@@ -676,7 +678,7 @@ function FrontLandscapeSvg({
         </text>
 
         <text x={CARD_W - 45} y="38" textAnchor="end" fill={theme.accentColor} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
-          FLIP CARD FOR INSTANT WHATSAPP QR SCAN →
+          {voiceOnly ? 'FLIP CARD — SCAN TO CALL' : 'FLIP CARD FOR INSTANT WHATSAPP QR SCAN'} →
         </text>
       </g>
     </svg>
@@ -703,6 +705,7 @@ function BackLandscapeSvg({
   profileUrl: string
   uid: string
 }) {
+  const voiceOnly = business.phone_type === 'voice'
   return (
     <svg
       viewBox={`0 0 ${CARD_W} ${CARD_H}`}
@@ -786,7 +789,7 @@ function BackLandscapeSvg({
           <rect width="240" height="42" rx="21" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
           <WhatsAppIconSvg x={12} y={9} size={24} fill={theme.accentColor} />
           <text x="44" y="26" fill={theme.chipText} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
-            INSTANT CHAT QR CODE
+            {voiceOnly ? 'SCAN TO CALL' : 'INSTANT CHAT QR CODE'}
           </text>
         </g>
       </g>
@@ -907,6 +910,7 @@ function FrontPortraitSvg({
   locationText,
   profileUrl,
   uid,
+  voiceOnly,
 }: {
   business: Business
   theme: ThemeConfig
@@ -916,6 +920,7 @@ function FrontPortraitSvg({
   locationText: string
   profileUrl: string
   uid: string
+  voiceOnly: boolean
 }) {
   const nameLength = business.name.length
   const nameFontSize = nameLength > 24 ? 26 : nameLength > 16 ? 30 : 34
@@ -1080,10 +1085,10 @@ function FrontPortraitSvg({
           <rect width="44" height="44" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <WhatsAppIconSvg x={10} y={10} size={24} fill={theme.accentColor} />
           <text x="58" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
-            WHATSAPP DIRECT
+            {voiceOnly ? 'VOICE & HOTLINE' : 'WHATSAPP DIRECT'}
           </text>
           <text x="58" y="38" fill={theme.primaryText} fontSize="17" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
-            {formattedPhone || '+263 WhatsApp Direct'}
+            {voiceOnly ? (formattedPhone || business.phone) : (formattedPhone || '+263 WhatsApp Direct')}
           </text>
         </g>
 
@@ -1125,7 +1130,7 @@ function FrontPortraitSvg({
         <rect width={PORTRAIT_W} height="64" fill={theme.footerBg} />
         <line x1="0" y1="0" x2={PORTRAIT_W} y2="0" stroke={theme.footerBorder} strokeWidth="1" />
         <text x="300" y="38" textAnchor="middle" fill={theme.accentColor} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
-          FLIP CARD FOR WHATSAPP QR SCAN →
+          {voiceOnly ? 'FLIP CARD — SCAN TO CALL' : 'FLIP CARD FOR WHATSAPP QR SCAN'} →
         </text>
       </g>
     </svg>
@@ -1152,6 +1157,7 @@ function BackPortraitSvg({
   profileUrl: string
   uid: string
 }) {
+  const voiceOnly = business.phone_type === 'voice'
   return (
     <svg
       viewBox={`0 0 ${PORTRAIT_W} ${PORTRAIT_H}`}
@@ -1362,9 +1368,14 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const locationText = [business.area, business.city, 'Zimbabwe'].filter(Boolean).join(', ')
   const profileUrl = `wadirectory.co.zw/business/${business.slug || business.id}`
   const phoneClean = (business.phone || '').replace(/[^0-9]/g, '')
-  const qrValue = `https://wa.me/${phoneClean}?text=${encodeURIComponent(
-    `Hi ${business.name}, I found your official business card on WA Directory Zimbabwe and would like to inquire about your services.`
-  )}`
+  // Voice-only listings (landline/hotline) have no WhatsApp chat — the card QR
+  // becomes a one-tap dial link and the contact chip shows the voice number.
+  const voiceOnly = business.phone_type === 'voice'
+  const qrValue = voiceOnly
+    ? `tel:${business.phone}`
+    : `https://wa.me/${phoneClean}?text=${encodeURIComponent(
+        `Hi ${business.name}, I found your official business card on WA Directory Zimbabwe and would like to inquire about your services.`
+      )}`
   const formattedPhone = formatPhone(business.phone)
   const theme = THEMES[currentTheme]
 
@@ -1500,7 +1511,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
       // Label: Back Side
       const backY = headerH + 30 * scale + curH + 60 * scale
-      ctx.fillText(`SIDE B (BACK WHATSAPP QR SCAN GATEWAY)`, pad, backY - 10 * scale)
+      ctx.fillText(voiceOnly ? `SIDE B (BACK SCAN-TO-CALL GATEWAY)` : `SIDE B (BACK WHATSAPP QR SCAN GATEWAY)`, pad, backY - 10 * scale)
 
       // Draw Back
       ctx.drawImage(backCanvas, pad, backY)
@@ -1535,16 +1546,20 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
   // Download Digital vCard (.vcf)
   function downloadVCard() {
+    const voiceNum = voiceOnly ? business.phone : business.voice_phone
     const vCardData = [
       'BEGIN:VCARD',
       'VERSION:3.0',
       `FN:${business.name}`,
       `ORG:${business.name}`,
-      `TEL;TYPE=CELL,VOICE,PREF:${formattedPhone || business.phone}`,
+      voiceOnly
+        ? `TEL;TYPE=WORK,VOICE,PREF:${business.phone}`
+        : `TEL;TYPE=CELL,VOICE,PREF:${formattedPhone || business.phone}`,
+      ...(voiceNum ? [`TEL;TYPE=WORK,VOICE:${voiceNum}`] : []),
       `ADR;TYPE=WORK:;;${business.address || ''};${business.city || 'Harare'};;Zimbabwe`,
       `URL:https://${profileUrl}`,
-      `NOTE:Verified WhatsApp Business on WA Directory Zimbabwe. Category: ${business.category?.join(', ') || 'Business'}`,
-      'X-SOCIALPROFILE;TYPE=whatsapp:https://wa.me/' + phoneClean,
+      `NOTE:${voiceOnly ? 'Verified business' : 'Verified WhatsApp Business'} on WA Directory Zimbabwe. Category: ${business.category?.join(', ') || 'Business'}`,
+      ...(voiceOnly ? [] : ['X-SOCIALPROFILE;TYPE=whatsapp:https://wa.me/' + phoneClean]),
       'END:VCARD',
     ].join('\r\n')
 
@@ -1876,6 +1891,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   initials={initials}
                   formattedPhone={formattedPhone}
                   locationText={locationText}
+                  voiceOnly={voiceOnly}
                   profileUrl={profileUrl}
                   uid={`${uniqueId}_dual_fl`}
                 />
@@ -1887,6 +1903,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   initials={initials}
                   formattedPhone={formattedPhone}
                   locationText={locationText}
+                  voiceOnly={voiceOnly}
                   profileUrl={profileUrl}
                   uid={`${uniqueId}_dual_fp`}
                 />
@@ -1943,6 +1960,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   initials={initials}
                   formattedPhone={formattedPhone}
                   locationText={locationText}
+                  voiceOnly={voiceOnly}
                   profileUrl={profileUrl}
                   uid={`${uniqueId}_hidden_fl`}
                 />
@@ -1954,6 +1972,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   initials={initials}
                   formattedPhone={formattedPhone}
                   locationText={locationText}
+                  voiceOnly={voiceOnly}
                   profileUrl={profileUrl}
                   uid={`${uniqueId}_hidden_fp`}
                 />
@@ -2012,6 +2031,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                     initials={initials}
                     formattedPhone={formattedPhone}
                     locationText={locationText}
+                    voiceOnly={voiceOnly}
                     profileUrl={profileUrl}
                     uid={`${uniqueId}_stage_fl`}
                   />
@@ -2023,6 +2043,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                     initials={initials}
                     formattedPhone={formattedPhone}
                     locationText={locationText}
+                    voiceOnly={voiceOnly}
                     profileUrl={profileUrl}
                     uid={`${uniqueId}_stage_fp`}
                   />

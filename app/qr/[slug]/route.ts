@@ -15,7 +15,7 @@ export async function GET(
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, phone, whatsapp_link')
+    .select('id, phone, phone_type, whatsapp_link')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -32,6 +32,11 @@ export async function GET(
     })
   } catch {
     // fire-and-forget: never block the redirect
+  }
+
+  // Voice-only listings have no WhatsApp chat — the QR dials the number instead.
+  if (business.phone_type === 'voice') {
+    redirect(`tel:${business.phone}`)
   }
 
   const message = encodeURIComponent(

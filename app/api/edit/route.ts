@@ -5,7 +5,7 @@ import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location, is_remote, phone_type, lat, lng, address_verified } = body
+    const { edit_token, name, bio, category, phone, country_code, whatsapp_username, city, area, areas, price_range, catalog_link, logo_url, website, address, show_location, is_remote, phone_type, voice_phone, lat, lng, address_verified } = body
 
     if (!edit_token) {
       return NextResponse.json({ error: 'Edit token is required' }, { status: 400 })
@@ -46,6 +46,10 @@ export async function POST(request: Request) {
     const whatsappLink = isVoice
       ? null
       : `https://wa.me/${fullPhone}?text=Hi%2C%20I%20found%20you%20on%20WA%20Directory`
+    // Optional secondary landline/hotline alongside a WhatsApp mobile (both types).
+    const cleanVoicePhone = !isVoice && typeof voice_phone === 'string' && voice_phone.trim()
+      ? normalizeVoicePhone(voice_phone.trim())
+      : null
 
     const isRemote = body.is_remote === true || city === 'remote' || city === '*'
     const cityPhysical = isRemote ? '' : (typeof city === 'string' ? city : '')
@@ -63,6 +67,7 @@ export async function POST(request: Request) {
         category: typeof category === 'string' ? [category] : category,
         phone: fullPhone,
         phone_type: isVoice ? 'voice' : 'whatsapp',
+        voice_phone: cleanVoicePhone,
         country_code: isVoice ? null : (country_code || null),
         city: cityPhysical || null,
         area: primaryArea || null,

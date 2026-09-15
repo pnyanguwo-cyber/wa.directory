@@ -13,7 +13,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, name, phone, slug, catalog_link, verified, location, city, area')
+    .select('id, name, phone, phone_type, slug, catalog_link, verified, location, city, area')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -22,9 +22,11 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
   const key = business.slug || business.id
   const profileUrl = `${SITE_URL}/business/${key}`
   const phoneClean = (business.phone || '').replace(/\D/g, '')
+  // Voice-only listings have no WhatsApp chat — the QR page dials instead.
+  const voiceOnly = business.phone_type === 'voice'
   const chatMsg = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
-  const chatUrl = phoneClean ? `https://wa.me/${phoneClean}?text=${chatMsg}` : `${SITE_URL}/qr/${key}`
-  const waLink = phoneClean ? `https://wa.me/${phoneClean}` : null
+  const chatUrl = voiceOnly ? `tel:${business.phone}` : phoneClean ? `https://wa.me/${phoneClean}?text=${chatMsg}` : `${SITE_URL}/qr/${key}`
+  const waLink = voiceOnly ? null : phoneClean ? `https://wa.me/${phoneClean}` : null
   const locationText = [business.area, business.city, 'Zimbabwe'].filter(Boolean).join(', ')
 
   return (

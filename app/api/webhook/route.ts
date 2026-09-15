@@ -299,16 +299,21 @@ async function sendSearchResults(from: string, text: string) {
   )
   businesses.forEach((b, i) => {
     const area = [b.area, b.city].filter(Boolean).join(', ') || b.location || 'Zimbabwe'
-    const chatLink = b.phone
-      ? `https://wa.me/${String(b.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
-      : `${SITE_URL}/go/${b.id}`
+    // Voice-only listings (landlines & hotlines) have no WhatsApp chat —
+    // point customers at the profile instead of a broken wa.me link.
+    const isVoiceBiz = b.phone_type === 'voice'
+    const chatLink = isVoiceBiz
+      ? ''
+      : b.phone
+        ? `https://wa.me/${String(b.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
+        : `${SITE_URL}/go/${b.id}`
     lines.push(
       [
         `${i + 1}. *${b.name}*`,
         `📍 ${area}`,
         b.price_range ? `💰 ${b.price_range}` : '',
         b.rating > 0 ? `⭐ ${b.rating.toFixed(1)} (${b.review_count || 0})` : '',
-        `👉 Chat: ${chatLink}`,
+        chatLink ? `👉 Chat: ${chatLink}` : '',
         `🔗 ${SITE_URL}/business/${b.slug || b.id}`,
       ]
         .filter(Boolean)
