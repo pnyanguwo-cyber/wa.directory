@@ -65,7 +65,7 @@ function Stars({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map(i => (
         <svg
           key={i}
-          className={`w-5 h-5 ${i <= stars ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}`}
+          className={`w-5 h-5 ${i <= stars ? 'text-yellow-500' : 'text-gray-300'}`}
           viewBox="0 0 20 20"
           fill="currentColor"
         >
@@ -222,10 +222,10 @@ async function BusinessContent({ slug }: { slug: string }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        <div className={`bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border shadow-soft-lift p-3 sm:p-6 ${
+        <div className={`bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border shadow-soft-lift p-3 sm:p-6 ${
           yellow
-            ? 'from-amber-50/90 via-amber-50/70 to-amber-100/30 dark:from-amber-950/40 dark:via-gray-900/90 dark:to-amber-950/20 border-amber-300/60 dark:border-amber-800/50'
-            : 'from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 border-white/70 dark:border-gray-800'
+            ? 'from-amber-50/90 via-amber-50/70 to-amber-100/30 border-amber-300/60'
+            : 'from-white/85 via-white/80 to-whatsapp-50/20 border-white/70'
         }`}>
           <div className="flex items-center justify-between mb-4">
             <Link
@@ -253,7 +253,7 @@ async function BusinessContent({ slug }: { slug: string }) {
               ) : (
                 <div className={`w-full h-full bg-gradient-to-r ${
                   yellow
-                    ? 'from-amber-100 via-amber-200 to-yellow-200 dark:from-amber-950/60 dark:via-amber-900/50 dark:to-yellow-950/50'
+                    ? 'from-amber-100 via-amber-200 to-yellow-200'
                     : 'from-whatsapp-100 to-whatsapp-200'
                 }`} />
               )}
@@ -262,8 +262,8 @@ async function BusinessContent({ slug }: { slug: string }) {
                 strokeWidth={0.9}
                 className={`absolute right-3 bottom-0 translate-y-3 w-24 h-24 sm:w-40 sm:h-40 ${
                   yellow
-                    ? 'text-amber-700/40 dark:text-amber-300/30'
-                    : 'text-whatsapp-700/20 dark:text-whatsapp-300/20'
+                    ? 'text-amber-700/40'
+                    : 'text-whatsapp-700/20'
                 }`}
               />
               {yellow && (
@@ -318,7 +318,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                     <span className="text-[10px] sm:text-xs font-semibold text-text-secondary">Popularity</span>
                     <span className="text-[10px] sm:text-xs font-bold text-whatsapp-700">{monthlyViews} profile views this month</span>
                   </div>
-                  <div className="h-1.5 sm:h-2 bg-surface dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-1.5 sm:h-2 bg-surface rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-whatsapp-400 to-whatsapp-600 rounded-full"
                       style={{ width: `${Math.min(100, 15 + monthlyViews * 0.85)}%` }}
@@ -341,10 +341,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                           key={a}
                           className={`inline-flex items-center gap-0.5 sm:gap-1 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-xs font-medium border ${
                             i === 0
-                              ? 'bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-800/50'
+                              ? 'bg-orange-50 text-orange-800 border-orange-300'
                               : isPending
-                                ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
-                                : 'bg-surface dark:bg-gray-800 text-text-secondary border-gray-200 dark:border-gray-700'
+                                ? 'bg-gray-100 text-gray-500 border-gray-200'
+                                : 'bg-surface text-text-secondary border-gray-200'
                           }`}
                         >
                           {i === 0 && (
@@ -372,7 +372,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                   </p>
                 )}
                 {business.price_range && (
-                  <span className="bg-surface dark:bg-gray-800 text-text-secondary text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded flex items-center gap-1">
+                  <span className="bg-surface text-text-secondary text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded flex items-center gap-1">
                     <span>{business.price_range.startsWith('$') ? '' : '$'}</span>
                     {business.price_range}
                   </span>
@@ -410,10 +410,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                           key={i}
                           className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm border ${
                             isPending
-                              ? 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                              ? 'bg-gray-100 text-gray-500 border-gray-200'
                               : isYellowPages([cat])
-                                ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700/50'
-                                : 'bg-whatsapp-50 dark:bg-whatsapp-950/40 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
                           }`}
                         >
                           {cat}
@@ -502,8 +502,8 @@ async function BusinessContent({ slug }: { slug: string }) {
                   <div>
                     <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Location & Directions</h2>
                     <div className="space-y-2">
-                      <div className="rounded-2xl bg-surface/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
-                        <div className="w-9 h-9 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200/60 dark:border-whatsapp-800/60 flex items-center justify-center text-whatsapp-600 dark:text-whatsapp-400 shrink-0">
+                      <div className="rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
+                        <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z" />
                           </svg>
@@ -516,8 +516,8 @@ async function BusinessContent({ slug }: { slug: string }) {
                         </div>
                       </div>
                       {business.address && business.show_location !== false && (
-                        <div className="rounded-2xl bg-surface/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
-                          <div className="w-9 h-9 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200/60 dark:border-whatsapp-800/60 flex items-center justify-center text-whatsapp-600 dark:text-whatsapp-400 shrink-0">
+                        <div className="rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
+                          <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z" />
                             </svg>
@@ -546,10 +546,10 @@ async function BusinessContent({ slug }: { slug: string }) {
                           href={areaDirectionsHref}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block rounded-2xl bg-surface/90 dark:bg-gray-800/80 border border-gray-200/80 dark:border-gray-700/80 p-3 sm:p-3.5 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                          className="block rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 shadow-xs hover:bg-gray-50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200/60 dark:border-whatsapp-800/60 flex items-center justify-center text-whatsapp-600 dark:text-whatsapp-400 shrink-0">
+                            <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
                               </svg>
@@ -560,7 +560,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                                 {businessAreas.length ? businessAreas[0] : ''}{business.city ? (businessAreas.length ? `, ${business.city}` : business.city) : ''}
                               </p>
                             </div>
-                            <span className="text-xs text-whatsapp-600 dark:text-whatsapp-400 font-semibold shrink-0">Directions</span>
+                            <span className="text-xs text-whatsapp-600 font-semibold shrink-0">Directions</span>
                           </div>
                         </a>
                       )}
@@ -584,12 +584,12 @@ async function BusinessContent({ slug }: { slug: string }) {
                 </div>
               )}
 
-              <div id="business-card" className="mb-4 sm:mb-8 pt-5 border-t border-gray-100 dark:border-gray-800 scroll-mt-6">
+              <div id="business-card" className="mb-4 sm:mb-8 pt-5 border-t border-gray-100 scroll-mt-6">
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <h2 className="text-base sm:text-lg font-bold text-text-primary">Official Business Card</h2>
-                      <span className="inline-flex items-center gap-1 bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200 dark:border-whatsapp-800 text-whatsapp-700 dark:text-whatsapp-300 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 bg-whatsapp-50 border border-whatsapp-200 text-whatsapp-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
                         <span className="w-1.5 h-1.5 rounded-full bg-whatsapp-500 animate-pulse" />
                         World Standard · 3.5″ × 2.0″
                       </span>
@@ -642,7 +642,7 @@ async function BusinessContent({ slug }: { slug: string }) {
             </div>
           )}
 
-          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 sm:hidden z-40">
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white border-t border-gray-200 sm:hidden z-40">
             <WhatsAppButton phone={business.phone} businessId={business.id} />
           </div>
         </div>

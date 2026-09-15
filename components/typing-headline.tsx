@@ -44,12 +44,12 @@ export default function TypingHeadline() {
 
   return (
     <div className="max-w-5xl mx-auto mb-4 sm:mb-6">
-      <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-text-primary dark:text-white tracking-tight leading-[1.1] sm:leading-[1.06] text-center">
+      <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-text-primary tracking-tight leading-[1.1] sm:leading-[1.06] text-center">
         <span>Find any </span>
-        <span className="relative inline-block bg-gradient-to-r from-whatsapp-600 via-whatsapp-500 to-emerald-500 dark:from-whatsapp-400 dark:via-emerald-400 dark:to-teal-300 bg-clip-text text-transparent pb-1">
+        <span className="relative inline-block bg-gradient-to-r from-whatsapp-600 via-whatsapp-500 to-emerald-500 bg-clip-text text-transparent pb-1">
           {currentText || '\u00A0'}
           <span
-            className="inline-block w-1.5 sm:w-2 md:w-2.5 h-[0.82em] ml-1 sm:ml-2 bg-whatsapp-500 dark:bg-whatsapp-400 rounded-sm animate-pulse align-baseline"
+            className="inline-block w-1.5 sm:w-2 md:w-2.5 h-[0.82em] ml-1 sm:ml-2 bg-whatsapp-500 rounded-sm animate-pulse align-baseline"
             aria-hidden="true"
           />
         </span>

@@ -208,6 +208,131 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const supabase = getSupabase()
 
+    if (body.action === 'reset_scope') {
+      // Manually reset the auction for one (category, city) scope: the base
+      // price returns to $0.10 and rankings fall back to the default
+      // algorithm (rarely-seen weighted shuffle) — every business starts
+      // from zero again.
+      const { category, city } = body
+      if (!category) return NextResponse.json({ error: 'category is required' }, { status: 400 })
+      const cityKey = city || ''
+      const period = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
+
+      // 1. Snapshot everyone affected BEFORE anything changes, so we can
+      //    notify them afterwards: spot holders (paid placements), unpaid
+      //    bidders and paid bidders.
+      const [spotsRes, pendingRes, paidRes] = await Promise.all([
+        supabase
+          .from('rank_spots')
+          .select('business_id, position')
+          .eq('category', category)
+          .eq('city', cityKey)
+          .eq('status', 'active'),
+        supabase
+          .from('bids')
+          .select('business_id, amount')
+          .eq('category', category)
+          .eq('city', cityKey)
+          .eq('period', period)
+          .eq('status', 'pending'),
+        supabase
+          .from('bids')
+          .select('business_id, amount')
+          .eq('category', category)
+          .eq('city', cityKey)
+          .eq('period', period)
+          .eq('status', 'paid'),
+      ])
+
+      // 2. Expire every active rank spot in this scope (the paid #1/#2/#3 go away).
+      const { error: spotsError } = await supabase
+        .from('rank_spots')
+        .update({ status: 'expired' })
+        .eq('category', category)
+        .eq('city', cityKey)
+        .eq('status', 'active')
+      if (spotsError) return NextResponse.json({ error: spotsError.message }, { status: 500 })
+
+      // 3. Close out this period's live bids in the scope so the auction
+      //    restarts clean: unpaid → expired, paid-but-not-yet-activated →
+      //    outbid (they lost their money spot to the reset).
+      const { error: pendingError } = await supabase
+        .from('bids')
+        .update({ status: 'expired' })
+        .eq('category', category)
+        .eq('city', cityKey)
+        .eq('period', period)
+        .eq('status', 'pending')
+      if (pendingError) return NextResponse.json({ error: pendingError.message }, { status: 500 })
+
+      const { error: paidError } = await supabase
+        .from('bids')
+        .update({ status: 'outbid' })
+        .eq('category', category)
+        .eq('city', cityKey)
+        .eq('period', period)
+        .eq('status', 'paid')
+      if (paidError) return NextResponse.json({ error: paidError.message }, { status: 500 })
+
+      // 4. WhatsApp every affected business — spot holders and bidders
+      //    alike — with a note tailored to what the reset costs them.
+      const affected = new Map<string, { spots: number[]; paid?: number; pending?: number }>()
+      for (const s of spotsRes.data || []) {
+        const entry = affected.get(s.business_id) || { spots: [] }
+        entry.spots.push(Number(s.position))
+        affected.set(s.business_id, entry)
+      }
+      for (const b of paidRes.data || []) {
+        const entry = affected.get(b.business_id) || { spots: [] }
+        entry.paid = Math.max(entry.paid ?? 0, Number(b.amount))
+        affected.set(b.business_id, entry)
+      }
+      for (const b of pendingRes.data || []) {
+        const entry = affected.get(b.business_id) || { spots: [] }
+        entry.pending = Math.max(entry.pending ?? 0, Number(b.amount))
+        affected.set(b.business_id, entry)
+      }
+
+      let notified = 0
+      if (affected.size > 0) {
+        const { data: affectedBiz } = await supabase
+          .from('businesses')
+          .select('id, phone')
+          .in('id', [...affected.keys()])
+        const portalUrl = `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/portal/ranking`
+        for (const biz of affectedBiz || []) {
+          const info = affected.get(biz.id)
+          if (!info || !biz.phone) continue
+          const lines: string[] = []
+          if (info.spots.length > 0) {
+            lines.push(`Your paid spot${info.spots.length > 1 ? 's' : ''} (#${info.spots.sort((a, b) => a - b).join(', #')}) was cleared.`)
+          }
+          if (info.paid != null) {
+            lines.push(`Your paid bid of $${info.paid.toFixed(2)} was outbid by the reset.`)
+          }
+          if (info.pending != null) {
+            lines.push(`Your pending bid of $${info.pending.toFixed(2)} was closed — nothing was charged.`)
+          }
+          sendWhatsAppMessage(
+            biz.phone,
+            [
+              'ℹ️ *Ranking auction reset*',
+              '',
+              `The ranking auction for *${category}*${cityKey ? ` in ${cityKey}` : ''} was reset by the directory team.`,
+              ...lines,
+              'Results now follow the default order and the bidding base price restarts from $0.10.',
+              '',
+              'You can bid again anytime from your portal:',
+              portalUrl,
+            ].join('\n')
+          ).catch(() => {})
+          notified++
+        }
+      }
+
+      return NextResponse.json({ success: true, notified })
+    }
+
     if (body.action === 'reject_bid') {
       const { bid_id, feedback } = body
       if (!bid_id) return NextResponse.json({ error: 'bid_id is required' }, { status: 400 })

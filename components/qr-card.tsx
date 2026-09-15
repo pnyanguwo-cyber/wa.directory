@@ -610,7 +610,7 @@ export default function QrCard({
   if (!mounted) {
     if (exportOnly) return null
     return (
-      <div className={`rounded-3xl bg-slate-100 dark:bg-gray-800 animate-pulse ${className ?? ''}`} style={{ minHeight: 320 }} />
+      <div className={`rounded-3xl bg-slate-100 animate-pulse ${className ?? ''}`} style={{ minHeight: 320 }} />
     )
   }
 
@@ -1078,14 +1078,14 @@ export default function QrCard({
     return (
       <>
         <div
-          className={`relative rounded-3xl bg-gradient-to-b from-white/95 to-slate-50/90 dark:from-gray-900/95 dark:to-gray-950/90 backdrop-blur-xl border border-gray-200/80 dark:border-gray-800 shadow-soft-lift p-4 sm:p-5 flex flex-col items-center gap-3.5 transition-all hover:shadow-xl ${
+          className={`relative rounded-3xl bg-gradient-to-b from-white/95 to-slate-50/90 backdrop-blur-xl border border-gray-200/80 shadow-soft-lift p-4 sm:p-5 flex flex-col items-center gap-3.5 transition-all hover:shadow-xl ${
             className ?? ''
           }`}
         >
           {/* Header Bar: Scan To Chat & Verified Badge */}
-          <div className="w-full flex items-center justify-between gap-2 border-b border-gray-100 dark:border-gray-800/80 pb-3">
+          <div className="w-full flex items-center justify-between gap-2 border-b border-gray-100 pb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200 dark:border-whatsapp-800 flex items-center justify-center text-whatsapp-600 dark:text-whatsapp-400 shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-whatsapp-50 border border-whatsapp-200 flex items-center justify-center text-whatsapp-600 shrink-0">
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d={WA_GLYPH_PATH} />
                 </svg>
@@ -1099,7 +1099,7 @@ export default function QrCard({
             </div>
 
             {verified && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-whatsapp-50 dark:bg-whatsapp-950/60 text-whatsapp-700 dark:text-whatsapp-300 border border-whatsapp-200/80 dark:border-whatsapp-800 shrink-0">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-whatsapp-50 text-whatsapp-700 border border-whatsapp-200/80 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-whatsapp-500 animate-pulse" />
                 Verified
               </span>
@@ -1109,7 +1109,7 @@ export default function QrCard({
           {/* Live Dynamic QR Stage */}
           <div
             ref={qrRef}
-            className="w-full flex items-center justify-center p-3 rounded-2xl bg-slate-50 dark:bg-gray-950/70 border border-slate-200/70 dark:border-gray-800 relative overflow-hidden group shadow-inner"
+            className="w-full flex items-center justify-center p-3 rounded-2xl bg-slate-50 border border-slate-200/70 relative overflow-hidden group shadow-inner"
           >
             {theme.isTransparent && (
               <div
@@ -1145,7 +1145,7 @@ export default function QrCard({
                     className={`h-7 rounded-xl transition-all flex items-center justify-center border cursor-pointer ${
                       active
                         ? 'border-whatsapp-500 ring-2 ring-whatsapp-500/40 scale-105 shadow-xs'
-                        : 'border-gray-200 dark:border-gray-700 opacity-80 hover:opacity-100 hover:scale-105'
+                        : 'border-gray-200 opacity-80 hover:opacity-100 hover:scale-105'
                     }`}
                     style={{ backgroundColor: t.isTransparent ? '#f1f5f9' : t.pillColor }}
                   >
@@ -1177,7 +1177,7 @@ export default function QrCard({
           <div className="w-full grid grid-cols-2 gap-2">
             <button
               onClick={() => setStudioModalOpen(true)}
-              className="w-full py-2 px-2.5 rounded-xl bg-surface dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-text-primary text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm"
+              className="w-full py-2 px-2.5 rounded-xl bg-surface hover:bg-gray-200 border border-gray-200 text-text-primary text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm"
               title="Open full QR Customization Studio"
             >
               <svg className="w-3.5 h-3.5 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -1190,7 +1190,7 @@ export default function QrCard({
             <button
               onClick={() => downloadPng(false)}
               disabled={downloading !== null}
-              className="w-full py-2 px-2.5 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/50 hover:bg-whatsapp-100 dark:hover:bg-whatsapp-900/60 border border-whatsapp-200 dark:border-whatsapp-800 text-whatsapp-800 dark:text-whatsapp-200 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+              className="w-full py-2 px-2.5 rounded-xl bg-whatsapp-50 hover:bg-whatsapp-100 border border-whatsapp-200 text-whatsapp-800 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
               title="Download Master HD Print PNG"
             >
               <svg className="w-3.5 h-3.5 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth={2.2} viewBox="0 0 24 24">
@@ -1201,7 +1201,7 @@ export default function QrCard({
           </div>
 
           {/* Quick Format Pill Bar (Vector SVG, Print Stand, Copy Link) */}
-          <div className="w-full flex items-center justify-between text-[11px] font-semibold text-text-secondary border-t border-gray-100 dark:border-gray-800/80 pt-2.5 px-1">
+          <div className="w-full flex items-center justify-between text-[11px] font-semibold text-text-secondary border-t border-gray-100 pt-2.5 px-1">
             <button
               onClick={downloadSvg}
               className="hover:text-whatsapp-600 transition-colors"
@@ -1239,13 +1239,13 @@ export default function QrCard({
               aria-modal="true"
               aria-labelledby={studioTitleId}
               tabIndex={-1}
-              className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl p-4 sm:p-6 space-y-5 focus:outline-none"
+              className="bg-white border border-gray-200 rounded-3xl w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl p-4 sm:p-6 space-y-5 focus:outline-none"
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="flex items-center justify-between border-b border-gray-100 dark:border-gray-800 pb-3">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-9 h-9 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950 flex items-center justify-center text-whatsapp-600">
+                  <div className="w-9 h-9 rounded-xl bg-whatsapp-50 flex items-center justify-center text-whatsapp-600">
                     <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                       <path d={WA_GLYPH_PATH} />
                     </svg>
@@ -1264,7 +1264,7 @@ export default function QrCard({
                   type="button"
                   onClick={() => setStudioModalOpen(false)}
                   aria-label="Close customization studio"
-                  className="w-8 h-8 rounded-full bg-surface dark:bg-gray-800 text-text-secondary hover:text-text-primary flex items-center justify-center transition-colors"
+                  className="w-8 h-8 rounded-full bg-surface text-text-secondary hover:text-text-primary flex items-center justify-center transition-colors"
                 >
                   ✕
                 </button>
@@ -1273,7 +1273,7 @@ export default function QrCard({
               {/* Live Preview & Toolbar Grid */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
                 {/* Left Preview Column */}
-                <div className="md:col-span-6 flex flex-col items-center justify-center p-5 sm:p-8 rounded-2xl bg-slate-100 dark:bg-gray-950/80 border border-slate-200 dark:border-gray-800 relative overflow-hidden min-h-[360px]">
+                <div className="md:col-span-6 flex flex-col items-center justify-center p-5 sm:p-8 rounded-2xl bg-slate-100 border border-slate-200 relative overflow-hidden min-h-[360px]">
                   {theme.isTransparent && (
                     <div
                       className="absolute inset-0 opacity-20 pointer-events-none"
@@ -1306,7 +1306,7 @@ export default function QrCard({
                             className={`px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border transition-all ${
                               active
                                 ? 'bg-whatsapp-500 text-white border-whatsapp-600 shadow-sm'
-                                : 'bg-surface dark:bg-gray-800 text-text-secondary border-gray-200 dark:border-gray-700 hover:text-text-primary'
+                                : 'bg-surface text-text-secondary border-gray-200 hover:text-text-primary'
                             }`}
                           >
                             <span
@@ -1325,14 +1325,14 @@ export default function QrCard({
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5 block">
                       Name Placement:
                     </label>
-                    <div className="grid grid-cols-4 gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl">
+                    <div className="grid grid-cols-4 gap-1 bg-surface p-1 rounded-xl">
                       {(['top', 'bottom', 'side', 'none'] as NamePlacement[]).map(pos => (
                         <button
                           key={pos}
                           onClick={() => setNamePlacement(pos)}
                           className={`py-1.5 rounded-lg text-xs font-semibold capitalize transition-all ${
                             namePlacement === pos
-                              ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                              ? 'bg-white text-text-primary shadow-sm'
                               : 'text-text-secondary hover:text-text-primary'
                           }`}
                         >
@@ -1347,12 +1347,12 @@ export default function QrCard({
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5 block">
                       Typography:
                     </label>
-                    <div className="grid grid-cols-3 gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl">
+                    <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-xl">
                       <button
                         onClick={() => setFontStyle('sans')}
                         className={`py-1.5 rounded-lg text-xs font-semibold font-sans transition-all ${
                           fontStyle === 'sans'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1362,7 +1362,7 @@ export default function QrCard({
                         onClick={() => setFontStyle('serif')}
                         className={`py-1.5 rounded-lg text-xs font-semibold font-serif transition-all ${
                           fontStyle === 'serif'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1372,7 +1372,7 @@ export default function QrCard({
                         onClick={() => setFontStyle('mono')}
                         className={`py-1.5 rounded-lg text-xs font-semibold font-mono transition-all ${
                           fontStyle === 'mono'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1386,12 +1386,12 @@ export default function QrCard({
                     <label className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-1.5 block">
                       Center Logo:
                     </label>
-                    <div className="grid grid-cols-4 gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl">
+                    <div className="grid grid-cols-4 gap-1 bg-surface p-1 rounded-xl">
                       <button
                         onClick={() => setCenterLogo('whatsapp')}
                         className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           centerLogo === 'whatsapp'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1401,7 +1401,7 @@ export default function QrCard({
                         onClick={() => setCenterLogo('shield')}
                         className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           centerLogo === 'shield'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1411,7 +1411,7 @@ export default function QrCard({
                         onClick={() => setCenterLogo('initials')}
                         className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           centerLogo === 'initials'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1421,7 +1421,7 @@ export default function QrCard({
                         onClick={() => setCenterLogo('none')}
                         className={`py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           centerLogo === 'none'
-                            ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                            ? 'bg-white text-text-primary shadow-sm'
                             : 'text-text-secondary hover:text-text-primary'
                         }`}
                       >
@@ -1440,14 +1440,14 @@ export default function QrCard({
                       value={customCta}
                       onChange={e => setCustomCta(e.target.value)}
                       placeholder="e.g. Scan to chat directly on WhatsApp"
-                      className="w-full px-3 py-2 rounded-xl text-xs bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary focus:outline-none focus:ring-2 focus:ring-whatsapp-500"
+                      className="w-full px-3 py-2 rounded-xl text-xs bg-surface border border-gray-200 text-text-primary focus:outline-none focus:ring-2 focus:ring-whatsapp-500"
                     />
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {CTA_PRESETS.slice(0, 3).map((preset, i) => (
                         <button
                           key={i}
                           onClick={() => setCustomCta(preset)}
-                          className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-text-secondary hover:text-text-primary"
+                          className="text-[10px] px-2 py-0.5 rounded-md bg-gray-100 text-text-secondary hover:text-text-primary"
                         >
                           {preset}
                         </button>
@@ -1458,7 +1458,7 @@ export default function QrCard({
               </div>
 
               {/* Master Download Action Suite */}
-              <div className="border-t border-gray-100 dark:border-gray-800 pt-4 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="border-t border-gray-100 pt-4 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   {/* Master HD PNG (2048x2048 300 DPI) */}
                   <button
@@ -1488,7 +1488,7 @@ export default function QrCard({
                   {/* Vector SVG */}
                   <button
                     onClick={downloadSvg}
-                    className="px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold"
+                    className="px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-text-secondary hover:text-text-primary text-xs font-semibold"
                   >
                     Vector SVG
                   </button>
@@ -1496,7 +1496,7 @@ export default function QrCard({
                   {/* Print Stand */}
                   <button
                     onClick={printStandSheet}
-                    className="px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold flex items-center gap-1.5"
+                    className="px-3.5 py-2.5 rounded-xl border border-gray-200 bg-white text-text-secondary hover:text-text-primary text-xs font-semibold flex items-center gap-1.5"
                   >
                     <svg className="w-3.5 h-3.5 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
@@ -1507,7 +1507,7 @@ export default function QrCard({
 
                 <button
                   onClick={copyLink}
-                  className="px-3.5 py-2.5 rounded-xl bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                  className="px-3.5 py-2.5 rounded-xl bg-surface border border-gray-200 text-text-primary text-xs font-semibold flex items-center gap-1.5 hover:bg-gray-200 transition-all"
                 >
                   {copied ? '✓ Link Copied!' : 'Copy Direct Link'}
                 </button>
@@ -1525,7 +1525,7 @@ export default function QrCard({
   return (
     <div className="w-full space-y-6">
       {/* TOOLBAR CONTROLS */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-6 shadow-sm space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
@@ -1545,7 +1545,7 @@ export default function QrCard({
                   className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all border ${
                     active
                       ? 'bg-whatsapp-500 text-white border-whatsapp-600 shadow-md shadow-whatsapp-500/20 scale-[1.02]'
-                      : 'bg-surface dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-text-secondary hover:text-text-primary hover:bg-gray-200 dark:hover:bg-gray-700'
+                      : 'bg-surface border-gray-200 text-text-secondary hover:text-text-primary hover:bg-gray-200'
                   }`}
                 >
                   <span
@@ -1559,19 +1559,19 @@ export default function QrCard({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-1">
               Placement:
             </span>
-            <div className="flex items-center gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl">
+            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl">
               {(['top', 'bottom', 'side', 'none'] as NamePlacement[]).map(pos => (
                 <button
                   key={pos}
                   onClick={() => setNamePlacement(pos)}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-all ${
                     namePlacement === pos
-                      ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                      ? 'bg-white text-text-primary shadow-sm'
                       : 'text-text-secondary hover:text-text-primary'
                   }`}
                 >
@@ -1585,12 +1585,12 @@ export default function QrCard({
             <span className="text-xs font-bold text-text-secondary uppercase tracking-wider mr-1">
               Typography:
             </span>
-            <div className="flex items-center gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl">
+            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl">
               <button
                 onClick={() => setFontStyle('sans')}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold font-sans transition-all ${
                   fontStyle === 'sans'
-                    ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                    ? 'bg-white text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -1600,7 +1600,7 @@ export default function QrCard({
                 onClick={() => setFontStyle('serif')}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold font-serif transition-all ${
                   fontStyle === 'serif'
-                    ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                    ? 'bg-white text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -1610,7 +1610,7 @@ export default function QrCard({
                 onClick={() => setFontStyle('mono')}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold font-mono transition-all ${
                   fontStyle === 'mono'
-                    ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                    ? 'bg-white text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -1622,7 +1622,7 @@ export default function QrCard({
       </div>
 
       {/* LIVE QR STAGE PREVIEW */}
-      <div className="flex flex-col items-center justify-center p-6 sm:p-12 rounded-3xl bg-slate-100 dark:bg-gray-950/60 border border-slate-200 dark:border-gray-800 relative overflow-hidden min-h-[480px]">
+      <div className="flex flex-col items-center justify-center p-6 sm:p-12 rounded-3xl bg-slate-100 border border-slate-200 relative overflow-hidden min-h-[480px]">
         {theme.isTransparent && (
           <div
             className="absolute inset-0 opacity-20 pointer-events-none"
@@ -1643,7 +1643,7 @@ export default function QrCard({
       </div>
 
       {/* EXPORT ACTION SUITE */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+      <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => downloadPng(false, 4)}
@@ -1670,14 +1670,14 @@ export default function QrCard({
 
           <button
             onClick={downloadSvg}
-            className="px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all"
+            className="px-4 py-3 rounded-xl border border-gray-200 bg-white/70 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all"
           >
             Vector SVG
           </button>
 
           <button
             onClick={printStandSheet}
-            className="px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all flex items-center gap-1.5"
+            className="px-4 py-3 rounded-xl border border-gray-200 bg-white/70 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all flex items-center gap-1.5"
           >
             <svg className="w-3.5 h-3.5 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
@@ -1688,7 +1688,7 @@ export default function QrCard({
 
         <button
           onClick={copyLink}
-          className="px-4 py-3 rounded-xl bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all shrink-0"
+          className="px-4 py-3 rounded-xl bg-surface border border-gray-200 text-text-primary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-200 transition-all shrink-0"
         >
           {copied ? '✓ Link Copied!' : 'Copy Direct Link'}
         </button>

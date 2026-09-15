@@ -163,7 +163,7 @@ export default function AdminCategories() {
                 <label className="text-xs font-medium text-text-secondary mb-1 block">Keywords (comma separated)</label>
                 <textarea value={editKeywords} onChange={e => setEditKeywords(e.target.value)} rows={3} className="input-field text-sm resize-none" placeholder="cakes, bread, pastry..." />
               </div>
-              <label className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl px-3 py-2.5 cursor-pointer">
+              <label className="flex items-center gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={editSpecial}

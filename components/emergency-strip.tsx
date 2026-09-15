@@ -19,7 +19,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
   return (
     <section
       aria-label="Emergency and essential services"
-      className="relative overflow-hidden rounded-3xl border border-amber-300/60 dark:border-amber-800/50 shadow-soft-lift bg-gradient-to-br from-amber-50 via-amber-50 to-yellow-100 dark:from-amber-950/40 dark:via-gray-900/90 dark:to-yellow-950/20 p-4 sm:p-6"
+      className="relative overflow-hidden rounded-3xl border border-amber-300/60 shadow-soft-lift bg-gradient-to-br from-amber-50 via-amber-50 to-yellow-100 p-4 sm:p-6"
     >
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
@@ -31,7 +31,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
           </div>
           <p className="text-text-secondary text-xs sm:text-sm mt-1">
             Verified public-service providers: tap to chat instantly on WhatsApp.{' '}
-            <Link href="/yellow-pages" className="text-amber-700 dark:text-amber-400 font-semibold hover:underline whitespace-nowrap">
+            <Link href="/yellow-pages" className="text-amber-700 font-semibold hover:underline whitespace-nowrap">
               View all →
             </Link>
           </p>
@@ -40,7 +40,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
         <CategoryDoodle
           categories={['Emergency Services']}
           strokeWidth={1}
-          className="hidden sm:block w-16 h-16 shrink-0 text-amber-600/40 dark:text-amber-400/30"
+          className="hidden sm:block w-16 h-16 shrink-0 text-amber-600/40"
         />
       </div>
 
@@ -61,14 +61,14 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
               >
                 <CategoryDoodle
                   categories={b.category}
-                  className="absolute -right-3 -bottom-3 w-24 h-24 text-amber-600 opacity-[0.12] dark:text-amber-400 dark:opacity-[0.14]"
+                  className="absolute -right-3 -bottom-3 w-24 h-24 text-amber-600 opacity-[0.12]"
                 />
                 <div className="flex items-start gap-2.5">
                   <span className="text-xl leading-none mt-0.5" aria-hidden="true">🚨</span>
                   <div className="min-w-0">
                     <Link
                       href={profilePath}
-                      className="font-bold text-xs sm:text-sm text-text-primary hover:text-amber-700 dark:hover:text-amber-300 transition-colors line-clamp-1"
+                      className="font-bold text-xs sm:text-sm text-text-primary hover:text-amber-700 transition-colors line-clamp-1"
                     >
                       {b.name}
                     </Link>
@@ -93,7 +93,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
                   ))}
                 </div>
 
-                <div className="mt-auto flex items-stretch gap-1.5 pt-2 border-t border-amber-200/60 dark:border-amber-800/40">
+                <div className="mt-auto flex items-stretch gap-1.5 pt-2 border-t border-amber-200/60">
                   {phoneDigits && (
                     b.phone_type === 'voice' ? (
                       <TrackLink
@@ -123,7 +123,7 @@ export default function EmergencyStrip({ businesses }: { businesses: Business[] 
                   )}
                   <Link
                     href={profilePath}
-                    className="btn-secondary flex-1 h-8 sm:h-9 text-[10px] sm:text-xs flex items-center justify-center gap-1.5 px-2 font-semibold text-text-primary dark:text-gray-100"
+                    className="btn-secondary flex-1 h-8 sm:h-9 text-[10px] sm:text-xs flex items-center justify-center gap-1.5 px-2 font-semibold text-text-primary"
                   >
                     Profile
                   </Link>

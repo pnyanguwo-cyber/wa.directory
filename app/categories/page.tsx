@@ -45,7 +45,7 @@ export default async function CategoriesPage() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
       {/* Header */}
-      <section className="rounded-3xl border border-white/70 dark:border-gray-800 shadow-soft-lift bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl p-6 sm:p-8 mb-6 sm:mb-8">
+      <section className="rounded-3xl border border-white/70 shadow-soft-lift bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl p-6 sm:p-8 mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-4xl font-extrabold text-text-primary tracking-tight">
           All Categories
         </h1>
@@ -67,7 +67,7 @@ export default async function CategoriesPage() {
             <Link
               key={cat.name}
               href={`/search?q=${encodeURIComponent(cat.name)}`}
-              className="card relative overflow-hidden p-4 sm:p-5 rounded-2xl border border-gray-200/70 dark:border-gray-800 hover:border-whatsapp-300 dark:hover:border-whatsapp-600 hover:-translate-y-1 hover:shadow-card-hover transition-all duration-200 group flex flex-col justify-between min-h-[160px] sm:min-h-[180px]"
+              className="card relative overflow-hidden p-4 sm:p-5 rounded-2xl border border-gray-200/70 hover:border-whatsapp-300 hover:-translate-y-1 hover:shadow-card-hover transition-all duration-200 group flex flex-col justify-between min-h-[160px] sm:min-h-[180px]"
             >
               {coverImage && (
                 <div className="absolute inset-0 z-0">
@@ -76,21 +76,21 @@ export default async function CategoriesPage() {
                     alt=""
                     fill
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    className="object-cover opacity-10 dark:opacity-15 group-hover:opacity-20 transition-opacity"
+                    className="object-cover opacity-10 group-hover:opacity-20 transition-opacity"
                   />
                 </div>
               )}
               <div className="relative z-10">
                 {LucideIcon ? (
-                  <LucideIcon className="w-5 h-5 sm:w-6 sm:h-6 mb-2 text-whatsapp-600 dark:text-whatsapp-400" />
+                  <LucideIcon className="w-5 h-5 sm:w-6 sm:h-6 mb-2 text-whatsapp-600" />
                 ) : (
                   <span className="text-xl mb-2 block" aria-hidden="true">{cat.icon}</span>
                 )}
-                <h3 className="font-bold text-text-primary dark:text-gray-100 text-sm sm:text-base group-hover:text-whatsapp-700 dark:group-hover:text-whatsapp-400 transition-colors">
+                <h3 className="font-bold text-text-primary text-sm sm:text-base group-hover:text-whatsapp-700 transition-colors">
                   {cat.name}
                 </h3>
               </div>
-              <div className="relative z-10 mt-2 pt-2 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-[10px] sm:text-xs font-semibold text-whatsapp-700 dark:text-whatsapp-400">
+              <div className="relative z-10 mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] sm:text-xs font-semibold text-whatsapp-700">
                 <span>{cat.count} listing{cat.count !== 1 ? 's' : ''}</span>
                 <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
               </div>

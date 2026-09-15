@@ -21,7 +21,7 @@ function Stars({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map(i => (
         <svg
           key={i}
-          className={`w-3.5 h-3.5 ${i <= rating ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}
+          className={`w-3.5 h-3.5 ${i <= rating ? 'text-yellow-400' : 'text-gray-300'}`}
           fill="currentColor"
           viewBox="0 0 24 24"
         >
@@ -76,13 +76,13 @@ export default function ReviewList({ businessId, initialReviews = [] }: ReviewLi
         {[1, 2, 3].map(i => (
           <div key={i} className="animate-pulse">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-800" />
+              <div className="w-8 h-8 rounded-full bg-gray-200" />
               <div className="space-y-1">
-                <div className="h-3 w-20 bg-gray-200 dark:bg-gray-800 rounded" />
-                <div className="h-2 w-16 bg-gray-200/60 dark:bg-gray-800/60 rounded" />
+                <div className="h-3 w-20 bg-gray-200 rounded" />
+                <div className="h-2 w-16 bg-gray-200/60 rounded" />
               </div>
             </div>
-            <div className="h-3 w-full bg-gray-200/60 dark:bg-gray-800/60 rounded" />
+            <div className="h-3 w-full bg-gray-200/60 rounded" />
           </div>
         ))}
       </div>
@@ -116,9 +116,9 @@ export function ReviewListDisplay({ reviews }: { reviews: Review[] }) {
   return (
     <div className="space-y-4">
       {reviews.map(review => (
-        <div key={review.id} className="border-b border-gray-100 dark:border-gray-800 pb-4 last:border-0 last:pb-0">
+        <div key={review.id} className="border-b border-gray-100 pb-4 last:border-0 last:pb-0">
           <div className="flex items-center gap-3 mb-2">
-            <div className="w-8 h-8 rounded-full bg-whatsapp-100 dark:bg-whatsapp-900/50 flex items-center justify-center text-xs font-bold text-whatsapp-700 dark:text-whatsapp-300">
+            <div className="w-8 h-8 rounded-full bg-whatsapp-100 flex items-center justify-center text-xs font-bold text-whatsapp-700">
               {review.name ? review.name.charAt(0).toUpperCase() : '?'}
             </div>
             <div>

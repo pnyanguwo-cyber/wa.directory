@@ -67,6 +67,7 @@ export default function AdminRankings() {
   })
   const [payingBid, setPayingBid] = useState<Bid | null>(null)
   const [payFee, setPayFee] = useState('')
+  const [resetting, setResetting] = useState<{ category: string; city: string; holderBusinessId?: string; holderName?: string; holderFee?: number } | null>(null)
 
   useEffect(() => {
     load()
@@ -86,7 +87,7 @@ export default function AdminRankings() {
   async function act(action: string, payload: Record<string, unknown>) {
     setBusy(true)
     setMessage('')
-    const method = action === 'reject_bid' || action === 'expire_spot' || action === 'delete_bid' ? 'PATCH' : 'POST'
+    const method = action === 'reject_bid' || action === 'expire_spot' || action === 'delete_bid' || action === 'reset_scope' ? 'PATCH' : 'POST'
     const { ok, data } = await adminFetch('/api/admin/rankings', {
       method,
       body: JSON.stringify({ action, ...payload }),
@@ -99,7 +100,8 @@ export default function AdminRankings() {
     setShowOverride(false)
     setPayingBid(null)
     setRejecting(null)
-    setMessage('Saved.')
+    setResetting(null)
+    setMessage(typeof data?.notified === 'number' ? `Saved. Notified ${data.notified} business${data.notified === 1 ? '' : 'es'} on WhatsApp.` : 'Saved.')
     load()
   }
 
@@ -261,6 +263,38 @@ export default function AdminRankings() {
         </div>
       )}
 
+      {resetting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
+            <h2 className="text-lg font-bold text-text-primary">Reset auction for this category</h2>
+            <p className="text-xs text-text-secondary">
+              {resetting.category}{resetting.city ? ` in ${resetting.city}` : ' · nationwide'}
+              {typeof resetting.holderFee === 'number' && resetting.holderFee > 0 && ` · current base price $${resetting.holderFee.toFixed(2)}/mo`}
+            </p>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              This clears every paid spot in the scope and closes this month's live bids. The bidding base price goes back to $0.10 and results fall back to the default ranking algorithm (listings with fewer profile views surface first).
+            </p>
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+              Every affected business — spot holders and bidders — will be notified on WhatsApp. Paid bidders are told their bid was outbid; pending bidders that nothing was charged.
+            </p>
+            <div className="flex gap-2.5 justify-end pt-2">
+              <button type="button" onClick={() => setResetting(null)} className="btn-secondary h-10 px-4 text-xs font-semibold">Cancel</button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => act('reset_scope', {
+                  category: resetting.category,
+                  city: resetting.city,
+                })}
+                className="h-10 px-5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded-2xl"
+              >
+                {busy ? 'Resetting...' : 'Reset auction'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AdminSectionHeader
         title="Rankings & Bids"
         subtitle={`${spots.length} spots · ${pendingBids.length} pending · ${paidBids.length} paid bids`}
@@ -329,7 +363,7 @@ export default function AdminRankings() {
             ) : (
               <div className="space-y-2.5">
                 {paidBids.map(b => (
-                  <div key={b.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-whatsapp-200/70 bg-whatsapp-50/50 dark:border-whatsapp-800/40 dark:bg-whatsapp-950/20 px-3.5 py-2.5">
+                  <div key={b.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-whatsapp-200/70 bg-whatsapp-50/50 px-3.5 py-2.5">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-text-primary truncate">{b.business?.name || 'Unknown'}</p>
                       <p className="text-[11px] text-text-secondary">
@@ -354,10 +388,29 @@ export default function AdminRankings() {
             const [category, city] = key.split('|||')
             return (
               <div key={key} className="neo-card p-4">
-                <h3 className="text-sm font-bold text-text-primary mb-3">
-                  {category} {city ? `· ${city}` : '· nationwide'}
-                  <span className="text-text-secondary font-normal text-xs ml-1.5">({list.length})</span>
-                </h3>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <h3 className="text-sm font-bold text-text-primary">
+                    {category} {city ? `· ${city}` : '· nationwide'}
+                    <span className="text-text-secondary font-normal text-xs ml-1.5">({list.length})</span>
+                  </h3>
+                  <button
+                    onClick={() => {
+                      const active = list.find(s => s.status === 'active')
+                      const top = list.slice().sort((a, b) => a.position - b.position)[0]
+                      setResetting({
+                        category,
+                        city,
+                        holderBusinessId: (active || top)?.business_id,
+                        holderName: (active || top)?.business?.name,
+                        holderFee: Number((active || top)?.monthly_fee || 0),
+                      })
+                    }}
+                    className="btn-secondary h-8 px-3 text-[11px] font-semibold text-red-600 border-red-200 hover:bg-red-50"
+                    title="Clear paid spots and restart bidding at $0.10"
+                  >
+                    Reset auction
+                  </button>
+                </div>
                 <div className="space-y-2">
                   {list.sort((a, b) => a.position - b.position).map(s => (
                     <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-200/80 bg-surface/50 px-3.5 py-2.5">

@@ -61,7 +61,7 @@ export default async function YellowPagesPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       {/* Header */}
-      <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 dark:border-amber-800/40 shadow-soft-lift bg-gradient-to-br from-amber-50/90 via-white to-amber-50/50 dark:from-amber-950/30 dark:via-gray-900 dark:to-amber-950/20 p-6 sm:p-8 mb-6 sm:mb-8">
+      <section className="relative overflow-hidden rounded-3xl border border-amber-200/60 shadow-soft-lift bg-gradient-to-br from-amber-50/90 via-white to-amber-50/50 p-6 sm:p-8 mb-6 sm:mb-8">
         <span className="badge-yellow-pages">★ Yellow Pages</span>
         <h1 className="text-2xl sm:text-4xl font-extrabold text-text-primary tracking-tight mt-3">
           Emergency &amp; Government Services

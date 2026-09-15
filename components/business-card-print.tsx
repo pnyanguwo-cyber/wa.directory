@@ -1723,11 +1723,11 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   return (
     <div className="w-full space-y-4 sm:space-y-6">
       {/* ---------------- TOOLBAR: THEME & ORIENTATION & VIEW MODES ---------------- */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
+      <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-4">
         {/* Row 1: Top Bar with Title, Orientation & View Switchers */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-gray-800 pb-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-2xl bg-whatsapp-50 dark:bg-whatsapp-950/60 border border-whatsapp-200/80 dark:border-whatsapp-800/80 flex items-center justify-center text-whatsapp-600 dark:text-whatsapp-400 shrink-0">
+            <div className="w-9 h-9 rounded-2xl bg-whatsapp-50 border border-whatsapp-200/80 flex items-center justify-center text-whatsapp-600 shrink-0">
               <svg className="w-4.5 h-4.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42" />
               </svg>
@@ -1740,11 +1740,11 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Orientation Toggle */}
-            <div className="flex items-center gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-gray-200/60">
               <button
                 onClick={() => setOrientation('landscape')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  orientation === 'landscape' ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+                  orientation === 'landscape' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
                 }`}
                 title="Standard Landscape (3.5 × 2.0 in)"
               >
@@ -1753,7 +1753,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               <button
                 onClick={() => setOrientation('portrait')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  orientation === 'portrait' ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+                  orientation === 'portrait' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
                 }`}
                 title="Modern Vertical Portrait (2.0 × 3.5 in)"
               >
@@ -1762,14 +1762,14 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             </div>
 
             {/* View Modes (Front, Back, Dual) */}
-            <div className="flex items-center gap-1 bg-surface dark:bg-gray-800 p-1 rounded-xl border border-gray-200/60 dark:border-gray-700/60">
+            <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-gray-200/60">
               <button
                 onClick={() => {
                   setActiveSide('front')
                   setIsFlipped(false)
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeSide === 'front' && !isFlipped ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+                  activeSide === 'front' && !isFlipped ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Front
@@ -1781,7 +1781,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   activeSide === 'back' || (activeSide === 'front' && isFlipped)
-                    ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm'
+                    ? 'bg-white text-text-primary shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
@@ -1790,7 +1790,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               <button
                 onClick={() => setActiveSide('both')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeSide === 'both' ? 'bg-white dark:bg-gray-700 text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
+                  activeSide === 'both' ? 'bg-white text-text-primary shadow-sm' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Dual View
@@ -1821,8 +1821,8 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   onClick={() => setCurrentTheme(tId)}
                   className={`p-2.5 sm:p-3 rounded-2xl text-left transition-all border flex flex-col justify-between gap-2 relative group cursor-pointer ${
                     active
-                      ? 'bg-white dark:bg-gray-800 border-whatsapp-500 ring-2 ring-whatsapp-500/30 shadow-md scale-[1.02]'
-                      : 'bg-surface/80 dark:bg-gray-800/60 border-gray-200/80 dark:border-gray-700/80 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-surface'
+                      ? 'bg-white border-whatsapp-500 ring-2 ring-whatsapp-500/30 shadow-md scale-[1.02]'
+                      : 'bg-surface/80 border-gray-200/80 hover:border-gray-300 hover:bg-surface'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -1833,7 +1833,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                       {active && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
                     {active && (
-                      <span className="text-[10px] font-bold text-whatsapp-600 bg-whatsapp-50 dark:bg-whatsapp-950/60 px-1.5 py-0.5 rounded-md border border-whatsapp-200 dark:border-whatsapp-800">
+                      <span className="text-[10px] font-bold text-whatsapp-600 bg-whatsapp-50 px-1.5 py-0.5 rounded-md border border-whatsapp-200">
                         Active
                       </span>
                     )}
@@ -1867,7 +1867,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 Download Front (HD)
               </button>
             </div>
-            <div ref={frontRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10 dark:ring-white/10">
+            <div ref={frontRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10">
               {orientation === 'landscape' ? (
                 <FrontLandscapeSvg
                   business={business}
@@ -1904,7 +1904,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 Download Back (HD)
               </button>
             </div>
-            <div ref={backRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10 dark:ring-white/10">
+            <div ref={backRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10">
               {orientation === 'landscape' ? (
                 <BackLandscapeSvg
                   business={business}
@@ -2003,7 +2003,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               title="Click to flip card"
             >
               {/* Front Face */}
-              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] ring-1 ring-black/10 dark:ring-white/10">
+              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] ring-1 ring-black/10">
                 {orientation === 'landscape' ? (
                   <FrontLandscapeSvg
                     business={business}
@@ -2049,7 +2049,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               </div>
 
               {/* Back Face */}
-              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] [transform:rotateY(180deg)] ring-1 ring-black/10 dark:ring-white/10">
+              <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] [transform:rotateY(180deg)] ring-1 ring-black/10">
                 {orientation === 'landscape' ? (
                   <BackLandscapeSvg
                     business={business}
@@ -2098,7 +2098,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
           <div className="mt-3 flex items-center gap-2">
             <button
               onClick={() => setIsFlipped(!isFlipped)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-text-primary text-xs font-semibold shadow-sm transition-all"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-surface hover:bg-gray-200 text-text-primary text-xs font-semibold shadow-sm transition-all"
             >
               <svg className="w-4 h-4 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
@@ -2110,7 +2110,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       )}
 
       {/* ---------------- EXPORT & ACTION COMMAND BAR ---------------- */}
-      <div className="bg-gradient-to-r from-surface via-white to-surface dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-4 shadow-sm">
+      <div className="bg-gradient-to-r from-surface via-white to-surface border border-gray-200 rounded-2xl p-4 shadow-sm">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           {/* Download Buttons Group */}
           <div className="flex flex-wrap items-center gap-2">
@@ -2151,7 +2151,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             {/* Vector SVG */}
             <button
               onClick={() => downloadSvg(isFlipped ? 'back' : 'front')}
-              className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all"
+              className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white/70 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all"
               title="Download vector SVG for professional graphic designers and print shops"
             >
               Vector SVG
@@ -2160,7 +2160,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             {/* Digital vCard (.vcf) */}
             <button
               onClick={downloadVCard}
-              className="px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all flex items-center gap-1.5"
+              className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white/70 text-text-secondary hover:text-text-primary text-xs font-semibold transition-all flex items-center gap-1.5"
               title="Download vCard (.vcf) contact file for phone contacts"
             >
               <svg className="w-3.5 h-3.5 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -2175,7 +2175,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             {/* Share to WhatsApp */}
             <button
               onClick={shareToWhatsApp}
-              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800 text-whatsapp-700 dark:text-whatsapp-300 hover:bg-whatsapp-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-whatsapp-50 border border-whatsapp-200 text-whatsapp-700 hover:bg-whatsapp-100 text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
             >
               <WhatsAppIconSvg x={0} y={0} size={15} fill="#25D366" />
               <span>Share</span>
@@ -2184,7 +2184,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             {/* Copy Card Link */}
             <button
               onClick={copyCardLink}
-              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-text-primary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+              className="flex-1 sm:flex-initial px-3.5 py-2.5 rounded-xl bg-surface border border-gray-200 text-text-primary text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-200 transition-all"
             >
               {copied ? (
                 <>

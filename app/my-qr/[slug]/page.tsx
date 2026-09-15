@@ -30,7 +30,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
   return (
     <div className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Header Banner */}
-      <div className="bg-gradient-to-br from-white/90 via-white/80 to-whatsapp-50/30 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/30 backdrop-blur-xl border border-white/80 dark:border-gray-800 rounded-3xl p-5 sm:p-8 shadow-soft-lift flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-br from-white/90 via-white/80 to-whatsapp-50/30 backdrop-blur-xl border border-white/80 rounded-3xl p-5 sm:p-8 shadow-soft-lift flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-text-primary">{business.name}</h1>
@@ -94,12 +94,12 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
       </div>
 
       {/* SECTION 2: PRIVATE OWNER PORTAL QR */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-5 sm:p-6 shadow-sm">
+      <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <h2 className="text-base sm:text-lg font-bold text-text-primary">2. Private Owner Portal QR</h2>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700">
                 OWNER ONLY
               </span>
             </div>
@@ -121,7 +121,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
       </div>
 
       {/* SECTION 3: FAST PROMOTIONAL & DIRECT LINKS */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
+      <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
         <h3 className="text-sm font-bold text-text-primary uppercase tracking-wide">Direct Links for WhatsApp Status & Social Media</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {waLink && (
@@ -129,10 +129,10 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
               href={waLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800 rounded-2xl p-4 hover:bg-whatsapp-100 transition-colors"
+              className="flex items-center justify-between gap-3 bg-whatsapp-50 border border-whatsapp-200 rounded-2xl p-4 hover:bg-whatsapp-100 transition-colors"
             >
               <div>
-                <p className="text-xs font-bold text-whatsapp-800 dark:text-whatsapp-200">Direct WhatsApp Chat Link</p>
+                <p className="text-xs font-bold text-whatsapp-800">Direct WhatsApp Chat Link</p>
                 <p className="text-[11px] text-text-secondary mt-0.5">Opens instant chat with your number</p>
               </div>
               <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -146,7 +146,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
               href={business.catalog_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 bg-surface dark:bg-gray-800/80 border border-gray-200 dark:border-gray-700 rounded-2xl p-4 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              className="flex items-center justify-between gap-3 bg-surface border border-gray-200 rounded-2xl p-4 hover:bg-gray-200 transition-colors"
             >
               <div>
                 <p className="text-xs font-bold text-text-primary">WhatsApp Product Catalog</p>
@@ -160,11 +160,11 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
 
           <a
             href={`/business/${key}#business-card`}
-            className="flex items-center justify-between gap-3 bg-gradient-to-r from-whatsapp-500/10 via-emerald-500/5 to-white dark:from-whatsapp-950/40 dark:via-gray-800 dark:to-gray-900 border border-whatsapp-300/60 dark:border-whatsapp-700/60 rounded-2xl p-4 hover:bg-whatsapp-50 transition-colors sm:col-span-2"
+            className="flex items-center justify-between gap-3 bg-gradient-to-r from-whatsapp-500/10 via-emerald-500/5 to-white border border-whatsapp-300/60 rounded-2xl p-4 hover:bg-whatsapp-50 transition-colors sm:col-span-2"
           >
             <div>
               <div className="flex items-center gap-1.5">
-                <p className="text-xs font-bold text-whatsapp-800 dark:text-whatsapp-200">Printable & Digital Business Card Studio</p>
+                <p className="text-xs font-bold text-whatsapp-800">Printable & Digital Business Card Studio</p>
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-whatsapp-500 text-white">WORLD STANDARD</span>
               </div>
               <p className="text-[11px] text-text-secondary mt-0.5">

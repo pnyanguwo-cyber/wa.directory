@@ -53,7 +53,7 @@ export default function BusinessMap({ businesses }: Props) {
 
   if (!mounted) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <div className="w-full h-full flex items-center justify-center bg-gray-100">
         <div className="flex items-center gap-2 text-text-secondary">
           <span className="w-5 h-5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />
           <span className="text-sm font-medium">Loading map...</span>
@@ -134,7 +134,7 @@ export default function BusinessMap({ businesses }: Props) {
             const map = document.querySelector('.leaflet-container') as any
             if (map?._leaflet_map) map._leaflet_map.zoomIn()
           }}
-          className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-lg font-bold text-text-primary hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
+          className="w-8 h-8 bg-white rounded-lg shadow-lg border border-gray-200 flex items-center justify-center text-lg font-bold text-text-primary hover:bg-gray-50 active:scale-95 transition-all"
         >
           +
         </button>
@@ -143,7 +143,7 @@ export default function BusinessMap({ businesses }: Props) {
             const map = document.querySelector('.leaflet-container') as any
             if (map?._leaflet_map) map._leaflet_map.zoomOut()
           }}
-          className="w-8 h-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-lg font-bold text-text-primary hover:bg-gray-50 dark:hover:bg-gray-700 active:scale-95 transition-all"
+          className="w-8 h-8 bg-white rounded-lg shadow-lg border border-gray-200 flex items-center justify-center text-lg font-bold text-text-primary hover:bg-gray-50 active:scale-95 transition-all"
         >
           −
         </button>
@@ -152,22 +152,22 @@ export default function BusinessMap({ businesses }: Props) {
       {/* List toggle button */}
       <button
         onClick={() => setShowList(!showList)}
-        className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white dark:bg-gray-800 rounded-full px-4 py-2 shadow-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-text-primary hover:shadow-xl transition-all active:scale-95"
+        className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white rounded-full px-4 py-2 shadow-lg border border-gray-200 text-xs font-semibold text-text-primary hover:shadow-xl transition-all active:scale-95"
       >
         {showList ? '🗺️ Map' : '📋 List'}
       </button>
 
       {/* Bottom sheet list */}
       {showList && (
-        <div className="absolute bottom-0 left-0 right-0 z-[1000] bg-white dark:bg-gray-900 rounded-t-2xl shadow-2xl border-t border-gray-200 dark:border-gray-700 max-h-[50vh] overflow-y-auto">
+        <div className="absolute bottom-0 left-0 right-0 z-[1000] bg-white rounded-t-2xl shadow-2xl border-t border-gray-200 max-h-[50vh] overflow-y-auto">
           <div className="p-4 space-y-2">
-            <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-3" />
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
             <p className="text-xs font-bold text-text-secondary mb-2">{businesses.length} businesses on map</p>
             {businesses.map(b => (
               <button
                 key={b.id}
                 onClick={() => { setSelected(b); setShowList(false) }}
-                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-gray-50 transition-colors text-left"
               >
                 <span className="text-xl shrink-0">{getCategoryEmoji(b.category || [])}</span>
                 <div className="min-w-0">

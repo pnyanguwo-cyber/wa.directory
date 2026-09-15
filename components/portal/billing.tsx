@@ -56,11 +56,11 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   }
 
   const statusStyle: Record<string, string> = {
-    active: 'bg-whatsapp-50 dark:bg-whatsapp-950/50 text-whatsapp-800 dark:text-whatsapp-300 border-whatsapp-200 dark:border-whatsapp-800/50',
-    pending: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/50',
-    expired: 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800/50',
-    cancelled: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
-    none: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+    active: 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200',
+    pending: 'bg-amber-50 text-amber-700 border-amber-200',
+    expired: 'bg-red-50 text-red-700 border-red-200',
+    cancelled: 'bg-gray-100 text-gray-600 border-gray-200',
+    none: 'bg-gray-100 text-gray-600 border-gray-200',
   }
 
   const planLabel = listingSub?.plan ? PLAN_CONFIG[listingSub.plan as PlanType]?.label || '1 Month' : '1 Month'
@@ -75,7 +75,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
       </div>
 
       {/* Listing Subscription */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-text-primary">Directory Listing</p>
@@ -89,11 +89,11 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
 
         {listingSub && (
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
+            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
               <p className="text-text-secondary font-medium">Plan</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">{planLabel}</p>
             </div>
-            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
+            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
               <p className="text-text-secondary font-medium">Amount</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">${Number(listingSub.amount || 0).toFixed(2)}</p>
             </div>
@@ -104,25 +104,25 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
         {listingActive && listingSub && expiresAt && (
           <div className={`mt-3 rounded-xl px-4 py-3 border ${
             isUrgent
-              ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800/50'
+              ? 'bg-red-50 border-red-200'
               : isWarning
-                ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800/50'
-                : 'bg-whatsapp-50 dark:bg-whatsapp-950/30 border-whatsapp-200 dark:border-whatsapp-800/50'
+                ? 'bg-amber-50 border-amber-200'
+                : 'bg-whatsapp-50 border-whatsapp-200'
           }`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-xs font-semibold ${isUrgent ? 'text-red-700 dark:text-red-400' : isWarning ? 'text-amber-700 dark:text-amber-400' : 'text-whatsapp-700 dark:text-whatsapp-400'}`}>
+                <p className={`text-xs font-semibold ${isUrgent ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-whatsapp-700'}`}>
                   Due: {expiresAt.toLocaleDateString('en-ZW', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
                 {listingSub.proAssistance && (
                   <p className="text-[10px] text-text-secondary mt-0.5">Includes pro WhatsApp catalog setup</p>
                 )}
               </div>
-              <span className={`text-lg font-extrabold ${isUrgent ? 'text-red-700 dark:text-red-400' : isWarning ? 'text-amber-700 dark:text-amber-400' : 'text-whatsapp-700 dark:text-whatsapp-400'}`}>
+              <span className={`text-lg font-extrabold ${isUrgent ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-whatsapp-700'}`}>
                 {daysRemaining}d
               </span>
             </div>
-            <div className="mt-2 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
                 className={`h-full rounded-full transition-all ${isUrgent ? 'bg-red-500' : isWarning ? 'bg-amber-500' : 'bg-whatsapp-500'}`}
                 style={{ width: `${Math.min(100, Math.max(5, ((daysRemaining || 0) / 30) * 100))}%` }}
@@ -151,7 +151,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
               Payment pending. Pay via EcoCash at <Link href="/pay" className="underline">/pay</Link> or let the admin know.
             </p>
           ) : (
-            <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border border-amber-200 dark:border-amber-800/50 p-4">
+            <div className="rounded-2xl bg-gradient-to-br from-amber-50 to-white border border-amber-200 p-4">
               <p className="text-sm font-bold text-text-primary">
                 {listingExpired ? 'Your listing is hidden' : 'Keep your listing visible'}
               </p>
@@ -171,7 +171,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
       </div>
 
       {/* Premium Subscription */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-text-primary">Premium Features</p>
@@ -185,18 +185,18 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
 
         {sub && (
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
+            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
               <p className="text-text-secondary font-medium">Monthly fee</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">${Number(sub.amount || 0).toFixed(2)}</p>
             </div>
-            <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700">
+            <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
               <p className="text-text-secondary font-medium">Expires</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">
                 {sub.expiresAt ? new Date(sub.expiresAt).toLocaleDateString() : '—'}
               </p>
             </div>
             {sub.adminNote && (
-              <div className="bg-surface dark:bg-gray-800 rounded-xl px-3 py-2.5 border border-gray-200/80 dark:border-gray-700 col-span-2 sm:col-span-1">
+              <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80 col-span-2 sm:col-span-1">
                 <p className="text-text-secondary font-medium">Admin note</p>
                 <p className="text-sm font-semibold text-text-primary mt-0.5">{sub.adminNote}</p>
               </div>
@@ -217,7 +217,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
               Your upgrade request is pending admin confirmation. Make your payment and let the admin know: they will activate it.
             </p>
           ) : (
-            <div className="rounded-2xl bg-gradient-to-br from-whatsapp-50 to-white dark:from-whatsapp-950/40 dark:to-gray-900 border border-whatsapp-200 dark:border-whatsapp-800/50 p-4">
+            <div className="rounded-2xl bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 p-4">
               <p className="text-sm font-bold text-text-primary">Go premium</p>
               <ul className="text-xs text-text-secondary mt-2 space-y-1">
                 <li>• Full statistics history (30/90/all days) + CSV export</li>

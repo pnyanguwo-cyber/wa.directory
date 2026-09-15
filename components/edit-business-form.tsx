@@ -275,7 +275,7 @@ export default function EditBusinessForm({
               className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
                 phoneType === 'whatsapp'
                   ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                  : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                  : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
               }`}
             >
               📱 WhatsApp mobile
@@ -286,14 +286,14 @@ export default function EditBusinessForm({
               className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
                 phoneType === 'voice'
                   ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
-                  : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                  : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
               }`}
             >
               ☎️ Landline or hotline (voice only)
             </button>
           </div>
           {phoneType === 'voice' && (
-            <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+            <p className="text-[11px] text-whatsapp-700 mt-1">
               Saved exactly as entered (e.g. 024 2123456 or 999): customers see a Call button instead of WhatsApp.
             </p>
           )}
@@ -343,10 +343,10 @@ export default function EditBusinessForm({
           />
         </div>
 
-        <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 space-y-3">
+        <div className="bg-surface border border-gray-200/60 rounded-xl px-4 py-3 space-y-3">
           <p className="text-sm font-medium text-text-primary">Where do you operate? <span className="text-text-secondary font-normal">select at least one</span></p>
           <div className="flex gap-3">
-            <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+            <label className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.isPhysical}
@@ -361,7 +361,7 @@ export default function EditBusinessForm({
                 <span className="block text-xs text-text-secondary">I have a shop / office</span>
               </span>
             </label>
-            <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+            <label className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer">
               <input
                 type="checkbox"
                 checked={form.isRemote}
@@ -465,7 +465,7 @@ export default function EditBusinessForm({
           )}
         </div>
 
-        <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">
+        <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
           <div>
             <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
             <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
@@ -473,7 +473,7 @@ export default function EditBusinessForm({
           <button
             type="button"
             onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
-            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
             role="switch"
             aria-checked={form.show_location}
           >
@@ -522,12 +522,12 @@ export default function EditBusinessForm({
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
-          <div className="flex gap-1 mb-3 bg-surface dark:bg-gray-800 rounded-xl p-1">
+          <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
             <button
               type="button"
               onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview('') }}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                logoMode === 'url' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                logoMode === 'url' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               URL
@@ -536,7 +536,7 @@ export default function EditBusinessForm({
               type="button"
               onClick={() => setLogoMode('upload')}
               className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                logoMode === 'upload' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                logoMode === 'upload' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
               }`}
             >
               Upload
@@ -570,7 +570,7 @@ export default function EditBusinessForm({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 transition-all duration-150 active:scale-[0.98]"
+                className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 transition-all duration-150 active:scale-[0.98]"
               >
                 {logoPreview ? (
                   <div className="flex flex-col items-center gap-2">

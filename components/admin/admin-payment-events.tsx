@@ -153,7 +153,7 @@ export default function AdminPaymentEvents() {
                 </button>
 
                 {expanded === e.id && (
-                  <div className="mt-3 space-y-2 border-t border-gray-200/70 dark:border-gray-700/50 pt-3">
+                  <div className="mt-3 space-y-2 border-t border-gray-200/70 pt-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                       <p><span className="font-semibold text-text-secondary">When:</span> <span className="text-text-primary">{new Date(e.created_at).toLocaleString()}</span></p>
                       <p className="truncate"><span className="font-semibold text-text-secondary">IP hash:</span> <span className="text-text-primary font-mono">{e.ip_hash || '—'}</span></p>

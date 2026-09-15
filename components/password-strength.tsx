@@ -38,7 +38,7 @@ export function PasswordStrengthMeter({ password }: { password: string }) {
         {[1, 2, 3, 4].map(i => (
           <div
             key={i}
-            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i <= score ? color : 'bg-gray-200 dark:bg-gray-700'}`}
+            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${i <= score ? color : 'bg-gray-200'}`}
           />
         ))}
       </div>

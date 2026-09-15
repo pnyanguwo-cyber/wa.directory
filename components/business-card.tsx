@@ -88,8 +88,8 @@ export default function BusinessCard({ business }: { business: Business }) {
             categories={business.category}
             className={`absolute -bottom-3 -right-2 w-20 h-20 sm:w-28 sm:h-28 ${
               yellow
-                ? 'text-amber-600 opacity-[0.12] dark:text-amber-400 dark:opacity-[0.14]'
-                : 'text-whatsapp-700 opacity-[0.06] dark:text-whatsapp-300 dark:opacity-[0.08]'
+                ? 'text-amber-600 opacity-[0.12]'
+                : 'text-whatsapp-700 opacity-[0.06]'
             }`}
           />
           <div className="flex gap-2 sm:gap-3.5">
@@ -121,7 +121,7 @@ export default function BusinessCard({ business }: { business: Business }) {
                   {[1, 2, 3, 4, 5].map(i => (
                     <svg
                       key={i}
-                      className={`w-3 h-3 sm:w-4 sm:h-4 ${i <= stars ? 'text-amber-400 fill-amber-400' : 'text-gray-300 fill-gray-300 dark:text-gray-600 dark:fill-gray-600'}`}
+                      className={`w-3 h-3 sm:w-4 sm:h-4 ${i <= stars ? 'text-amber-400 fill-amber-400' : 'text-gray-300 fill-gray-300'}`}
                       viewBox="0 0 24 24"
                       aria-hidden="true"
                     >
@@ -139,15 +139,15 @@ export default function BusinessCard({ business }: { business: Business }) {
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <LocationDisplay business={business} />
             {business.price_range && (
-              <span className="bg-surface/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700 text-text-secondary dark:text-gray-300 text-xs px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1">
-                <span className="text-whatsapp-600 dark:text-whatsapp-400 font-semibold">$</span>
+              <span className="bg-surface/80 border border-gray-200/60 text-text-secondary text-xs px-2.5 py-0.5 rounded-full font-medium flex items-center gap-1">
+                <span className="text-whatsapp-600 font-semibold">$</span>
                 {business.price_range}
               </span>
             )}
           </div>
 
           {business.bio && (
-            <p className="text-text-secondary dark:text-gray-400 text-xs sm:text-base mt-1.5 mb-1 sm:mt-2.5 sm:mb-2 line-clamp-1 sm:line-clamp-2 leading-relaxed">{cleanBio(business.bio)}</p>
+            <p className="text-text-secondary text-xs sm:text-base mt-1.5 mb-1 sm:mt-2.5 sm:mb-2 line-clamp-1 sm:line-clamp-2 leading-relaxed">{cleanBio(business.bio)}</p>
           )}              {business.category && business.category.length > 0 && (
                 <div className="flex flex-wrap gap-0.5 sm:gap-1.5 my-0.5 sm:my-3">
                   {business.category.slice(0, 3).map((cat, i) => (
@@ -160,7 +160,7 @@ export default function BusinessCard({ business }: { business: Business }) {
         </div>
       </Link>
 
-      <div className="relative flex items-stretch gap-1 sm:gap-2 mt-1.5 pt-2 sm:mt-4 sm:pt-3.5 border-t border-gray-100 dark:border-gray-800">
+      <div className="relative flex items-stretch gap-1 sm:gap-2 mt-1.5 pt-2 sm:mt-4 sm:pt-3.5 border-t border-gray-100">
         {phoneDigits && (
           business.phone_type === 'voice' ? (
             <TrackLink
@@ -190,9 +190,9 @@ export default function BusinessCard({ business }: { business: Business }) {
         )}
         <Link
           href={profilePath}
-          className="btn-secondary flex-1 h-8 sm:h-12 px-2 sm:px-4 flex items-center justify-center gap-1.5 text-[10px] sm:text-base font-medium text-text-primary dark:text-gray-100 shrink-0 z-10"
+          className="btn-secondary flex-1 h-8 sm:h-12 px-2 sm:px-4 flex items-center justify-center gap-1.5 text-[10px] sm:text-base font-medium text-text-primary shrink-0 z-10"
         >
-          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-text-secondary dark:text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+          <svg className="w-3 h-3 sm:w-4 sm:h-4 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
           </svg>
           <span className="truncate">Profile</span>

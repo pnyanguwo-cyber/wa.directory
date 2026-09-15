@@ -81,7 +81,7 @@ export default async function HomePage() {
   return (
     <main className="min-h-[calc(100vh-3.5rem)]">
       {/* High-Converting Glass Mesh Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-whatsapp-500/10 via-surface/40 to-transparent dark:from-whatsapp-900/20 dark:via-gray-900/30 dark:to-transparent pt-8 pb-12 sm:pt-14 sm:pb-16 border-b border-gray-200/50 dark:border-gray-800">
+      <section className="relative overflow-hidden bg-gradient-to-b from-whatsapp-500/10 via-surface/40 to-transparent pt-8 pb-12 sm:pt-14 sm:pb-16 border-b border-gray-200/50">
         {/* Left Flank Image: wad1 fading seamlessly into white/background towards the middle */}
         <div
           aria-hidden="true"
@@ -98,8 +98,8 @@ export default async function HomePage() {
             sizes="(max-width: 640px) 0vw, 45vw"
             className="object-cover object-left"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-white/60 dark:to-gray-900/80" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70 dark:from-gray-900/30 dark:to-gray-900/70" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-white/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70" />
         </div>
 
         {/* Right Flank Image: wad2 fading seamlessly into white/background towards the middle */}
@@ -118,14 +118,14 @@ export default async function HomePage() {
             sizes="(max-width: 640px) 0vw, 45vw"
             className="object-cover object-right"
           />
-          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-white/60 dark:to-gray-900/80" />
-          <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70 dark:from-gray-900/30 dark:to-gray-900/70" />
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-white/60" />
+          <div className="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/70" />
         </div>
 
         {/* Soft Ambient Glows */}
         <div
           aria-hidden="true"
-          className="absolute -top-24 left-1/2 -translate-x-1/2 w-[350px] sm:w-[600px] h-[350px] sm:h-[400px] bg-whatsapp-400/20 dark:bg-whatsapp-500/15 rounded-full blur-3xl pointer-events-none -z-10"
+          className="absolute -top-24 left-1/2 -translate-x-1/2 w-[350px] sm:w-[600px] h-[350px] sm:h-[400px] bg-whatsapp-400/20 rounded-full blur-3xl pointer-events-none -z-10"
         />
         <div
           aria-hidden="true"
@@ -141,7 +141,7 @@ export default async function HomePage() {
           <TypingHeadline />
 
           {/* Subtitle */}
-          <p className="text-text-primary dark:text-gray-100 text-sm sm:text-lg max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed font-medium">
+          <p className="text-text-primary text-sm sm:text-lg max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed font-medium">
             Find verified local shops, trusted service providers, and real-time catalog prices in Harare, Bulawayo, and across Zimbabwe. Connect directly on WhatsApp with zero hassle.
           </p>
 
@@ -154,11 +154,11 @@ export default async function HomePage() {
           <CategoryChips categories={QUICK_CATEGORIES} />
 
           {/* Live Verified Stats */}
-          <div className="mt-4 pt-4 sm:mt-6 sm:pt-5 border-t border-gray-200/60 dark:border-gray-800/80 flex flex-wrap items-center justify-center">
+          <div className="mt-4 pt-4 sm:mt-6 sm:pt-5 border-t border-gray-200/60 flex flex-wrap items-center justify-center">
             {count !== null && (
-              <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-text-secondary dark:text-gray-300">
+              <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-text-secondary">
                 <span className="w-2 h-2 rounded-full bg-whatsapp-500" aria-hidden="true" />
-                <span>Over <strong className="font-bold text-whatsapp-700 dark:text-whatsapp-400"><CountUp target={count} />+</strong> verified businesses listed</span>
+                <span>Over <strong className="font-bold text-whatsapp-700"><CountUp target={count} />+</strong> verified businesses listed</span>
               </div>
             )}
           </div>
@@ -172,66 +172,66 @@ export default async function HomePage() {
 
         {/* Recently Added Marquee Strip */}
         {scrollBusinesses && scrollBusinesses.length > 0 && (
-          <section aria-label="Recent listings" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-4 sm:p-6">
+          <section aria-label="Recent listings" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/80 shadow-soft-lift p-4 sm:p-6">
             <FeaturedScroll businesses={scrollBusinesses} />
           </section>
         )}
 
         {/* Featured Verified Businesses */}
-        <section aria-label="Featured businesses" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-5 sm:p-8">
+        <section aria-label="Featured businesses" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/80 shadow-soft-lift p-5 sm:p-8">
           <FeaturedBusinesses businesses={featured || []} />
         </section>
 
         {/* How WA Directory Works (3 Step Value Proposition) */}
-        <section aria-labelledby="how-it-works-heading" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-6 sm:p-8">
+        <section aria-labelledby="how-it-works-heading" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/80 shadow-soft-lift p-6 sm:p-8">
           <div className="text-center max-w-2xl mx-auto mb-8">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-whatsapp-100/70 dark:bg-whatsapp-900/40 text-whatsapp-800 dark:text-gray-100 text-xs font-bold uppercase tracking-wider mb-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-whatsapp-100/70 text-whatsapp-800 text-xs font-bold uppercase tracking-wider mb-2">
               Simple & Fast
             </div>
-            <h2 id="how-it-works-heading" className="text-2xl sm:text-3xl font-extrabold text-text-primary dark:text-gray-100 tracking-tight">
+            <h2 id="how-it-works-heading" className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
               How WA Directory Works
             </h2>
-            <p className="text-text-secondary dark:text-gray-400 text-sm sm:text-base mt-1.5">
+            <p className="text-text-secondary text-sm sm:text-base mt-1.5">
               Connect with reliable local Zimbabwean vendors in seconds with zero app installation.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 dark:border-gray-800 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
-              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 dark:bg-whatsapp-900/50 text-whatsapp-700 dark:text-gray-100 flex items-center justify-center mb-4 shadow-sm">
+            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
+              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 text-whatsapp-700 flex items-center justify-center mb-4 shadow-sm">
                 <Icon name="search" className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold text-whatsapp-600 dark:text-whatsapp-400 tracking-wider uppercase mb-1">Step 1</span>
-              <h3 className="text-lg font-bold text-text-primary dark:text-gray-100 mb-2">
+              <span className="text-xs font-bold text-whatsapp-600 tracking-wider uppercase mb-1">Step 1</span>
+              <h3 className="text-lg font-bold text-text-primary mb-2">
                 1. Search or Ask AI
               </h3>
-              <p className="text-text-secondary dark:text-gray-400 text-sm leading-relaxed">
+              <p className="text-text-secondary text-sm leading-relaxed">
                 Type what you need in plain English or Shona (e.g. &ldquo;solar installer in Avondale&rdquo; or &ldquo;plumber Bulawayo&rdquo;). Our smart AI searches verified local listings.
               </p>
             </div>
 
-            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 dark:border-gray-800 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
-              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 dark:bg-whatsapp-900/50 text-whatsapp-700 dark:text-gray-100 flex items-center justify-center mb-4 shadow-sm">
+            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
+              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 text-whatsapp-700 flex items-center justify-center mb-4 shadow-sm">
                 <Icon name="messageSquare" className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold text-whatsapp-600 dark:text-whatsapp-400 tracking-wider uppercase mb-1">Step 2</span>
-              <h3 className="text-lg font-bold text-text-primary dark:text-gray-100 mb-2">
+              <span className="text-xs font-bold text-whatsapp-600 tracking-wider uppercase mb-1">Step 2</span>
+              <h3 className="text-lg font-bold text-text-primary mb-2">
                 2. Chat on WhatsApp
               </h3>
-              <p className="text-text-secondary dark:text-gray-400 text-sm leading-relaxed">
+              <p className="text-text-secondary text-sm leading-relaxed">
                 Tap &ldquo;Chat on WhatsApp&rdquo; to open an instant conversation with the verified owner. Ask questions, request quotes, or browse their official WhatsApp catalog.
               </p>
             </div>
 
-            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 dark:border-gray-800 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
-              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 dark:bg-whatsapp-900/50 text-whatsapp-700 dark:text-gray-100 flex items-center justify-center mb-4 shadow-sm">
+            <div className="card p-5 sm:p-6 rounded-2xl border border-gray-200/70 flex flex-col items-start relative overflow-hidden group hover:-translate-y-1 transition-all duration-200">
+              <div className="w-12 h-12 rounded-2xl bg-whatsapp-100 text-whatsapp-700 flex items-center justify-center mb-4 shadow-sm">
                 <Icon name="handshake" className="w-6 h-6" />
               </div>
-              <span className="text-xs font-bold text-whatsapp-600 dark:text-whatsapp-400 tracking-wider uppercase mb-1">Step 3</span>
-              <h3 className="text-lg font-bold text-text-primary dark:text-gray-100 mb-2">
+              <span className="text-xs font-bold text-whatsapp-600 tracking-wider uppercase mb-1">Step 3</span>
+              <h3 className="text-lg font-bold text-text-primary mb-2">
                 3. Buy with Confidence
               </h3>
-              <p className="text-text-secondary dark:text-gray-400 text-sm leading-relaxed">
+              <p className="text-text-secondary text-sm leading-relaxed">
                 Review verified badges, real customer star ratings, and exact business locations to deal safely with trusted Zimbabwean entrepreneurs.
               </p>
             </div>
@@ -239,22 +239,22 @@ export default async function HomePage() {
         </section>
 
         {/* Explore Popular Zimbabwean Categories */}
-        <section aria-labelledby="categories-grid-heading" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-6 sm:p-8">
+        <section aria-labelledby="categories-grid-heading" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/80 shadow-soft-lift p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-6 gap-2">
             <div>
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-whatsapp-100/80 dark:bg-whatsapp-900/40 text-whatsapp-800 dark:text-gray-100 text-xs font-bold mb-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-whatsapp-100/80 text-whatsapp-800 text-xs font-bold mb-1">
                 Taxonomy
               </div>
-              <h2 id="categories-grid-heading" className="text-2xl sm:text-3xl font-extrabold text-text-primary dark:text-gray-100 tracking-tight">
+              <h2 id="categories-grid-heading" className="text-2xl sm:text-3xl font-extrabold text-text-primary tracking-tight">
                 Explore Top Categories
               </h2>
-              <p className="text-text-secondary dark:text-gray-400 text-sm sm:text-base mt-0.5">
+              <p className="text-text-secondary text-sm sm:text-base mt-0.5">
                 Browse businesses by specialty in Harare, Bulawayo, Mutare, and more
               </p>
             </div>
             <Link
               href="/categories"
-              className="text-xs sm:text-sm font-bold text-whatsapp-700 dark:text-whatsapp-400 hover:text-whatsapp-800 flex items-center gap-1 shrink-0 group"
+              className="text-xs sm:text-sm font-bold text-whatsapp-700 hover:text-whatsapp-800 flex items-center gap-1 shrink-0 group"
             >
               <span>View All Categories</span>
               <span className="group-hover:translate-x-0.5 transition-transform">&rarr;</span>
@@ -268,7 +268,7 @@ export default async function HomePage() {
         <FaqSection />
 
         {/* All Verified Businesses Grid */}
-        <section aria-label="All verified businesses" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 dark:from-gray-900/90 dark:via-gray-900/80 dark:to-whatsapp-950/20 backdrop-blur-xl rounded-3xl border border-white/80 dark:border-gray-800 shadow-soft-lift p-5 sm:p-8">
+        <section aria-label="All verified businesses" className="bg-gradient-to-br from-white/90 via-white/85 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/80 shadow-soft-lift p-5 sm:p-8">
           <ShowMoreSection businesses={allVerified || []} />
         </section>
 

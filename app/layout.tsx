@@ -1,12 +1,11 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 import './globals.css'
 import dynamic from 'next/dynamic'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
-import { ThemeProvider } from 'next-themes'
 import Image from 'next/image'
 
 const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
@@ -14,8 +13,14 @@ const PWARegistration = dynamic(() => import('@/components/pwa-registration'), {
 const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
 const MobileFloatingActions = dynamic(() => import('@/components/mobile-floating-actions'), { ssr: false })
 
-const inter = Inter({
-  subsets: ['latin'],
+// Self-hosted Inter variable font (weights 100-900, latin subset).
+// No network dependency at build/dev time — Google Fonts being briefly
+// unreachable used to silently drop real weights (incl. font-black 900),
+// leaving only the Arial fallback and "un-bold" headings.
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
+  weight: '100 900',
+  style: 'normal',
   display: 'swap',
   variable: '--font-inter',
 })
@@ -54,16 +59,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <body className={`${inter.variable} min-h-screen font-sans`}>
         <SiteSplash />
-        <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-          <Navbar />
+        <Navbar />
           <BannerStrip />
           <PWARegistration />
           <InstallPWA />
-          <MobileFloatingActions />
-          {/* Global Floor / Background Wallpaper */}
+        <MobileFloatingActions />
+        {/* Global Floor / Background Wallpaper */}
           <div
             aria-hidden="true"
             className="fixed inset-0 -z-30 pointer-events-none select-none"
@@ -73,22 +77,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               alt=""
               fill
               sizes="100vw"
-              className="object-cover opacity-90 dark:opacity-25 transition-opacity duration-500"
+              className="object-cover opacity-90 transition-opacity duration-500"
             />
           </div>
           {/* Translucent overlay for crisp card contrast */}
           <div
             aria-hidden="true"
-            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-20 bg-white/40 dark:bg-gray-950/80 backdrop-blur-[0.5px]"
+            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-20 bg-white/40 backdrop-blur-[0.5px]"
           />
           {/* Ambient radial accent lighting */}
           <div
             aria-hidden="true"
-            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(37,211,102,0.12),transparent)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(18,140,126,0.2),transparent)]"
+            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(37,211,102,0.12),transparent)]"
           />
-          <main className="relative pb-16 md:pb-0">{children}</main>
-          <Footer />
-        </ThemeProvider>
+        <main className="relative pb-16 md:pb-0">{children}</main>
+        <Footer />
       </body>
     </html>
   )

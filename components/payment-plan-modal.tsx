@@ -51,13 +51,13 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
       <div
-        className="relative z-10 w-full max-w-lg bg-white dark:bg-gray-900 rounded-3xl border border-gray-200/80 dark:border-gray-800 shadow-2xl p-6 space-y-5 animate-slide-up"
+        className="relative z-10 w-full max-w-lg bg-white rounded-3xl border border-gray-200/80 shadow-2xl p-6 space-y-5 animate-slide-up"
         onClick={e => e.stopPropagation()}
       >
         {/* Close */}
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"
+          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors"
           aria-label="Close"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -81,8 +81,8 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
                 onClick={() => { setSelected(p); setError('') }}
                 className={`relative rounded-2xl border-2 p-4 text-center transition-all ${
                   isActive
-                    ? 'border-whatsapp-500 bg-whatsapp-50 dark:bg-whatsapp-950/40 shadow-md'
-                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600'
+                    ? 'border-whatsapp-500 bg-whatsapp-50 shadow-md'
+                    : 'border-gray-200 bg-white hover:border-gray-300'
                 }`}
               >
                 {isActive && (
@@ -92,14 +92,14 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
                     </svg>
                   </div>
                 )}
-                <p className={`text-2xl font-extrabold ${isActive ? 'text-whatsapp-700 dark:text-whatsapp-400' : 'text-text-primary'}`}>
+                <p className={`text-2xl font-extrabold ${isActive ? 'text-whatsapp-700' : 'text-text-primary'}`}>
                   {cfg.months}
                 </p>
-                <p className={`text-xs font-semibold mt-0.5 ${isActive ? 'text-whatsapp-600 dark:text-whatsapp-400' : 'text-text-secondary'}`}>
+                <p className={`text-xs font-semibold mt-0.5 ${isActive ? 'text-whatsapp-600' : 'text-text-secondary'}`}>
                   {cfg.months === 1 ? 'Month' : 'Months'}
                 </p>
-                <div className={`mt-3 pt-3 border-t ${isActive ? 'border-whatsapp-200 dark:border-whatsapp-800' : 'border-gray-200 dark:border-gray-700'}`}>
-                  <p className={`text-base font-extrabold ${isActive ? 'text-whatsapp-700 dark:text-whatsapp-400' : 'text-text-primary'}`}>
+                <div className={`mt-3 pt-3 border-t ${isActive ? 'border-whatsapp-200' : 'border-gray-200'}`}>
+                  <p className={`text-base font-extrabold ${isActive ? 'text-whatsapp-700' : 'text-text-primary'}`}>
                     ${cfg.price.toFixed(2)}
                   </p>
                   {cfg.months > 1 && (
@@ -113,7 +113,7 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
 
         {/* Pro assistance add-on — 12-month only */}
         {selected === '12m' && (
-          <div className="rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/50 dark:bg-amber-950/20 p-4 animate-fade-in">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 animate-fade-in">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -135,20 +135,20 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
 
         {/* Summary */}
         {selected && (
-          <div className="bg-surface dark:bg-gray-800 rounded-2xl p-4 border border-gray-200/60 dark:border-gray-700">
+          <div className="bg-surface rounded-2xl p-4 border border-gray-200/60">
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium text-text-primary">{PLAN_CONFIG[selected].label} listing</span>
               <span className="font-bold text-text-primary">${PLAN_CONFIG[selected].price.toFixed(2)}</span>
             </div>
             {proAssistance && (
-              <div className="flex items-center justify-between text-sm mt-1.5 pt-1.5 border-t border-gray-200/60 dark:border-gray-700">
+              <div className="flex items-center justify-between text-sm mt-1.5 pt-1.5 border-t border-gray-200/60">
                 <span className="font-medium text-text-primary">Pro assistance</span>
                 <span className="font-bold text-text-primary">+${PRO_ASSISTANCE_PRICE.toFixed(2)}</span>
               </div>
             )}
-            <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200/60 dark:border-gray-700">
+            <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200/60">
               <span className="font-bold text-text-primary">Total</span>
-              <span className="font-extrabold text-whatsapp-700 dark:text-whatsapp-400">
+              <span className="font-extrabold text-whatsapp-700">
                 ${(PLAN_CONFIG[selected].price + (proAssistance ? PRO_ASSISTANCE_PRICE : 0)).toFixed(2)}
               </span>
             </div>

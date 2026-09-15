@@ -445,7 +445,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         )}
 
         {isPaidListings && (
-          <div className="bg-white dark:bg-gray-900 border border-amber-200 dark:border-amber-800/50 rounded-3xl p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
+          <div className="bg-white border border-amber-200 rounded-3xl p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
             {/* Splash card header */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
             <div className="flex items-center gap-3 mb-4">
@@ -522,8 +522,8 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <div className="text-center space-y-3 py-2 animate-fade-in">
                 <div className="relative w-14 h-14 mx-auto">
                   <div className="absolute inset-0 bg-whatsapp-400/20 rounded-full blur-xl animate-pulse" />
-                  <div className="relative w-14 h-14 rounded-full bg-whatsapp-100 dark:bg-whatsapp-900/40 flex items-center justify-center">
-                    <svg className="w-7 h-7 text-whatsapp-600 dark:text-whatsapp-400 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <div className="relative w-14 h-14 rounded-full bg-whatsapp-100 flex items-center justify-center">
+                    <svg className="w-7 h-7 text-whatsapp-600 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                     </svg>
                   </div>
@@ -532,7 +532,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 <p className="text-xs text-text-secondary leading-relaxed">
                   You will be verified within <strong className="text-text-primary">15 minutes</strong> and given feedback on your EcoCash number (+{splashPhone.replace(/\D/g, '')}). Once confirmed, your listing goes live.
                 </p>
-                <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-700">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                   Awaiting admin approval
                 </div>
@@ -546,16 +546,16 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         )}
 
         {requests.length > 0 && (
-          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 mb-6 text-left">
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">Your requests are in review:</p>
-            <p className="text-sm text-amber-800 dark:text-amber-300">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 text-left">
+            <p className="text-xs font-semibold text-amber-800 mb-1">Your requests are in review:</p>
+            <p className="text-sm text-amber-800">
               {requests.map(r => r.type === 'city' ? `"${r.name}" (city)` : `"${r.name}"`).join(', ')} will appear once an admin approves {requests.length > 1 ? 'them' : 'it'}.
             </p>
           </div>
         )}
-        <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 mb-6 text-left">
-          <p className="text-xs font-semibold text-whatsapp-800 dark:text-whatsapp-300 mb-1">Save this link to edit your listing later:</p>
-          <p className="text-sm text-whatsapp-700 dark:text-whatsapp-300 break-all font-mono bg-white dark:bg-gray-900 rounded-lg p-2 border border-whatsapp-100 dark:border-whatsapp-900 select-all">
+        <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 mb-6 text-left">
+          <p className="text-xs font-semibold text-whatsapp-800 mb-1">Save this link to edit your listing later:</p>
+          <p className="text-sm text-whatsapp-700 break-all font-mono bg-white rounded-lg p-2 border border-whatsapp-100 select-all">
             {typeof window !== 'undefined' ? `${window.location.origin}/edit?token=${editToken}` : ''}
           </p>
           <p className="text-xs text-text-secondary mt-2">If you lose this link, contact us to get a new one.</p>
@@ -568,7 +568,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             downloadName={`${form.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edit-link.png`}
           />
         </div>
-        <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card mb-6">
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card mb-6">
           <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once {isPaidListings ? 'paid and ' : ''}approved)</p>
           <p className="text-xs text-text-secondary mb-4">
             Print these and place them on your counter, shelves and packaging: customers scan to chat with you directly.
@@ -626,11 +626,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         {[1, 2, 3].map(s => (
           <div key={s} className="flex items-center">
             {s > 1 && (
-              <div className={`h-1 w-8 sm:w-12 transition-colors duration-300 ${step >= s ? 'bg-whatsapp-500' : 'bg-gray-200 dark:bg-gray-700'}`} />
+              <div className={`h-1 w-8 sm:w-12 transition-colors duration-300 ${step >= s ? 'bg-whatsapp-500' : 'bg-gray-200'}`} />
             )}
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
-                step >= s ? 'bg-whatsapp-500 text-white scale-100' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 scale-90'
+                step >= s ? 'bg-whatsapp-500 text-white scale-100' : 'bg-gray-200 text-gray-500 scale-90'
               }`}
             >
               {s}
@@ -754,12 +754,12 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 className="input-field"
               />
               {form.phone && !phoneError && selectedCountry && phoneType === 'whatsapp' && (
-                <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+                <p className="text-[11px] text-whatsapp-700 mt-1">
                   Will be saved as +{toFullPhone(form.countryCode, form.phone)}
                 </p>
               )}
               {form.phone && phoneType === 'voice' && (
-                <p className="text-[11px] text-whatsapp-700 dark:text-whatsapp-400 mt-1">
+                <p className="text-[11px] text-whatsapp-700 mt-1">
                   Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} (customers see a Call button)
                 </p>
               )}
@@ -770,7 +770,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
                     phoneType === 'whatsapp'
                       ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                      : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                      : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
                   }`}
                 >
                   📱 WhatsApp mobile
@@ -781,7 +781,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
                     phoneType === 'voice'
                       ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
-                      : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                      : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
                   }`}
                 >
                   ☎️ Landline or hotline (voice only)
@@ -831,7 +831,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   const cat = allCategoryOptions.find(o => o.value === c)
                   const hint = categoryHints.get(c)
                   return hint ? (
-                    <span key={c} className="text-xs text-text-secondary bg-surface dark:bg-gray-800 rounded-lg px-2 py-1">
+                    <span key={c} className="text-xs text-text-secondary bg-surface rounded-lg px-2 py-1">
                       {cat?.label.split(' ')[0]} {hint}
                     </span>
                   ) : null
@@ -860,7 +860,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           <button
             onClick={handleGenerateBio}
             disabled={!form.description.trim() || bioLoading}
-            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
+            className="w-full border-2 border-whatsapp-500 text-whatsapp-600 py-2.5 rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-whatsapp-50 hover:scale-[1.02] active:scale-[0.95] active:brightness-90 transition-all duration-150"
           >
             {bioLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -872,7 +872,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             )}
           </button>
           {form.bio && (
-            <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 animate-slide-up">
+            <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 animate-slide-up">
               <p className="text-sm text-text-primary">{form.bio}</p>
               <div className="flex items-center gap-2 mt-3">
                 <button
@@ -903,10 +903,10 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </div>
           )}
           <p className="text-xs text-text-secondary">Type what you sell above, then click to generate a professional bio.</p>
-          <div className="bg-surface dark:bg-gray-800 border border-gray-200/60 dark:border-gray-700 rounded-xl px-4 py-3 space-y-3">
+          <div className="bg-surface border border-gray-200/60 rounded-xl px-4 py-3 space-y-3">
             <p className="text-sm font-medium text-text-primary">Where do you operate? <span className="text-text-secondary font-normal">select at least one</span></p>
             <div className="flex gap-3">
-              <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+              <label className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.isPhysical}
@@ -921,7 +921,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   <span className="block text-xs text-text-secondary">I have a shop / office</span>
                 </span>
               </label>
-              <label className="flex-1 flex items-center gap-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 cursor-pointer">
+              <label className="flex-1 flex items-center gap-2.5 bg-white border border-gray-200 rounded-xl px-3 py-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={form.isRemote}
@@ -1029,7 +1029,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               </p>
             )}
           </div>
-          <div className="flex items-center justify-between bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 border border-gray-200/60 dark:border-gray-700">
+          <div className="flex items-center justify-between bg-surface rounded-xl px-4 py-3 border border-gray-200/60">
             <div>
               <p className="text-sm font-medium text-text-primary">Show my address on my profile</p>
               <p className="text-xs text-text-secondary">Customers can see your location and get directions</p>
@@ -1037,7 +1037,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <button
               type="button"
               onClick={() => setForm(f => ({ ...f, show_location: !f.show_location }))}
-              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+              className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${form.show_location ? 'bg-whatsapp-500' : 'bg-gray-300'}`}
               role="switch"
               aria-checked={form.show_location}
             >
@@ -1062,11 +1062,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         <div className="space-y-4 animate-fade-in">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
-            <div className="flex gap-1 mb-3 bg-surface dark:bg-gray-800 rounded-xl p-1">
+            <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
               <button
                 onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview(''); setErrors(prev => ({ ...prev, logo: undefined })) }}
                 className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                  logoMode === 'url' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                  logoMode === 'url' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 URL
@@ -1074,7 +1074,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <button
                 onClick={() => setLogoMode('upload')}
                 className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all duration-150 ${
-                  logoMode === 'upload' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+                  logoMode === 'upload' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
                 }`}
               >
                 Upload
@@ -1110,7 +1110,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 />
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="w-full border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 dark:hover:bg-whatsapp-950/30 transition-all duration-150 active:scale-[0.98]"
+                  className="w-full border-2 border-dashed border-gray-300 rounded-xl py-6 text-center hover:border-whatsapp-500 hover:bg-whatsapp-50 transition-all duration-150 active:scale-[0.98]"
                 >
                   {logoPreview ? (
                     <div className="flex flex-col items-center gap-2">
@@ -1281,7 +1281,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </div>
             <p className="text-xs text-whatsapp-600 mt-1">Average price customers should expect</p>
           </div>
-          <div className="bg-surface dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-2">
+          <div className="bg-surface border border-gray-200 rounded-xl p-4 space-y-2">
             <h3 className="font-semibold text-text-primary mb-2">Preview</h3>
             <p className="text-sm text-text-secondary">
               <span className="font-medium text-text-primary">Name:</span> {form.name}
@@ -1320,7 +1320,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </p>
           </div>
           {errors.submit && (
-            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/50 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
               <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
               </svg>

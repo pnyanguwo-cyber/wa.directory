@@ -86,7 +86,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
       <form onSubmit={handleSubmit}>
         <div className="relative flex items-center">
           {/* Search Glass & AI Spark Icon */}
-          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-whatsapp-600 dark:text-whatsapp-400">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none text-whatsapp-600">
             <svg
               className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
@@ -113,7 +113,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
             aria-autocomplete="list"
             aria-controls="search-suggestions"
             aria-expanded={showDropdown}
-            className={`w-full pl-11 sm:pl-[52px] ${large ? 'pr-24 sm:pr-32 h-14 sm:h-16 text-base sm:text-lg' : 'pr-20 h-12 text-sm sm:text-base'} rounded-2xl border border-gray-200/90 dark:border-gray-700/80 bg-white/95 dark:bg-gray-900/95 text-text-primary dark:text-gray-100 placeholder:text-text-secondary/70 dark:placeholder:text-gray-400 backdrop-blur-md focus:border-whatsapp-500 dark:focus:border-whatsapp-400 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_24px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(0,0,0,0.02)]`}
+            className={`w-full pl-11 sm:pl-[52px] ${large ? 'pr-24 sm:pr-32 h-14 sm:h-16 text-base sm:text-lg' : 'pr-20 h-12 text-sm sm:text-base'} rounded-2xl border border-gray-200/90 bg-white/95 text-text-primary placeholder:text-text-secondary/70 backdrop-blur-md focus:border-whatsapp-500 focus:ring-4 focus:ring-whatsapp-500/15 outline-none transition-all duration-200 shadow-[0_4px_24px_rgba(0,0,0,0.06),inset_0_1px_2px_rgba(0,0,0,0.02)]`}
           />
 
           {/* Action / Clear / Spinner inside search bar */}
@@ -126,7 +126,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
                   setSuggestions([])
                   setShowDropdown(false)
                 }}
-                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
                 title="Clear search"
                 aria-label="Clear search"
               >
@@ -165,7 +165,7 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
         <ul
           id="search-suggestions"
           role="listbox"
-          className="absolute top-full mt-2 left-0 right-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/90 dark:border-gray-700 rounded-2xl shadow-dropdown z-50 overflow-hidden m-0 p-1.5 list-none animate-slide-up"
+          className="absolute top-full mt-2 left-0 right-0 bg-white/95 backdrop-blur-xl border border-gray-200/90 rounded-2xl shadow-dropdown z-50 overflow-hidden m-0 p-1.5 list-none animate-slide-up"
         >
           {suggestions.map((name, i) => (
             <li
@@ -178,18 +178,18 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
               }}
               className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer flex items-center justify-between ${
                 i === selectedIndex
-                  ? 'bg-whatsapp-50 dark:bg-whatsapp-900/40 text-whatsapp-800 dark:text-whatsapp-200 font-semibold shadow-sm'
-                  : 'text-text-primary dark:text-gray-200 hover:bg-surface dark:hover:bg-gray-800'
+                  ? 'bg-whatsapp-50 text-whatsapp-800 font-semibold shadow-sm'
+                  : 'text-text-primary hover:bg-surface'
               }`}
             >
               <span className="flex items-center gap-2.5 truncate">
-                <svg className="w-4 h-4 text-whatsapp-600 dark:text-whatsapp-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="11" cy="11" r="8" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
                 </svg>
                 <span className="truncate">{name}</span>
               </span>
-              <span className="text-xs text-whatsapp-700 dark:text-whatsapp-400 font-medium shrink-0 ml-2">
+              <span className="text-xs text-whatsapp-700 font-medium shrink-0 ml-2">
                 Search &rarr;
               </span>
             </li>

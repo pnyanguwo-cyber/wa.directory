@@ -228,7 +228,7 @@ export default function PortalRanking({
       {/* Scope picker: my categories × my locations. Nationwide businesses get a
           location dropdown and bid one location at a time; everyone else is
           pinned to their own city. */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-4 shadow-card space-y-3">
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card space-y-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary mb-1.5">Your categories</p>
           <div className="flex flex-wrap gap-2">
@@ -240,7 +240,7 @@ export default function PortalRanking({
                 className={`h-9 px-4 rounded-2xl text-xs font-semibold border transition-all ${
                   category === c
                     ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                    : 'bg-white dark:bg-gray-800 border-gray-200/80 dark:border-gray-700 text-text-secondary hover:bg-surface dark:hover:bg-gray-700'
+                    : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
                 }`}
               >
                 {c}
@@ -264,7 +264,7 @@ export default function PortalRanking({
               ))}
             </select>
           ) : (
-            <span className="inline-flex items-center gap-1.5 h-9 px-4 rounded-2xl text-xs font-semibold bg-whatsapp-50 dark:bg-whatsapp-900/30 text-whatsapp-800 dark:text-whatsapp-300 border border-whatsapp-200 dark:border-whatsapp-700/40">
+            <span className="inline-flex items-center gap-1.5 h-9 px-4 rounded-2xl text-xs font-semibold bg-whatsapp-50 text-whatsapp-800 border border-whatsapp-200">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
@@ -282,13 +282,13 @@ export default function PortalRanking({
       </div>
 
       {/* Current #1 holder */}
-      <div className="rounded-2xl border p-5 shadow-card bg-gradient-to-br from-amber-50 to-white dark:from-amber-950/40 dark:to-gray-900 border-amber-200 dark:border-amber-800/50">
+      <div className="rounded-2xl border p-5 shadow-card bg-gradient-to-br from-amber-50 to-white border-amber-200">
         {(() => {
           const spot = spots.find(s => s.position === 1)
           return (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm font-extrabold text-amber-600 dark:text-amber-400">#1 Gold — current holder</p>
+                <p className="text-sm font-extrabold text-amber-600">#1 Gold — current holder</p>
                 <span className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">
                   {spot ? `$${spot.monthlyFee.toFixed(2)}/mo` : 'Open'}
                 </span>
@@ -307,7 +307,7 @@ export default function PortalRanking({
       </div>
 
       {/* Live auction board */}
-      <div className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-bold text-text-primary">Live auction board</p>
           <span className="text-[11px] text-text-secondary">
@@ -329,13 +329,13 @@ export default function PortalRanking({
                 key={b.id}
                 className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
                   b.mine
-                    ? 'bg-whatsapp-50 dark:bg-whatsapp-950/30 border-whatsapp-300 dark:border-whatsapp-700'
-                    : 'bg-surface/60 dark:bg-gray-800/60 border-gray-200/70 dark:border-gray-700'
+                    ? 'bg-whatsapp-50 border-whatsapp-300'
+                    : 'bg-surface/60 border-gray-200/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
-                    i === 0 ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                    i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
                   }`}>
                     {i + 1}
                   </span>
@@ -343,17 +343,17 @@ export default function PortalRanking({
                     {b.mine ? 'Your business' : b.businessName}
                   </p>
                   {b.mine && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 dark:text-whatsapp-300 shrink-0">You</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 shrink-0">You</span>
                   )}
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-sm font-bold text-text-primary">${b.amount.toFixed(2)}</p>
                   <p className={`text-[10px] font-semibold capitalize ${
                     b.status === 'approved' || b.status === 'paid'
-                      ? 'text-whatsapp-700 dark:text-whatsapp-300'
+                      ? 'text-whatsapp-700'
                       : b.status === 'outbid'
                         ? 'text-gray-400'
-                        : 'text-amber-600 dark:text-amber-400'
+                        : 'text-amber-600'
                   }`}>
                     {b.status === 'pending' ? 'awaiting payment' : b.status}
                   </p>
@@ -391,7 +391,7 @@ export default function PortalRanking({
             }
             openPaymentModal({ id: '', amount: fee })
           }}
-          className="bg-white dark:bg-gray-900 border border-gray-200/80 dark:border-gray-800 rounded-2xl p-5 shadow-card space-y-4"
+          className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card space-y-4"
         >
           <div>
             <p className="text-sm font-bold text-text-primary">
@@ -434,9 +434,9 @@ export default function PortalRanking({
         <div className="space-y-2">
           <p className="text-sm font-bold text-text-primary">My unpaid bids</p>
           {myPending.map(b => (
-            <div key={b.id} className="bg-white dark:bg-gray-900 border border-amber-200/70 dark:border-amber-800/40 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
+            <div key={b.id} className="bg-white border border-amber-200/70 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300">
+                <span className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold bg-amber-100 text-amber-700">
                   #1
                 </span>
                 <div>
@@ -464,7 +464,7 @@ export default function PortalRanking({
           aria-modal="true"
           aria-label="EcoCash payment"
         >
-          <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white dark:border-gray-700">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
             <div className="text-center">
               <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-whatsapp-400 to-whatsapp-600 flex items-center justify-center shadow-lg mb-3">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
@@ -523,11 +523,11 @@ export default function PortalRanking({
               <div className="space-y-3 text-center">
                 <div className="relative w-16 h-16 mx-auto">
                   <div className="absolute inset-0 bg-whatsapp-400/20 rounded-full blur-xl animate-pulse" />
-                  <div className="relative w-16 h-16 rounded-full border-4 border-whatsapp-100 dark:border-whatsapp-900 border-t-whatsapp-500 animate-spin" />
+                  <div className="relative w-16 h-16 rounded-full border-4 border-whatsapp-100 border-t-whatsapp-500 animate-spin" />
                 </div>
                 <p className="text-sm font-bold text-text-primary">Waiting for your EcoCash PIN…</p>
                 {payInstructions && (
-                  <p className="text-xs text-text-secondary bg-surface dark:bg-gray-800 rounded-xl px-4 py-2.5 leading-relaxed">{payInstructions}</p>
+                  <p className="text-xs text-text-secondary bg-surface rounded-xl px-4 py-2.5 leading-relaxed">{payInstructions}</p>
                 )}
                 <p className="text-[11px] text-text-secondary">
                   Approve the prompt on your phone. This page updates automatically — you&rsquo;ll become #1 the moment the payment lands.

@@ -46,14 +46,14 @@ export default function ReviewForm({ businessId, onReviewSubmitted }: ReviewForm
 
   if (submitted) {
     return (
-      <div className="bg-whatsapp-50 dark:bg-whatsapp-950/40 border border-whatsapp-200 dark:border-whatsapp-800/50 rounded-xl p-4 text-center animate-slide-up">
-        <div className="w-10 h-10 rounded-full bg-whatsapp-100 dark:bg-whatsapp-900/50 flex items-center justify-center mx-auto mb-2">
+      <div className="bg-whatsapp-50 border border-whatsapp-200 rounded-xl p-4 text-center animate-slide-up">
+        <div className="w-10 h-10 rounded-full bg-whatsapp-100 flex items-center justify-center mx-auto mb-2">
           <svg className="w-5 h-5 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
           </svg>
         </div>
-        <p className="text-sm font-semibold text-whatsapp-800 dark:text-whatsapp-200">Thanks for your review!</p>
-        <p className="text-xs text-whatsapp-600 dark:text-whatsapp-400 mt-1">Your feedback helps others find great businesses.</p>
+        <p className="text-sm font-semibold text-whatsapp-800">Thanks for your review!</p>
+        <p className="text-xs text-whatsapp-600 mt-1">Your feedback helps others find great businesses.</p>
       </div>
     )
   }
@@ -77,7 +77,7 @@ export default function ReviewForm({ businessId, onReviewSubmitted }: ReviewForm
                 className={`w-7 h-7 transition-colors ${
                   star <= (hoverRating || rating)
                     ? 'text-yellow-400'
-                    : 'text-gray-300 dark:text-gray-600'
+                    : 'text-gray-300'
                 }`}
                 fill="currentColor"
                 viewBox="0 0 24 24"

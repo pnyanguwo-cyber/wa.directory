@@ -70,7 +70,7 @@ export default function AdminNameContests() {
     <div className="space-y-6">
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
             <h3 className="text-lg font-bold text-text-primary">
               {confirmAction.action === 'approve' ? 'Approve Contest?' : 'Reject Contest?'}
             </h3>

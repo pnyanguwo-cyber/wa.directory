@@ -28,7 +28,7 @@ export default async function MapPage() {
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       {/* Header bar */}
-      <div className="shrink-0 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 px-4 py-3 flex items-center justify-between">
+      <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <div>
           <h1 className="text-sm font-bold text-text-primary">Business Map</h1>
           <p className="text-[10px] text-text-secondary">

@@ -66,25 +66,25 @@ export default function RequestConfirmModal({
         onClick={onCancel}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-full max-w-sm bg-white dark:bg-gray-900 rounded-3xl border border-gray-200/80 dark:border-gray-800 shadow-2xl p-6 animate-slide-up">
-        <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-whatsapp-100 dark:bg-whatsapp-900/50 text-whatsapp-700 dark:text-gray-100 mx-auto mb-4">
+      <div className="relative z-10 w-full max-w-sm bg-white rounded-3xl border border-gray-200/80 shadow-2xl p-6 animate-slide-up">
+        <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-whatsapp-100 text-whatsapp-700 mx-auto mb-4">
           {TYPE_ICONS[type]}
         </div>
 
-        <h2 id="request-modal-title" className="text-lg font-bold text-text-primary dark:text-gray-100 text-center mb-2">
+        <h2 id="request-modal-title" className="text-lg font-bold text-text-primary text-center mb-2">
           Request new {TYPE_LABELS[type]}?
         </h2>
 
-        <div className="bg-surface dark:bg-gray-800 rounded-xl px-4 py-3 mb-4 text-center">
-          <p className="text-sm text-text-secondary dark:text-gray-400">
+        <div className="bg-surface rounded-xl px-4 py-3 mb-4 text-center">
+          <p className="text-sm text-text-secondary">
             You&apos;re requesting
           </p>
-          <p className="text-base font-semibold text-text-primary dark:text-gray-100 mt-0.5">
+          <p className="text-base font-semibold text-text-primary mt-0.5">
             &ldquo;{name}&rdquo;
           </p>
         </div>
 
-        <p className="text-xs text-text-secondary dark:text-gray-400 text-center mb-6 leading-relaxed">
+        <p className="text-xs text-text-secondary text-center mb-6 leading-relaxed">
           This will be sent to our team for review. Once approved, it will appear for all users on WA Directory.
         </p>
 
@@ -92,7 +92,7 @@ export default function RequestConfirmModal({
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 px-4 py-2.5 text-sm font-medium text-text-secondary dark:text-gray-400 bg-surface dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-xl transition-colors"
+            className="flex-1 px-4 py-2.5 text-sm font-medium text-text-secondary bg-surface hover:bg-gray-200 rounded-xl transition-colors"
           >
             Cancel
           </button>

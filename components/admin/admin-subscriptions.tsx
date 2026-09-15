@@ -161,11 +161,11 @@ export default function AdminSubscriptions() {
       )}
 
       {/* Tab Switcher */}
-      <div className="flex gap-1.5 bg-surface dark:bg-gray-800 rounded-xl p-1">
+      <div className="flex gap-1.5 bg-surface rounded-xl p-1">
         <button
           onClick={() => setTab('listing')}
           className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
-            tab === 'listing' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+            tab === 'listing' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
           }`}
         >
           Listing Payments ({listingRows.length})
@@ -173,7 +173,7 @@ export default function AdminSubscriptions() {
         <button
           onClick={() => setTab('premium')}
           className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
-            tab === 'premium' ? 'bg-white dark:bg-gray-700 shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+            tab === 'premium' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
           }`}
         >
           Premium Subscriptions ({rows.length})

@@ -48,7 +48,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-whatsapp-100/60 via-surface to-surface flex items-center justify-center px-4 py-8">
       <div
         ref={cardRef}
-        className={`w-full max-w-md bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl rounded-3xl shadow-[0_12px_40px_rgba(11,20,26,0.08)] border border-white/90 dark:border-gray-800 p-8 space-y-6 transition-all duration-500 ${
+        className={`w-full max-w-md bg-white/90 backdrop-blur-xl rounded-3xl shadow-[0_12px_40px_rgba(11,20,26,0.08)] border border-white/90 p-8 space-y-6 transition-all duration-500 ${
           visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
         } ${shake ? 'animate-shake' : ''}`}
       >

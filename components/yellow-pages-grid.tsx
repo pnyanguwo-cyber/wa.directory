@@ -63,8 +63,8 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
               onClick={() => setSelected(isActive ? null : cat.name)}
               className={`card relative overflow-hidden p-5 sm:p-6 rounded-2xl border text-left transition-all duration-200 group ${
                 isActive
-                  ? 'border-amber-400 dark:border-amber-500/60 shadow-card-hover ring-2 ring-amber-200 dark:ring-amber-500/30'
-                  : 'border-gray-200/70 dark:border-gray-800 hover:border-amber-300 dark:hover:border-amber-600 hover:-translate-y-1 hover:shadow-card-hover'
+                  ? 'border-amber-400 shadow-card-hover ring-2 ring-amber-200'
+                  : 'border-gray-200/70 hover:border-amber-300 hover:-translate-y-1 hover:shadow-card-hover'
               }`}
             >
               {coverImage && (
@@ -74,26 +74,26 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
                     alt=""
                     fill
                     sizes="(max-width: 640px) 100vw, 50vw"
-                    className="object-cover opacity-10 dark:opacity-15 group-hover:opacity-20 transition-opacity"
+                    className="object-cover opacity-10 group-hover:opacity-20 transition-opacity"
                   />
                 </div>
               )}
               <div className="relative z-10">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center mb-3 sm:mb-4 ${
                   isActive
-                    ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300'
-                    : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 group-hover:bg-amber-100 dark:group-hover:bg-amber-900/50'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-amber-50 text-amber-600 group-hover:bg-amber-100'
                 } transition-colors`}>
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <h3 className="font-bold text-text-primary dark:text-gray-100 text-base sm:text-lg group-hover:text-amber-700 dark:group-hover:text-amber-400 transition-colors">
+                <h3 className="font-bold text-text-primary text-base sm:text-lg group-hover:text-amber-700 transition-colors">
                   {cat.name}
                 </h3>
-                <p className="text-text-secondary dark:text-gray-400 text-xs sm:text-sm mt-1 leading-relaxed">
+                <p className="text-text-secondary text-xs sm:text-sm mt-1 leading-relaxed">
                   {cat.description}
                 </p>
               </div>
-              <div className="relative z-10 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between text-xs font-semibold text-amber-700 dark:text-amber-400">
+              <div className="relative z-10 mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-amber-700">
                 <span>{count} listing{count !== 1 ? 's' : ''}</span>
                 <span className={`transition-transform ${isActive ? 'rotate-90' : 'group-hover:translate-x-1'}`}>
                   &rarr;
@@ -110,7 +110,7 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSelected(null)}
-              className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 transition-colors"
+              className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               All Categories
@@ -119,7 +119,7 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
 
           <div>
             <h2 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
-              <selectedCat.icon className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+              <selectedCat.icon className="w-6 h-6 text-amber-600" />
               {selectedCat.name}
             </h2>
             <p className="text-text-secondary text-xs sm:text-sm mt-1">
@@ -140,7 +140,7 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
               {cities.map(([city, list]) => (
                 <div key={city}>
                   <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-1.5">
-                    <MapPin className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
                     {city === 'Nationwide' ? (
                       <span>
                         Nationwide <span className="font-normal text-text-secondary text-xs">serves the whole country</span>
