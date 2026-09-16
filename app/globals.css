@@ -52,20 +52,22 @@
     @apply inline-flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 shrink-0 drop-shadow-sm;
   }
   .btn-primary {
-    @apply bg-whatsapp-500 text-white font-semibold rounded-2xl transition-all duration-200 shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
+    @apply bg-whatsapp-500 text-white font-semibold rounded-2xl transition-all duration-200 ease-out shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none;
   }
   .btn-primary:not(:disabled) {
-    @apply hover:bg-whatsapp-600 hover:shadow-[0_6px_20px_rgba(18,140,126,0.35)] active:scale-[0.97] active:brightness-95;
+    @apply hover:bg-whatsapp-600 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_rgba(18,140,126,0.45)]
+      active:translate-y-0 active:scale-[0.96] active:brightness-95 active:shadow-[inset_0_3px_8px_rgba(0,0,0,0.35)];
   }
 
   .btn-secondary {
-    @apply border font-medium rounded-2xl shadow-sm transition-all duration-200 backdrop-blur-md;
+    @apply border font-medium rounded-2xl shadow-sm transition-all duration-200 ease-out backdrop-blur-md;
     border-color: rgb(var(--border-color));
     background-color: rgba(var(--bg-card), 0.8);
     color: rgb(var(--text-primary));
   }
   .btn-secondary:not(:disabled) {
-    @apply hover:shadow-card active:scale-[0.97];
+    @apply hover:shadow-card hover:-translate-y-0.5 hover:border-whatsapp-300/60
+      active:translate-y-0 active:scale-[0.96] active:bg-surface active:shadow-[inset_0_3px_8px_rgba(0,0,0,0.12)];
     background-color: rgb(var(--bg-card));
     border-color: rgb(var(--border-color));
   }
@@ -98,6 +100,12 @@
     border-color: rgb(var(--border-color));
     background-color: rgba(var(--bg-card), 0.9);
     box-shadow: inset 1px 1px 3px rgba(0,0,0,0.04);
+  }
+
+  /* Label slot for side-by-side form fields: fixed two-line height so one
+     wrapping label can't push its input lower than its neighbour's. */
+  .field-label {
+    @apply block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem];
   }
 
   .chip {

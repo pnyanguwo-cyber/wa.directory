@@ -120,10 +120,10 @@ export default function MultiSearchSelect({
   return (
     <div ref={wrapperRef} className="relative">
       {label && (
-        <label htmlFor={inputId} className="block text-sm font-medium text-text-primary mb-1.5">{label}</label>
+        <label htmlFor={inputId} className="field-label">{label}</label>
       )}
       <div
-        className="flex flex-wrap items-center gap-1.5 border border-gray-200 rounded-xl bg-white px-2.5 py-2 cursor-text transition-all focus-within:border-whatsapp-500 focus-within:ring-2 focus-within:ring-whatsapp-500/20"
+        className="flex flex-wrap items-center gap-1.5 border border-gray-200 rounded-2xl bg-white px-2.5 min-h-[3.25rem] py-2 cursor-text transition-all focus-within:border-whatsapp-500 focus-within:ring-2 focus-within:ring-whatsapp-500/20"
         onClick={() => wrapperRef.current?.querySelector('input')?.focus()}
       >
         {values.map(v => {

@@ -14,6 +14,50 @@ const NAV_SPINNER = (
   </svg>
 )
 
+// Navbar link with press/hover feedback (from btn-primary/btn-secondary) and
+// an in-button processing spinner while the route renders. The spinner
+// overlays the dimmed label so the button never shifts layout while waiting.
+function NavLink({
+  href,
+  title,
+  primary,
+  children,
+}: {
+  href: string
+  title: string
+  primary?: boolean
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const [loading, setLoading] = useState(false)
+
+  // Arrived at the destination (or navigated elsewhere): clear the state.
+  useEffect(() => {
+    setLoading(false)
+  }, [pathname])
+
+
+  return (
+    <Link
+      href={href}
+      title={title}
+      aria-busy={loading}
+      onClick={() => {
+        if (loading || pathname === href) return
+        setLoading(true)
+      }}
+      className={`${primary ? 'btn-primary' : 'btn-secondary'} relative px-3 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${loading ? 'btn-loading' : ''}`}
+    >
+      {loading && (
+        <span className="absolute inset-0 flex items-center justify-center">{NAV_SPINNER}</span>
+      )}
+      <span className={loading ? 'opacity-0 flex items-center gap-1.5' : 'contents'}>
+        {children}
+      </span>
+    </Link>
+  )
+}
+
 export default function Navbar() {
   const router = useRouter()
   const pathname = usePathname()
@@ -84,14 +128,14 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 backdrop-blur-xl border-b shadow-sm" style={{ backgroundColor: 'rgba(var(--bg-card), 0.85)', borderColor: 'rgb(var(--border-color))' }} aria-label="Main navigation">
       {loggingOut && <Splash label="Logging out..." />}
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2.5 group">
+        <Link href="/" className="flex items-center gap-2.5 group active:scale-[0.97] transition-transform duration-150">
           <Image
             src="/logo-square.png"
             alt="WA Directory logo"
             width={40}
             height={40}
             priority
-            className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 transition-transform duration-200"
+            className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 group-active:scale-95 transition-transform duration-200"
           />
           <span className="text-lg font-extrabold tracking-tight leading-tight">
             <span className="bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 bg-clip-text text-transparent">WA</span>
@@ -100,61 +144,48 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2.5">
-          <Link
-            href="/map"
-            title="View business map"
-            className="btn-secondary px-3 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
-          >
+          <NavLink href="/map" title="View business map">
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
             </svg>
             <span className="hidden sm:inline">Map</span>
-          </Link>
-          <Link
-            href="/pay"
-            title="Make a payment"
-            className="hidden sm:flex btn-secondary px-3 py-2.5 text-xs sm:text-sm font-semibold items-center gap-1.5 whitespace-nowrap"
-          >
-            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-            </svg>
-            <span>Pay</span>
-          </Link>
-          <Link
-            href="/list"
-            title="List your business"
-            className="btn-primary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
-          >
+          </NavLink>
+          <div className="hidden sm:block">
+            <NavLink href="/pay" title="Make a payment">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+              </svg>
+              <span>Pay</span>
+            </NavLink>
+          </div>
+          <NavLink href="/list" title="List your business" primary>
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             <span className="hidden sm:inline">List your business</span>
             <span className="inline sm:hidden">List</span>
-          </Link>
+          </NavLink>
           {loggedIn === null ? (
             <div className="h-10 w-10 sm:w-24 bg-gray-200/60 rounded-xl animate-pulse" />
           ) : loggedIn ? (
             <>
               {!pathname.startsWith('/portal') && (
-                <Link
-                  href="/portal"
-                  title="My Portal"
-                  className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
-                >
+                <NavLink href="/portal" title="My Portal">
                   <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625z" />
                   </svg>
                   <span className="hidden sm:inline">My Portal</span>
                   <span className="inline sm:hidden">Portal</span>
-                </Link>
+                </NavLink>
               )}
               <button
                 type="button"
                 onClick={logout}
                 disabled={loggingOut}
                 title="Logout"
-                className="btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap"
+                aria-busy={loggingOut}
+                className={`btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${loggingOut ? 'btn-loading' : ''}`}
               >
                 <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
@@ -168,7 +199,9 @@ export default function Navbar() {
               type="button"
               onClick={() => navigate('/login')}
               title="Log in your account"
-              className={`btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${navigatingTo === '/login' ? 'opacity-70 cursor-wait' : ''}`}
+              disabled={navigatingTo === '/login'}
+              aria-busy={navigatingTo === '/login'}
+              className={`btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${navigatingTo === '/login' ? 'btn-loading' : ''}`}
             >
               {navigatingTo === '/login' ? (
                 NAV_SPINNER

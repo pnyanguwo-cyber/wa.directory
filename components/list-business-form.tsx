@@ -667,7 +667,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         <div className="space-y-4 animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Business Name</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Business Name</label>
               <input
                 type="text"
                 value={form.name}
@@ -680,7 +680,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
+              <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
                 WhatsApp Business Username <span className="text-text-secondary font-normal">(optional)</span>
               </label>
               <input
@@ -771,7 +771,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               label="Country Code"
             />
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Phone Number</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Phone Number</label>
               <input
                 ref={phoneRef}
                 type="tel"
@@ -791,43 +791,84 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   Will be saved exactly as entered: {normalizeVoicePhone(form.phone)} (customers see a Call button)
                 </p>
               )}
-              {/* Optional: WhatsApp mobile, voice, or both. */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <button
-                  type="button"
-                  aria-pressed={phoneWhatsapp}
-                  onClick={() => setPhoneWhatsapp(v => !v)}
-                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
-                    phoneWhatsapp
-                      ? 'bg-whatsapp-500 text-white border-whatsapp-500 shadow-md'
-                      : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
-                  }`}
-                >
-                  📱 WhatsApp mobile
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={phoneVoice}
-                  onClick={() => setPhoneVoice(v => !v)}
-                  className={`h-9 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
-                    phoneVoice
-                      ? 'bg-whatsapp-600 text-white border-whatsapp-600 shadow-md'
-                      : 'bg-white border-gray-200/80 text-text-secondary hover:bg-surface'
-                  }`}
-                >
-                  ☎️ Landline or hotline (voice only)
-                </button>
-              </div>
-              {!phoneWhatsapp && !phoneVoice && (
-                <p className="text-xs text-danger mt-1">Select at least one phone type (WhatsApp or voice).</p>
-              )}
-              {phoneWhatsapp && <p className="text-xs text-whatsapp-600 mt-1">Customers will chat with this number on WhatsApp</p>}
-              {phoneVoice && !phoneWhatsapp && (
-                <p className="text-xs text-whatsapp-600 mt-1">Customers will get a Call button for this number</p>
-              )}
+              {/* How customers reach you: WhatsApp mobile, voice line, or both. */}
+              <fieldset className="mt-3">
+                <legend className="text-xs font-semibold text-text-primary mb-1.5">
+                  How can customers use this number? <span className="text-text-secondary font-normal">select one or both</span>
+                </legend>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={phoneWhatsapp}
+                    onClick={() => setPhoneWhatsapp(v => !v)}
+                    className={`flex items-start gap-2.5 text-left rounded-xl border-2 px-3 py-2.5 transition-all duration-150 ${
+                      phoneWhatsapp
+                        ? 'border-whatsapp-500 bg-whatsapp-50 shadow-sm active:scale-[0.98]'
+                        : 'border-gray-200 bg-white text-text-secondary hover:border-whatsapp-200 active:scale-[0.98]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                        phoneWhatsapp ? 'bg-whatsapp-500 border-whatsapp-500' : 'border-gray-300 bg-white'
+                      }`}
+                    >
+                      {phoneWhatsapp && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs font-bold ${phoneWhatsapp ? 'text-whatsapp-800' : 'text-text-primary'}`}>
+                        📱 WhatsApp mobile
+                      </span>
+                      <span className="block text-[11px] text-text-secondary leading-snug">
+                        Customers tap to chat with you on WhatsApp
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={phoneVoice}
+                    onClick={() => setPhoneVoice(v => !v)}
+                    className={`flex items-start gap-2.5 text-left rounded-xl border-2 px-3 py-2.5 transition-all duration-150 ${
+                      phoneVoice
+                        ? 'border-whatsapp-600 bg-whatsapp-50 shadow-sm active:scale-[0.98]'
+                        : 'border-gray-200 bg-white text-text-secondary hover:border-whatsapp-200 active:scale-[0.98]'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`mt-0.5 w-4 h-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${
+                        phoneVoice ? 'bg-whatsapp-600 border-whatsapp-600' : 'border-gray-300 bg-white'
+                      }`}
+                    >
+                      {phoneVoice && (
+                        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth="3.5" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="min-w-0">
+                      <span className={`block text-xs font-bold ${phoneVoice ? 'text-whatsapp-800' : 'text-text-primary'}`}>
+                        ☎️ Landline / hotline
+                      </span>
+                      <span className="block text-[11px] text-text-secondary leading-snug">
+                        Customers tap to call — voice only, no chat
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                {!phoneWhatsapp && !phoneVoice && (
+                  <p className="text-xs text-danger mt-1.5">Select at least one option above.</p>
+                )}
+              </fieldset>
               {phoneVoice && phoneWhatsapp && (
                 <div className="mt-2">
-                  <label className="block text-sm font-medium text-text-primary mb-1.5">Landline / hotline number <span className="text-text-secondary font-normal">(optional)</span></label>
+                  <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Landline / hotline number <span className="text-text-secondary font-normal">(optional)</span></label>
                   <input
                     type="tel"
                     value={voicePhone}
@@ -861,7 +902,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
       {step === 2 && (
         <div className="space-y-4 animate-fade-in">
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
               Categories <span className="text-text-secondary font-normal">pick all that apply</span>
             </label>
             <MultiSearchSelect
@@ -894,7 +935,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">What do you sell?</label>
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">What do you sell?</label>
             <textarea
               ref={descriptionRef}
               value={form.description}
@@ -1053,7 +1094,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <p className="text-xs text-danger">Select at least one option above, and a city/area if you have a physical location.</p>
           )}
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
               Street Address <span className="text-text-secondary font-normal">(optional)</span>
             </label>
             <input
@@ -1139,7 +1180,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </summary>
             <div className="pt-3 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">Logo</label>
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Logo</label>
             <div className="flex gap-1 mb-3 bg-surface rounded-xl p-1">
               <button
                 onClick={() => { setLogoMode('url'); setLogoFile(null); setLogoPreview(''); setErrors(prev => ({ ...prev, logo: undefined })) }}
@@ -1217,7 +1258,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
               WhatsApp Catalog Link <span className="text-text-secondary">(optional)</span>
             </label>
             <input
@@ -1243,7 +1284,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             </details>
           </div>
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
               Website <span className="text-text-secondary">(optional)</span>
             </label>
             <input
@@ -1261,7 +1302,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           </details>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5">
+              <label htmlFor="field-password" className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
                 Portal Password <span className="text-danger font-semibold">(required)</span>
               </label>
             <div className="relative">
@@ -1308,7 +1349,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             <PasswordStrengthMeter password={form.password} />
             </div>
             <div>
-              <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5">
+              <label htmlFor="field-confirm-password" className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
                 Confirm Password <span className="text-danger font-semibold">(required)</span>
               </label>
             <div className="relative">

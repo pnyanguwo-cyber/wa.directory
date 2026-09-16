@@ -96,7 +96,7 @@ export default function SearchSelect({
   return (
     <div ref={wrapperRef} className="relative">
       {label && (
-        <label className="block text-sm font-medium text-text-primary mb-1.5">
+        <label className="field-label">
           {label}
         </label>
       )}
