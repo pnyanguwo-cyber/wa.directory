@@ -7,8 +7,8 @@ export default function MobileFloatingActions() {
   const pathname = usePathname()
   const isHome = pathname === '/'
 
-  // Hide on desktop and on the pay page itself
-  if (pathname === '/pay') return null
+  // Hide on desktop, pay page, and interactive map page
+  if (pathname === '/pay' || pathname === '/map') return null
 
   return (
     <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2 sm:hidden animate-slide-up">

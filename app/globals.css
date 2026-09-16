@@ -385,4 +385,24 @@
   }
 }
 
+/* Map UI & Leaflet Custom Pins */
+.custom-map-pin, .user-gps-pin {
+  background: transparent !important;
+  border: none !important;
+}
+
+.map-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.map-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.map-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(18, 140, 126, 0.2);
+  border-radius: 9999px;
+}
+.map-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(18, 140, 126, 0.4);
+}
+
 

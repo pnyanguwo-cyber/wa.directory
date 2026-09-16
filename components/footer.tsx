@@ -2,9 +2,13 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { usePathname } from 'next/navigation'
 import Icon from '@/components/icon'
 
 export default function Footer() {
+  const pathname = usePathname()
+  if (pathname === '/map') return null
+
   return (
     <footer className="mt-12 border-t border-gray-200/80 bg-surface/70 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
