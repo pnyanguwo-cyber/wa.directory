@@ -15,19 +15,44 @@ function getSupabase() {
   )
 }
 
-// Search for businesses by ID, username, phone, or name
+// Search for businesses by ID, username, phone, and name — all strategies run
+// and results are merged (deduped by id, priority order preserved), with each
+// row tagged by the strategy that found it so the /pay selector can offer a
+// match-type filter dropdown.
 async function searchBusinesses(supabase: ReturnType<typeof getSupabase>, query: string) {
   const trimmed = query.trim()
   if (!trimmed) return []
+
+  type PayBusiness = {
+    id: string
+    name: string
+    slug: string
+    business_id: string
+    username: string | null
+    phone: string
+    city: string
+    area: string
+    logo_url: string | null
+    category: string[]
+    payment_status: string
+    match: 'business_id' | 'phone' | 'username' | 'name'
+  }
+  const SELECT = 'id, name, slug, business_id, username, phone, city, area, logo_url, category, payment_status'
+  const found = new Map<string, PayBusiness>()
+  function add(rows: Array<Omit<PayBusiness, 'match'>> | null, match: PayBusiness['match']) {
+    for (const row of rows || []) {
+      if (!found.has(row.id)) found.set(row.id, { ...row, match })
+    }
+  }
 
   // 1. Exact business ID match (WA-XXXXXX)
   if (isValidBusinessId(trimmed)) {
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, slug, business_id, username, phone, city, area, logo_url, category, payment_status')
+      .select(SELECT)
       .eq('business_id', trimmed)
       .maybeSingle()
-    return data ? [data] : []
+    add(data ? [data] : [], 'business_id')
   }
 
   // 2. Phone number search (strip non-digits)
@@ -35,32 +60,33 @@ async function searchBusinesses(supabase: ReturnType<typeof getSupabase>, query:
   if (digits.length >= 9) {
     const { data } = await supabase
       .from('businesses')
-      .select('id, name, slug, business_id, username, phone, city, area, logo_url, category, payment_status')
+      .select(SELECT)
       .eq('phone', digits)
       .limit(10)
-    if (data?.length) return data
+    add(data, 'phone')
   }
 
   // 3. Username search (smart match)
   const { data: allBiz } = await supabase
     .from('businesses')
-    .select('id, name, slug, business_id, username, phone, city, area, logo_url, category, payment_status')
+    .select(SELECT)
     .not('username', 'is', null)
     .limit(100)
 
-  const usernameMatches_ = (allBiz || []).filter(b =>
-    b.username && usernameMatches(trimmed, b.username)
+  add(
+    (allBiz || []).filter(b => b.username && usernameMatches(trimmed, b.username)),
+    'username'
   )
-  if (usernameMatches_.length > 0) return usernameMatches_
 
   // 4. Name search (fuzzy)
   const { data: nameResults } = await supabase
     .from('businesses')
-    .select('id, name, slug, business_id, username, phone, city, area, logo_url, category, payment_status')
+    .select(SELECT)
     .ilike('name', `%${trimmed}%`)
     .limit(10)
+  add(nameResults, 'name')
 
-  return nameResults || []
+  return Array.from(found.values())
 }
 
 // GET: Search for a business

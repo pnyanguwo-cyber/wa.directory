@@ -19,6 +19,15 @@ interface Business {
   logo_url: string
   category: string[]
   payment_status: string
+  // Which search strategy found this result (see /api/pay's searchBusinesses).
+  match?: 'business_id' | 'phone' | 'username' | 'name'
+}
+
+const MATCH_LABELS: Record<string, string> = {
+  business_id: 'Business ID',
+  phone: 'Phone number',
+  username: 'Username',
+  name: 'Name',
 }
 
 export default function PayPage() {
@@ -38,6 +47,8 @@ export default function PayPage() {
   const [paidLive, setPaidLive] = useState(false)
   // Whether Paynow is configured server-side (auto EcoCash possible).
   const [paymentsConfigured, setPaymentsConfigured] = useState(true)
+  // Match-type filter for the "select business" step.
+  const [payMatch, setPayMatch] = useState<string>('all')
   const [simulating, setSimulating] = useState(false)
 
   // Done step + auto payment: poll until the webhook activates the listing.
@@ -82,6 +93,7 @@ export default function PayPage() {
       const res = await fetch(`/api/pay?q=${encodeURIComponent(query.trim())}`)
       const data = await res.json()
       setPaymentsConfigured(data.payments_configured !== false)
+      setPayMatch('all')
       setResults(data.businesses || [])
       if (!data.businesses?.length) {
         setError('No businesses found. Try a different search (name, phone, or Business ID like WA-XXXXXX).')
@@ -167,6 +179,14 @@ export default function PayPage() {
       {PLAN_CONFIG[plan].label} · ${totalAmount.toFixed(2)}
     </span>
   )
+
+  // Match-type breakdown for the select-step filter dropdown.
+  const matchKindCounts: Record<string, number> = {}
+  for (const b of results) {
+    const k = b.match || 'name'
+    matchKindCounts[k] = (matchKindCounts[k] || 0) + 1
+  }
+  const shownResults = payMatch === 'all' ? results : results.filter(b => (b.match || 'name') === payMatch)
 
   return (
     <div className="pay-flow min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
@@ -472,8 +492,31 @@ export default function PayPage() {
                 </div>
                 {planBadge}
               </div>
+
+              {/* Match-type filter — only useful when results span kinds */}
+              {Object.keys(matchKindCounts).length > 1 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <label htmlFor="pay-match-filter" className="text-xs text-text-secondary shrink-0">
+                    Filter by match:
+                  </label>
+                  <select
+                    id="pay-match-filter"
+                    value={payMatch}
+                    onChange={e => setPayMatch(e.target.value)}
+                    className="input-field text-sm max-w-[16rem]"
+                  >
+                    <option value="all">All matches ({results.length})</option>
+                    {Object.entries(matchKindCounts).map(([kind, count]) => (
+                      <option key={kind} value={kind}>
+                        {MATCH_LABELS[kind] || kind} ({count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="space-y-2 max-h-80 overflow-y-auto">
-                {results.map(biz => (
+                {shownResults.map(biz => (
                   <button
                     key={biz.id}
                     onClick={() => handleSelect(biz)}

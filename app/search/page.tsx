@@ -32,9 +32,10 @@ export async function generateMetadata({ searchParams }: { searchParams: { q?: s
   }
 }
 
-async function SearchResults({ q, verified, sort }: { q: string; verified: boolean; sort: string }) {
+async function SearchResults({ q, verified, sort, match }: { q: string; verified: boolean; sort: string; match: string }) {
   const supabase = getSupabase()
   const conditions: string[] = []
+  const relatedCats = new Set<string>()
 
   if (q) {
     conditions.push(`name.ilike.%${q}%`, `bio.ilike.%${q}%`)
@@ -42,7 +43,6 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
     if (matchedCat !== 'Other') conditions.push(`category.cs.{${matchedCat}}`)
 
     const related = await expandSearchQuery(q)
-    const relatedCats = new Set<string>()
     for (const term of related) {
       const cat = matchCategory(term)
       if (cat !== 'Other') relatedCats.add(cat)
@@ -80,10 +80,25 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
     ? await orderSearchResults(rawBusinesses, matchedCategory !== 'Other' ? matchedCategory : (q || 'browse'), city, q || (sort || 'default'))
     : []
 
+  // Match-type filter: tag each result with how it matched the query
+  // (mirrors the .or() conditions above) and narrow the ranked list.
+  const ql = q.toLowerCase()
+  const matchFiltered = q && match !== 'all'
+  const shown = matchFiltered
+    ? businesses.filter(b => {
+        if (match === 'name') return (b.name || '').toLowerCase().includes(ql)
+        if (match === 'description') return (b.bio || '').toLowerCase().includes(ql)
+        if (match === 'category') return matchedCategory !== 'Other' && (b.category || []).includes(matchedCategory)
+        if (match === 'related') return (b.category || []).some(c => relatedCats.has(c))
+        return true
+      })
+    : businesses
+  const displayTotal = matchFiltered ? shown.length : total
+
   return (
     <>
-      <FilterBar total={total} query={q} />
-      {total === 0 ? (
+      <FilterBar total={displayTotal} query={q} />
+      {displayTotal === 0 ? (
         <div className="text-center py-16">
           <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg className="w-8 h-8 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,14 +107,16 @@ async function SearchResults({ q, verified, sort }: { q: string; verified: boole
           </div>
           <h2 className="text-lg font-semibold text-text-primary mb-1">No results found</h2>
           <p className="text-text-secondary text-sm">
-            Try &ldquo;hardware near me&rdquo; or check your spelling
+            {matchFiltered
+              ? 'No businesses matched that match type — try “All matches”.'
+              : <>Try &ldquo;hardware near me&rdquo; or check your spelling</>}
           </p>
         </div>
       ) : (
         <>
-          <ImpressionPing businesses={businesses} category={matchedCategory !== 'Other' ? matchedCategory : ''} />
+          <ImpressionPing businesses={shown} category={matchedCategory !== 'Other' ? matchedCategory : ''} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {businesses.map(b => (
+            {shown.map(b => (
               <BusinessCard key={b.id} business={b} />
             ))}
           </div>
@@ -128,14 +145,19 @@ function SearchSkeleton() {
   )
 }
 
+const MATCH_TYPES = ['all', 'name', 'description', 'category', 'related'] as const
+
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string; verified?: string; sort?: string }
+  searchParams: { q?: string; verified?: string; sort?: string; match?: string }
 }) {
   const q = searchParams.q || ''
   const verified = searchParams.verified === 'true'
   const sort = searchParams.sort || 'rating'
+  const match = (MATCH_TYPES as readonly string[]).includes(searchParams.match || '')
+    ? (searchParams.match as string)
+    : 'all'
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -150,7 +172,7 @@ export default async function SearchPage({
           Back to Home
         </Link>
         <Suspense fallback={<SearchSkeleton />}>
-          <SearchResults q={q} verified={verified} sort={sort} />
+          <SearchResults q={q} verified={verified} sort={sort} match={match} />
         </Suspense>
       </div>
     </div>
