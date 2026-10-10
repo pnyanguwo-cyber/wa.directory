@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 
 interface Spot {
   position: number
@@ -560,7 +561,7 @@ export default function PortalRanking({
                     ) : `Pay $${payBid.amount.toFixed(2)}`}
                   </button>
                 </div>
-                {process.env.NODE_ENV !== 'production' && (
+                {paymentSimulationEnabled() && (
                   <button
                     type="button"
                     onClick={simulatePayment}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import LogoImage from '@/components/logo-image'
+import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import type { PlanType } from '@/types'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 
@@ -32,7 +33,40 @@ export default function PayPage() {
   const [error, setError] = useState('')
   // True when Paynow pushed a real EcoCash prompt (auto-confirming payment).
   const [autoEcoCash, setAutoEcoCash] = useState(false)
+  // True once the webhook (or a simulation) has activated the listing — the
+  // poll below flips this without any reload or admin step.
+  const [paidLive, setPaidLive] = useState(false)
+  // Whether Paynow is configured server-side (auto EcoCash possible).
+  const [paymentsConfigured, setPaymentsConfigured] = useState(true)
   const [simulating, setSimulating] = useState(false)
+
+  // Done step + auto payment: poll until the webhook activates the listing.
+  useEffect(() => {
+    if (step !== 'done' || paidLive || !autoEcoCash || !selected) return
+    let cancelled = false
+    let ticks = 0
+    const interval = setInterval(async () => {
+      ticks += 1
+      if (ticks > 75) {
+        clearInterval(interval)
+        return
+      }
+      try {
+        const res = await fetch(`/api/pay/status?business_id=${encodeURIComponent(selected.business_id)}`, { cache: 'no-store' })
+        const data = await res.json()
+        if (res.ok && data.active && !cancelled) {
+          clearInterval(interval)
+          setPaidLive(true)
+        }
+      } catch {
+        // transient network error: keep polling
+      }
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [step, paidLive, autoEcoCash, selected])
 
   // Bring the active step's card into view when moving between steps
   useEffect(() => {
@@ -47,6 +81,7 @@ export default function PayPage() {
     try {
       const res = await fetch(`/api/pay?q=${encodeURIComponent(query.trim())}`)
       const data = await res.json()
+      setPaymentsConfigured(data.payments_configured !== false)
       setResults(data.businesses || [])
       if (!data.businesses?.length) {
         setError('No businesses found. Try a different search (name, phone, or Business ID like WA-XXXXXX).')
@@ -89,11 +124,37 @@ export default function PayPage() {
         return
       }
       setAutoEcoCash(!!data.auto_ecocash)
+      setPaidLive(false)
       setStep('done')
     } catch {
       setError('Could not submit payment request. Please try again.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Dev-only: activate through the same helper the real EcoCash webhook runs.
+  async function simulateLive() {
+    if (!selected || simulating) return
+    setSimulating(true)
+    setError('')
+    try {
+      const res = await fetch('/api/pay/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business_id: selected.business_id, plan }),
+      })
+      if (res.ok) {
+        setPaidLive(true)
+        setStep('done')
+      } else {
+        const data = await res.json().catch(() => null)
+        setError(data?.error || 'Simulation failed')
+      }
+    } catch {
+      // leave the screen as-is; simulation is best-effort dev tooling
+    } finally {
+      setSimulating(false)
     }
   }
 
@@ -483,7 +544,9 @@ export default function PayPage() {
                   Your EcoCash phone number
                 </label>
                 <p className="text-xs text-text-secondary mb-3 leading-relaxed">
-                  Enter the number you&apos;re paying from. Admin will verify the EcoCash transaction from this number.
+                  {paymentsConfigured
+                    ? 'Enter the number you\u2019re paying from. You\u2019ll get an EcoCash PIN prompt on this phone — approve it and your listing goes live instantly.'
+                    : 'Enter the number you\u2019re paying from. Admin will verify the EcoCash transaction from this number.'}
                 </p>
                 <input
                   type="tel"
@@ -513,7 +576,9 @@ export default function PayPage() {
                   <span className="font-extrabold text-whatsapp-700 tabular-nums">${totalAmount.toFixed(2)}</span>
                 </div>
                 <p className="text-xs text-text-secondary mt-2 leading-relaxed">
-                  Covers your listing for {PLAN_CONFIG[plan].label.toLowerCase()}. Admin will verify the EcoCash transaction.
+                  {paymentsConfigured
+                    ? `Covers your listing for ${PLAN_CONFIG[plan].label.toLowerCase()}. Your listing activates automatically once the EcoCash payment succeeds.`
+                    : `Covers your listing for ${PLAN_CONFIG[plan].label.toLowerCase()}. Admin will verify the EcoCash transaction.`}
                 </p>
               </div>
 
@@ -535,9 +600,27 @@ export default function PayPage() {
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Submitting...
                     </span>
-                  ) : 'Submit Payment Request'}
+                  ) : paymentsConfigured ? `Pay $${totalAmount.toFixed(2)} with EcoCash` : 'Submit Payment Request'}
                 </button>
               </div>
+
+              {/* Dev-only: simulate a confirmed payment through the same
+                  activation path a real EcoCash payment takes. */}
+              {selected && paymentSimulationEnabled() && (
+                <button
+                  type="button"
+                  disabled={simulating}
+                  onClick={simulateLive}
+                  className="inline-flex items-center justify-center gap-1.5 w-full mt-3 px-5 py-2.5 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+                >
+                  {simulating ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      Simulating payment…
+                    </span>
+                  ) : '⚙ Simulate payment (dev only)'}
+                </button>
+              )}
             </div>
           )}
 
@@ -556,14 +639,26 @@ export default function PayPage() {
               </div>
 
               <h2 className="text-xl font-extrabold tracking-tight text-text-primary mb-2">
-                {autoEcoCash ? 'EcoCash Prompt Sent' : 'Payment Request Submitted'}
+                {paidLive
+                  ? 'Payment Confirmed — You\u2019re Live!'
+                  : autoEcoCash
+                    ? 'EcoCash Prompt Sent'
+                    : 'Payment Request Submitted'}
               </h2>
               <p className="text-sm text-text-secondary mb-1 leading-relaxed">
-                You&apos;re paying <span className="font-bold text-whatsapp-700">${totalAmount.toFixed(2)}</span> ({PLAN_CONFIG[plan].label}) for <strong className="text-text-primary">{selected?.name}</strong>
+                {paidLive ? (
+                  <><strong className="text-text-primary">{selected?.name}</strong> is now visible in the directory for {PLAN_CONFIG[plan].label.toLowerCase()}.</>
+                ) : (
+                  <>You&apos;re paying <span className="font-bold text-whatsapp-700">${totalAmount.toFixed(2)}</span> ({PLAN_CONFIG[plan].label}) for <strong className="text-text-primary">{selected?.name}</strong></>
+                )}
               </p>
-              {autoEcoCash ? (
+              {paidLive ? (
                 <p className="text-xs text-text-secondary mb-6 leading-relaxed">
-                  Check the phone +{payerPhone.replace(/\D/g, '')} for an EcoCash prompt and enter your PIN. Your listing goes live <strong> automatically</strong> the moment payment succeeds.
+                  The payment was confirmed automatically — no admin approval needed. You&apos;ll receive a WhatsApp confirmation shortly.
+                </p>
+              ) : autoEcoCash ? (
+                <p className="text-xs text-text-secondary mb-6 leading-relaxed">
+                  Check the phone +{payerPhone.replace(/\D/g, '')} for an EcoCash prompt and enter your PIN. Your listing goes live <strong> automatically</strong> the moment payment succeeds — this page updates by itself.
                 </p>
               ) : (
                 <p className="text-xs text-text-secondary mb-6 leading-relaxed">
@@ -571,38 +666,26 @@ export default function PayPage() {
                 </p>
               )}
 
-              {/* What happens next */}
-              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-5 mb-6 text-left"
-                style={{ boxShadow: '0 2px 8px -2px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
-                <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">What happens next</p>
-                <ol className="text-xs text-amber-900 space-y-1.5 leading-relaxed">
-                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> {autoEcoCash ? 'Enter your EcoCash PIN on the prompt' : 'Pay via EcoCash from +253… your number'}</li>
-                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your listing goes live for {PLAN_CONFIG[plan].label.toLowerCase()}{autoEcoCash ? ' automatically' : ' once admin confirms'}</li>
-                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">3.</span> You&apos;ll receive a WhatsApp confirmation</li>
-                </ol>
-              </div>
+              {/* What happens next — only while waiting for the payment */}
+              {!paidLive && (
+                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-5 mb-6 text-left"
+                  style={{ boxShadow: '0 2px 8px -2px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">What happens next</p>
+                  <ol className="text-xs text-amber-900 space-y-1.5 leading-relaxed">
+                    <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> {autoEcoCash ? 'Enter your EcoCash PIN on the prompt' : 'Pay via EcoCash from +253… your number'}</li>
+                    <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your listing goes live for {PLAN_CONFIG[plan].label.toLowerCase()}{autoEcoCash ? ' automatically — this page will update itself' : ' once admin confirms'}</li>
+                    <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">3.</span> You&apos;ll receive a WhatsApp confirmation</li>
+                  </ol>
+                </div>
+              )}
 
               {/* Dev-only: simulate a confirmed payment through the same
                   activation path a real EcoCash payment takes. */}
-              {selected && process.env.NODE_ENV !== 'production' && (
+              {selected && !paidLive && paymentSimulationEnabled() && (
                 <button
                   type="button"
                   disabled={simulating}
-                  onClick={async () => {
-                    setSimulating(true)
-                    try {
-                      const res = await fetch('/api/pay/simulate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ business_id: selected.business_id, plan }),
-                      })
-                      if (res.ok) window.location.reload()
-                    } catch {
-                      // leave the screen as-is; simulation is best-effort dev tooling
-                    } finally {
-                      setSimulating(false)
-                    }
-                  }}
+                  onClick={simulateLive}
                   className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-5 py-2.5 mb-4 rounded-full text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
                 >
                   {simulating ? (
@@ -614,12 +697,14 @@ export default function PayPage() {
                 </button>
               )}
 
-              <Link
-                href="/"
-                className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-6 py-3 text-sm font-semibold shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] hover:from-whatsapp-600 hover:to-whatsapp-700 hover:shadow-[0_6px_20px_rgba(18,140,126,0.35)] active:scale-[0.97] transition-all duration-150"
-              >
-                Back to Home
-              </Link>
+              <div>
+                <Link
+                  href="/"
+                  className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-6 py-3 text-sm font-semibold shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] hover:from-whatsapp-600 hover:to-whatsapp-700 hover:shadow-[0_6px_20px_rgba(18,140,126,0.35)] active:scale-[0.97] transition-all duration-150"
+                >
+                  Back to Home
+                </Link>
+              </div>
             </div>
           )}
               </div>

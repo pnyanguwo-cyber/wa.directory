@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { PLAN_CONFIG } from '@/types'
@@ -16,6 +16,7 @@ import { PasswordStrengthMeter, validatePassword } from '@/components/password-s
 import { Smartphone, PhoneCall } from 'lucide-react'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 import { normalizeUsername } from '@/lib/username'
+import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 
 interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
@@ -61,9 +62,40 @@ export default function ListBusinessForm({
   const [payPlan, setPayPlan] = useState<'1m' | '6m' | '12m'>('1m')
   // Post-submit payment flow: package selection → phone entry.
   const [payStage, setPayStage] = useState<'packages' | 'phone'>('packages')
-  // Feedback modal states: 'verified' (simulated success) or 'pending' (awaiting admin).
+  // Feedback modal states: 'verified' (success) or 'pending' (awaiting payment).
   const [payResult, setPayResult] = useState<'none' | 'verified' | 'pending'>('none')
+  // True when /api/pay pushed a real auto-confirming EcoCash prompt — the
+  // listing goes live with no admin step, detected by polling below.
+  const [autoEcocash, setAutoEcocash] = useState(false)
   const [simulating, setSimulating] = useState(false)
+
+  // Auto payment in flight: poll until the webhook flips the listing live.
+  useEffect(() => {
+    if (payResult !== 'pending' || !autoEcocash || !businessId) return
+    let cancelled = false
+    let ticks = 0
+    const interval = setInterval(async () => {
+      ticks += 1
+      if (ticks > 75) {
+        clearInterval(interval)
+        return
+      }
+      try {
+        const res = await fetch(`/api/pay/status?business_id=${encodeURIComponent(businessId)}`, { cache: 'no-store' })
+        const data = await res.json()
+        if (res.ok && data.active && !cancelled) {
+          clearInterval(interval)
+          setPayResult('verified')
+        }
+      } catch {
+        // transient network error: keep polling
+      }
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [payResult, autoEcocash, businessId])
   const [logoMode, setLogoMode] = useState<LogoMode>('url')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -620,6 +652,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       setSplashError(data.error || 'Could not submit your payment')
                       return
                     }
+                    setAutoEcocash(!!data.auto_ecocash)
                     setPayResult('pending')
                   } catch {
                     setSplashError('Could not submit your payment. Please try again.')
@@ -635,7 +668,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 <div>
                   <label className="block text-sm font-semibold text-text-primary mb-1">Your EcoCash number</label>
                   <p className="text-xs text-text-secondary mb-2">
-                    Enter the number paying from. Admin will verify the transaction from this number.
+                    Enter the number paying from. You&apos;ll get an EcoCash PIN prompt on this phone — approve it and your listing goes live instantly.
                   </p>
                   <input
                     type="tel"
@@ -663,7 +696,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
 
             {/** Simulate payment (dev only) — activates the listing without a real
                 gateway transaction, exactly like admin confirmation would. */}
-            {process.env.NODE_ENV !== 'production' && (
+            {paymentSimulationEnabled() && (
             <button
               type="button"
               disabled={simulating}
@@ -740,11 +773,19 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-extrabold text-text-primary">Payment not verified yet</h3>
-                  <p className="text-xs text-text-secondary leading-relaxed">
-                    Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${splashPhone.replace(/D/g, '')}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
-                  </p>
-                  {process.env.NODE_ENV !== 'production' && (
+                  <h3 className="text-lg font-extrabold text-text-primary">
+                    {autoEcocash ? 'EcoCash prompt sent' : 'Payment not verified yet'}
+                  </h3>
+                  {autoEcocash ? (
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      Check <strong>{splashPhone ? `+${splashPhone.replace(/\D/g, '')}` : 'your phone'}</strong> for the EcoCash prompt and enter your PIN. Your <strong>{PLAN_CONFIG[payPlan].label}</strong> listing goes live <strong className="text-text-primary">automatically</strong> the moment the payment succeeds — this screen updates by itself. No admin approval needed.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-text-secondary leading-relaxed">
+                      Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${splashPhone.replace(/\D/g, '')}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
+                    </p>
+                  )}
+                  {paymentSimulationEnabled() && (
                   <button
                     type="button"
                     onClick={async () => {

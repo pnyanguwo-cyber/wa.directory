@@ -30,6 +30,9 @@ interface ListingSubscription {
   created_at: string
   plan: string
   pro_assistance: boolean
+  paynow_reference: string | null
+  paynow_paid_at: string | null
+  auto_confirmed_at: string | null
   business: { id: string; name: string; slug: string; phone: string; business_id: string; username: string; city: string; payment_status: string } | null
 }
 
@@ -270,6 +273,22 @@ export default function AdminSubscriptions() {
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${statusStyle[s.status] || statusStyle.cancelled}`}>
                       {s.status}
                     </span>
+
+                    {s.auto_confirmed_at ? (
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-whatsapp-50 text-whatsapp-700 border-whatsapp-200"
+                        title={`Confirmed automatically by Paynow${s.paynow_reference ? ` · ${s.paynow_reference}` : ''} on ${new Date(s.auto_confirmed_at).toLocaleString()}`}
+                      >
+                        ⚡ Auto-confirmed
+                      </span>
+                    ) : s.paynow_reference && s.status === 'pending' ? (
+                      <span
+                        className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-amber-50 text-amber-700 border-amber-200"
+                        title={`EcoCash prompt sent (${s.paynow_reference}) — auto-confirms when the payer enters their PIN`}
+                      >
+                        ⏳ EcoCash sent
+                      </span>
+                    ) : null}
 
                     {s.status === 'pending' && (
                       <div className="flex items-center gap-2">

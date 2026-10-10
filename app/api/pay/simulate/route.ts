@@ -4,6 +4,7 @@ import { activateListingSubscription } from '@/lib/listing-activation'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { paymentSimulationApiEnabled } from '@/lib/pay-simulation'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
 
@@ -21,7 +22,8 @@ import type { PlanType } from '@/types'
 //
 // business_id accepts either the public Business ID code (used at /pay and in
 // the listing form) or the internal UUID (used by portal components).
-// Gated behind NODE_ENV !== 'production' so it can never fire on the live site.
+// Gated by lib/pay-simulation: dev by default, or when the deployment sets
+// NEXT_PUBLIC_ENABLE_PAYMENT_SIMULATION=1 / ENABLE_PAYMENT_SIMULATION=1.
 
 type Supabase = ReturnType<typeof getSupabase>
 
@@ -308,7 +310,7 @@ async function simulatePremium(supabase: Supabase, body: Record<string, unknown>
 }
 
 export async function POST(request: Request) {
-  if (process.env.NODE_ENV === 'production') {
+  if (!paymentSimulationApiEnabled()) {
     return NextResponse.json({ error: 'Simulated payments are only available in development.' }, { status: 403 })
   }
 

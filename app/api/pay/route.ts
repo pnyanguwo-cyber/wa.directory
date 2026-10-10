@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { isValidBusinessId } from '@/lib/business-id'
 import { normalizeForSearch, usernameMatches } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-import { initiateEcoCashPayment } from '@/lib/paynow'
+import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
   const supabase = getSupabase()
   const businesses = await searchBusinesses(supabase, query)
-  return NextResponse.json({ businesses })
+  return NextResponse.json({ businesses, payments_configured: paynowConfigured() })
 }
 
 // POST: Create a pending payment for a business

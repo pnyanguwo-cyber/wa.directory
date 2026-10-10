@@ -36,10 +36,11 @@ export async function GET() {
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
-  // Listing subscriptions — include plan + pro_assistance
+  // Listing subscriptions — include plan + pro_assistance + Paynow bookkeeping
+  // so the dashboard can show auto-confirmed vs manual at a glance.
   const { data: listingSubs } = await supabase
     .from('listing_subscriptions')
-    .select('id, business_id, status, amount, payer_phone, started_at, expires_at, renewal_notified_at, created_at, plan, pro_assistance')
+    .select('id, business_id, status, amount, payer_phone, started_at, expires_at, renewal_notified_at, created_at, plan, pro_assistance, paynow_reference, paynow_paid_at, auto_confirmed_at')
     .order('created_at', { ascending: false })
     .limit(300)
 

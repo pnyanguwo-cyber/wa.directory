@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PaymentPlanModal from '@/components/payment-plan-modal'
+import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import type { PlanType } from '@/types'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 
@@ -19,7 +20,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   const [notice, setNotice] = useState('')
   const [showPlanModal, setShowPlanModal] = useState(false)
   const [simulating, setSimulating] = useState<'plan' | 'premium' | null>(null)
-  const isDev = process.env.NODE_ENV !== 'production'
+  const isDev = paymentSimulationEnabled()
 
   const premiumStatus = sub?.status || 'none'
   const premiumActive = premiumStatus === 'active' && (!sub!.expiresAt || new Date(sub!.expiresAt) > new Date())
