@@ -748,13 +748,14 @@ export default function AdminListings() {
 
           <div className="space-y-2.5">
             {paginated.map(b => (
-              <div key={b.id} className="neo-card p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5">
+              <div key={b.id} className="neo-card p-3.5 sm:p-4 flex flex-col gap-3">
+                {/* Row 1: identity */}
+                <div className="flex items-center gap-3 min-w-0">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(b.id)}
                     onChange={() => toggleSelect(b.id)}
-                    className="w-4 h-4 accent-whatsapp-600 shrink-0 cursor-pointer mt-1 sm:mt-0"
+                    className="w-4 h-4 accent-whatsapp-600 shrink-0 cursor-pointer"
                     aria-label={`Select ${b.name}`}
                   />
                   {b.logo_url ? (
@@ -764,9 +765,9 @@ export default function AdminListings() {
                       <span className="text-xs font-bold text-whatsapp-800">{b.name.charAt(0)}</span>
                     </div>
                   )}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                      <h3 className="font-bold text-text-primary text-sm truncate max-w-full">{b.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <h3 className="font-bold text-text-primary text-sm truncate">{b.name}</h3>
                       {b.verified && (
                         <span className="badge-verified shrink-0">
                           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -776,49 +777,50 @@ export default function AdminListings() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-text-secondary flex-wrap">
-                      <span className="truncate">{b.category?.slice(0, 2).join(', ')}</span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{b.city || b.location}</span>
-                    </div>
-                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] text-text-secondary mt-1">
-                      {(b as { business_id?: string }).business_id && (
-                        <span className="font-mono">{(b as { business_id: string }).business_id}</span>
-                      )}
-                      {(b as { username?: string }).username && (
-                        <span>@{(b as { username: string }).username}</span>
-                      )}
-                      {/* Payment status: always visible + inline override so the admin can
-                          make a stuck listing live without hunting through Subscriptions. */}
-                      <span className="relative inline-flex items-center">
-                        <select
-                          value={(b as { payment_status?: string }).payment_status || 'active'}
-                          onChange={e => handleSetPayment(b.id, e.target.value)}
-                          disabled={payBusyId === b.id}
-                          title="Override payment status — only 'active' shows in public search"
-                          className={`appearance-none pl-2 pr-6 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wide cursor-pointer border-0 outline-none transition-all disabled:opacity-50 ${
-                            STATUS_STYLES[(b as { payment_status?: string }).payment_status || 'active'] || 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          <option value="active">Active ✓</option>
-                          <option value="pending">Pending</option>
-                          <option value="expired">Expired</option>
-                          <option value="unpaid">Unpaid</option>
-                        </select>
-                        <svg className="absolute right-1.5 w-3 h-3 pointer-events-none opacity-60" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                        </svg>
-                      </span>
-                    </div>
+                    <p className="text-xs text-text-secondary truncate mt-0.5">
+                      {[b.category?.slice(0, 2).join(', '), b.city || b.location].filter(Boolean).join(' · ')}
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0 sm:flex-wrap sm:justify-end">
+                {/* Row 2: meta pills — full-width, no overlap with the action bar */}
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1.5 text-[10px] text-text-secondary min-w-0">
+                  {(b as { business_id?: string }).business_id && (
+                    <span className="font-mono">{(b as { business_id: string }).business_id}</span>
+                  )}
+                  {(b as { username?: string }).username && (
+                    <span className="truncate max-w-[9rem] sm:max-w-none">@{(b as { username: string }).username}</span>
+                  )}
+                  {/* Payment status: inline override so the admin can make a stuck
+                      listing live without hunting through Subscriptions. */}
+                  <span className="relative inline-flex items-center">
+                    <select
+                      value={(b as { payment_status?: string }).payment_status || 'active'}
+                      onChange={e => handleSetPayment(b.id, e.target.value)}
+                      disabled={payBusyId === b.id}
+                      title="Override payment status — only 'active' shows in public search"
+                      className={`appearance-none pl-2 pr-6 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wide cursor-pointer border-0 outline-none transition-all disabled:opacity-50 ${
+                        STATUS_STYLES[(b as { payment_status?: string }).payment_status || 'active'] || 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
+                      <option value="active">Active ✓</option>
+                      <option value="pending">Pending</option>
+                      <option value="expired">Expired</option>
+                      <option value="unpaid">Unpaid</option>
+                    </select>
+                    <svg className="absolute right-1.5 w-3 h-3 pointer-events-none opacity-60" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </span>
+                </div>
+
+                {/* Row 3: actions — 3 equal buttons always one clean line */}
+                <div className="grid grid-cols-3 gap-2">
                   {b.verified ? (
                     <button
                       onClick={() => handleToggleVerify(b.id, true)}
                       disabled={togglingId === b.id}
-                      className="h-9 px-4 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 flex-1 sm:flex-none"
+                      className="h-9 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50"
                       title="Unverify business"
                     >
                       {togglingId === b.id ? '...' : 'Unverify'}
@@ -827,7 +829,7 @@ export default function AdminListings() {
                     <button
                       onClick={() => handleToggleVerify(b.id, false)}
                       disabled={togglingId === b.id}
-                      className="h-9 px-4 text-xs font-medium text-whatsapp-800 bg-whatsapp-100 hover:bg-whatsapp-200 rounded-xl transition-all disabled:opacity-50 flex-1 sm:flex-none"
+                      className="h-9 text-xs font-medium text-whatsapp-800 bg-whatsapp-100 hover:bg-whatsapp-200 rounded-xl transition-all disabled:opacity-50"
                       title="Approve business (also activates payment)"
                     >
                       {togglingId === b.id ? '...' : 'Approve'}
@@ -835,7 +837,7 @@ export default function AdminListings() {
                   )}
                   <button
                     onClick={() => openEdit(b)}
-                    className="h-9 px-4 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all flex-1 sm:flex-none"
+                    className="h-9 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
                     title="Edit business"
                   >
                     Edit
@@ -843,7 +845,7 @@ export default function AdminListings() {
                   <button
                     onClick={() => setConfirmDelete(b.id)}
                     disabled={deletingId === b.id}
-                    className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                    className="h-9 flex items-center justify-center text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
                     title="Delete listing"
                   >
                     {deletingId === b.id ? (
@@ -863,11 +865,11 @@ export default function AdminListings() {
           </div>
 
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-1.5 mt-6">
+            <div className="flex items-center justify-center gap-1.5 mt-6 max-w-full overflow-x-auto pb-1">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
+                className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -877,7 +879,7 @@ export default function AdminListings() {
                 <button
                   key={p}
                   onClick={() => setPage(p)}
-                  className={`h-9 w-9 rounded-xl text-xs font-semibold transition-all ${
+                  className={`h-9 w-9 shrink-0 rounded-xl text-xs font-semibold transition-all ${
                     p === page
                       ? 'bg-whatsapp-500 text-white shadow-sm'
                       : 'border border-gray-200 text-text-secondary hover:bg-surface'
@@ -889,7 +891,7 @@ export default function AdminListings() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
-                className="h-9 w-9 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
+                className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl border border-gray-200 text-text-secondary hover:bg-surface disabled:opacity-30 transition-all"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />

@@ -76,6 +76,7 @@ export default function PortalRanking({
   const [payStage, setPayStage] = useState<'entry' | 'waiting'>('entry')
   const [payInstructions, setPayInstructions] = useState('')
   const [payError, setPayError] = useState('')
+  const [simulating, setSimulating] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pollCountRef = useRef(0)
 
@@ -197,6 +198,38 @@ export default function PortalRanking({
       setPayError('Could not start the payment. Please try again.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Dev-only: confirm the bid through the same activation chain the real
+  // Paynow webhook runs (mark paid → take over #1 → notify).
+  async function simulatePayment() {
+    if (!payBid || simulating) return
+    setSimulating(true)
+    setPayError('')
+    try {
+      const res = await fetch('/api/pay/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          payBid.id
+            ? { kind: 'bid', bid_id: payBid.id }
+            : { kind: 'bid', business_id: businessId, category, city, amount: payBid.amount }
+        ),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPayError(data.error || 'Simulation failed')
+        return
+      }
+      stopPolling()
+      setPayBid(null)
+      setNotice('Payment confirmed! You are now the #1 spot holder. 🎉')
+      load(category, city)
+    } catch {
+      setPayError('Simulation failed. Please try again.')
+    } finally {
+      setSimulating(false)
     }
   }
 
@@ -527,6 +560,21 @@ export default function PortalRanking({
                     ) : `Pay $${payBid.amount.toFixed(2)}`}
                   </button>
                 </div>
+                {process.env.NODE_ENV !== 'production' && (
+                  <button
+                    type="button"
+                    onClick={simulatePayment}
+                    disabled={simulating}
+                    className="w-full py-2 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+                  >
+                    {simulating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        Simulating payment…
+                      </span>
+                    ) : '⚙ Simulate payment (dev only)'}
+                  </button>
+                )}
               </form>
             ) : (
               <div className="space-y-3 text-center">

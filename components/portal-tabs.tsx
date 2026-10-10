@@ -25,27 +25,31 @@ export default function PortalTabs({ isHq = false }: { isHq?: boolean }) {
   const tabs = isHq ? TABS : TABS.filter(t => t.href !== '/portal/branches')
 
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-      {tabs.map(t => {
-        const matched = pending === t.href || (t.href === '/portal' ? pathname === '/portal' : pathname.startsWith(t.href))
-        return (
-          <Link
-            key={t.href}
-            href={t.href}
-            onClick={() => setPending(t.href)}
-            className={`h-11 px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
-              matched
-                ? 'bg-whatsapp-500 text-white shadow-md'
-                : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
-            }`}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
-            </svg>
-            {t.label}
-          </Link>
-        )
-      })}
+    <div className="relative -mx-4 sm:mx-0">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-4 sm:px-1 scrollbar-none">
+        {tabs.map(t => {
+          const matched = pending === t.href || (t.href === '/portal' ? pathname === '/portal' : pathname.startsWith(t.href))
+          return (
+            <Link
+              key={t.href}
+              href={t.href}
+              onClick={() => setPending(t.href)}
+              aria-current={matched ? 'page' : undefined}
+              className={`h-11 px-3.5 sm:px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 ${
+                matched
+                  ? 'bg-whatsapp-500 text-white shadow-md'
+                  : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
+              }`}
+            >
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
+              </svg>
+              {t.label}
+            </Link>
+          )
+        })}
+      </div>
+      <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[rgb(var(--bg-primary))] to-transparent sm:hidden" />
     </div>
   )
 }

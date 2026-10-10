@@ -8,9 +8,12 @@ interface Props {
   open: boolean
   onClose: () => void
   onProceed: (payload: { plan: PlanType; hasProAssistance: boolean }) => void
+  // Dev-only: confirm the renewal through the simulated payment path.
+  onSimulate?: (payload: { plan: PlanType; hasProAssistance: boolean }) => void
+  simulating?: boolean
 }
 
-export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
+export default function PaymentPlanModal({ open, onClose, onProceed, onSimulate, simulating }: Props) {
   const [selected, setSelected] = useState<PlanType | null>(null)
   const [proAssistance, setProAssistance] = useState(false)
   const [error, setError] = useState('')
@@ -153,6 +156,24 @@ export default function PaymentPlanModal({ open, onClose, onProceed }: Props) {
               </span>
             </div>
           </div>
+        )}
+
+        {/* Dev-only: simulate a confirmed payment through the same activation
+            path a real EcoCash renewal payment takes. */}
+        {onSimulate && selected && (
+          <button
+            type="button"
+            disabled={simulating}
+            onClick={() => onSimulate({ plan: selected, hasProAssistance: proAssistance })}
+            className="w-full py-2.5 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+          >
+            {simulating ? (
+              <span className="flex items-center justify-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                Simulating payment…
+              </span>
+            ) : '⚙ Simulate payment (dev only)'}
+          </button>
         )}
 
         {/* Actions */}

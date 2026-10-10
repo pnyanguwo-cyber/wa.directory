@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { isValidBusinessId } from '@/lib/business-id'
 import { normalizeForSearch, usernameMatches } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { initiateEcoCashPayment } from '@/lib/paynow'
+import { logPaymentEvent } from '@/lib/payment-events'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
 
@@ -122,7 +124,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Yellow Pages listings are free' }, { status: 400 })
     }
 
-    // Check for existing pending subscription
+    // Check for an existing pending subscription to reuse (idempotent retries).
     const { data: existing } = await supabase
       .from('listing_subscriptions')
       .select('id')
@@ -130,15 +132,21 @@ export async function POST(request: Request) {
       .eq('status', 'pending')
       .maybeSingle()
 
+    // Create or update the pending subscription, then — when Paynow is
+    // configured — push a real EcoCash payment request to the payer's phone.
+    // Paynow's result webhook (/api/paynow/result) auto-confirms LISTING-<id>
+    // payments and activates the subscription without any admin action.
+    let subscriptionId: string
+    const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
+
     if (existing) {
-      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
+      subscriptionId = existing.id
       await supabase
         .from('listing_subscriptions')
         .update({ payer_phone: payerClean, amount, plan, pro_assistance: !!hasProAssistance })
         .eq('id', existing.id)
     } else {
-      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
-      await supabase
+      const inserted = await supabase
         .from('listing_subscriptions')
         .insert({
           business_id: business.id,
@@ -148,6 +156,12 @@ export async function POST(request: Request) {
           plan,
           pro_assistance: !!hasProAssistance,
         })
+        .select('id')
+        .single()
+      if (inserted.error || !inserted.data) {
+        return NextResponse.json({ error: inserted.error?.message || 'Could not create the payment record' }, { status: 500 })
+      }
+      subscriptionId = inserted.data.id
     }
 
     // Update business payment_status
@@ -156,14 +170,47 @@ export async function POST(request: Request) {
       .update({ payment_status: 'pending' })
       .eq('id', business.id)
 
-    // Notify admin via WhatsApp
+    // Attempt automatic EcoCash payment via Paynow. Falls back to manual
+    // admin verification when Paynow env vars are absent or initiation fails.
+    let autoPayment: { initiated: boolean; instructions?: string } = { initiated: false }
+    if (process.env.PAYNOW_INTEGRATION_ID && process.env.PAYNOW_INTEGRATION_KEY && process.env.SITE_URL) {
+      const init = await initiateEcoCashPayment({
+        reference: `LISTING-${subscriptionId}`,
+        amount,
+        phone: payerClean,
+        additionalInfo: `WA Directory listing: ${business.name} (${PLAN_CONFIG[plan].label})`,
+        resultUrl: `${process.env.SITE_URL}/api/paynow/result`,
+      })
+      if (init.ok && init.pollUrl) {
+        await supabase
+          .from('listing_subscriptions')
+          .update({ paynow_poll_url: init.pollUrl, paynow_reference: init.paynowReference || null })
+          .eq('id', subscriptionId)
+        autoPayment = { initiated: true, instructions: init.instructions }
+        await logPaymentEvent({
+          eventType: 'payment_initiated',
+          businessId: business.id,
+          detail: { via: 'listing_pay', plan, amount, paynowRef: init.paynowReference },
+          request,
+        })
+      } else {
+        await logPaymentEvent({
+          eventType: 'payment_init_failed',
+          outcome: 'error',
+          businessId: business.id,
+          detail: { via: 'listing_pay', error: init.error || 'unknown' },
+          request,
+        })
+      }
+    }
+
+    // Notify admin via WhatsApp (manual fallback signal — never blocks)
     if (process.env.ADMIN_WHATSAPP) {
       const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
-      const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [
-          '💰 *PAYMENT REQUEST*',
+          autoPayment.initiated ? '💰 *AUTOMATIC PAYMENT IN PROGRESS*' : '💰 *PAYMENT REQUEST*',
           '',
           `Business: ${business.name}`,
           `Username: @${business.username || 'N/A'}`,
@@ -172,15 +219,21 @@ export async function POST(request: Request) {
           hasProAssistance ? 'Add-on: Pro WhatsApp catalog setup' : '',
           `Payer EcoCash: +${payerClean}`,
           '',
-          `Check EcoCash for transaction from +${payerClean}`,
-          `Review: ${siteUrl}/admin`,
+          autoPayment.initiated
+            ? 'EcoCash prompt sent to the payer. It will auto-confirm without admin action if they pay.'
+            : `Check EcoCash for transaction from +${payerClean}`,
+          autoPayment.initiated ? '' : `Review: ${siteUrl}/admin`,
         ].filter(Boolean).join('\n')
       ).catch(() => {})
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Payment request submitted. Admin will verify and activate shortly.',
+      auto_ecocash: autoPayment.initiated,
+      instructions: autoPayment.instructions || null,
+      message: autoPayment.initiated
+        ? 'An EcoCash prompt was sent to your phone. Enter your PIN and your listing goes live automatically.'
+        : 'Payment request submitted. Admin will verify and activate shortly.',
     })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })

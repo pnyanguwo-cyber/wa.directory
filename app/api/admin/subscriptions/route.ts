@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-import { PLAN_CONFIG } from '@/types'
+import { activateListingSubscription } from '@/lib/listing-activation'
 
 function getSupabase() {
   return createClient(
@@ -156,59 +156,12 @@ export async function POST(request: Request) {
       const { subscription_id } = body
       if (!subscription_id) return NextResponse.json({ error: 'subscription_id is required' }, { status: 400 })
 
-      const { data: existing } = await supabase
-        .from('listing_subscriptions')
-        .select('business_id, plan')
-        .eq('id', subscription_id)
-        .maybeSingle()
-
-      if (!existing) return NextResponse.json({ error: 'Listing subscription not found' }, { status: 404 })
-
-      const plan = existing.plan || '1m'
-      const planDays = PLAN_CONFIG[plan as keyof typeof PLAN_CONFIG]?.days || 30
-      const now = new Date()
-      const expiresAt = addDays(now, planDays)
-
-      const { error } = await supabase
-        .from('listing_subscriptions')
-        .update({
-          status: 'active',
-          started_at: now.toISOString(),
-          expires_at: expiresAt.toISOString(),
-        })
-        .eq('id', subscription_id)
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-      // Activate the business listing
-      await supabase
-        .from('businesses')
-        .update({
-          payment_status: 'active',
-          verified: true,
-          listing_activated_at: now.toISOString(),
-        })
-        .eq('id', existing.business_id)
-
-      // Notify business owner
-      const { data: business } = await supabase
-        .from('businesses')
-        .select('name, phone, username')
-        .eq('id', existing.business_id)
-        .maybeSingle()
-
-      if (business?.phone) {
-        sendWhatsAppMessage(
-          business.phone,
-          [
-            '🎉 *Your listing is now live!*',
-            '',
-            `${business.name} (@${business.username || 'N/A'}) is now visible on WA Directory.`,
-            `Active for ${PLAN_CONFIG[plan as keyof typeof PLAN_CONFIG]?.label || '1 Month'} until ${expiresAt.toISOString().slice(0, 10)}.`,
-            '',
-            'Anyone can renew for you at: ' + (process.env.SITE_URL || 'https://wadirectory.co.zw') + '/pay',
-          ].join('\n')
-        ).catch(() => {})
+      // Manual admin override — same activation logic as the automatic
+      // Paynow webhook (shared helper), but flagged as manual.
+      const result = await activateListingSubscription(supabase, subscription_id, { autoConfirmed: false })
+      if (!result.ok) {
+        const status = result.error === 'Listing subscription not found' ? 404 : 500
+        return NextResponse.json({ error: result.error }, { status })
       }
 
       return NextResponse.json({ success: true })

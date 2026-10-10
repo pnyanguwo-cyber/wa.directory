@@ -30,6 +30,9 @@ export default function PayPage() {
   const [payerPhone, setPayerPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  // True when Paynow pushed a real EcoCash prompt (auto-confirming payment).
+  const [autoEcoCash, setAutoEcoCash] = useState(false)
+  const [simulating, setSimulating] = useState(false)
 
   // Bring the active step's card into view when moving between steps
   useEffect(() => {
@@ -85,6 +88,7 @@ export default function PayPage() {
         setError(data.error || 'Payment request failed')
         return
       }
+      setAutoEcoCash(!!data.auto_ecocash)
       setStep('done')
     } catch {
       setError('Could not submit payment request. Please try again.')
@@ -551,24 +555,64 @@ export default function PayPage() {
                 </div>
               </div>
 
-              <h2 className="text-xl font-extrabold tracking-tight text-text-primary mb-2">Payment Request Submitted</h2>
+              <h2 className="text-xl font-extrabold tracking-tight text-text-primary mb-2">
+                {autoEcoCash ? 'EcoCash Prompt Sent' : 'Payment Request Submitted'}
+              </h2>
               <p className="text-sm text-text-secondary mb-1 leading-relaxed">
                 You&apos;re paying <span className="font-bold text-whatsapp-700">${totalAmount.toFixed(2)}</span> ({PLAN_CONFIG[plan].label}) for <strong className="text-text-primary">{selected?.name}</strong>
               </p>
-              <p className="text-xs text-text-secondary mb-6 leading-relaxed">
-                Admin will verify the EcoCash transaction from +{payerPhone.replace(/\D/g, '')} and activate the listing shortly.
-              </p>
+              {autoEcoCash ? (
+                <p className="text-xs text-text-secondary mb-6 leading-relaxed">
+                  Check the phone +{payerPhone.replace(/\D/g, '')} for an EcoCash prompt and enter your PIN. Your listing goes live <strong> automatically</strong> the moment payment succeeds.
+                </p>
+              ) : (
+                <p className="text-xs text-text-secondary mb-6 leading-relaxed">
+                  Admin will verify the EcoCash transaction from +{payerPhone.replace(/\D/g, '')} and activate the listing shortly.
+                </p>
+              )}
 
               {/* What happens next */}
               <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-5 mb-6 text-left"
                 style={{ boxShadow: '0 2px 8px -2px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
                 <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">What happens next</p>
                 <ol className="text-xs text-amber-900 space-y-1.5 leading-relaxed">
-                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> Admin checks EcoCash for your transaction</li>
-                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Once confirmed, your listing goes live for {PLAN_CONFIG[plan].label.toLowerCase()}</li>
+                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> {autoEcoCash ? 'Enter your EcoCash PIN on the prompt' : 'Pay via EcoCash from +253… your number'}</li>
+                  <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your listing goes live for {PLAN_CONFIG[plan].label.toLowerCase()}{autoEcoCash ? ' automatically' : ' once admin confirms'}</li>
                   <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">3.</span> You&apos;ll receive a WhatsApp confirmation</li>
                 </ol>
               </div>
+
+              {/* Dev-only: simulate a confirmed payment through the same
+                  activation path a real EcoCash payment takes. */}
+              {selected && process.env.NODE_ENV !== 'production' && (
+                <button
+                  type="button"
+                  disabled={simulating}
+                  onClick={async () => {
+                    setSimulating(true)
+                    try {
+                      const res = await fetch('/api/pay/simulate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ business_id: selected.business_id, plan }),
+                      })
+                      if (res.ok) window.location.reload()
+                    } catch {
+                      // leave the screen as-is; simulation is best-effort dev tooling
+                    } finally {
+                      setSimulating(false)
+                    }
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-5 py-2.5 mb-4 rounded-full text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+                >
+                  {simulating ? (
+                    <span className="flex items-center gap-2">
+                      <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      Simulating payment…
+                    </span>
+                  ) : '⚙ Simulate payment (dev only)'}
+                </button>
+              )}
 
               <Link
                 href="/"

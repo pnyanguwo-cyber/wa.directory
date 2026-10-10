@@ -14,14 +14,14 @@ export default async function PortalLayout({ children }: { children: React.React
   const isHq = actor.role === 'org-hq'
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
-      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 space-y-6">
+    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl sm:rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0">
             <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">
               {isHq ? 'Organization Portal · HQ' : actor.role === 'org-branch' ? `${actor.orgName} · Branch Portal` : 'Business Portal'}
             </span>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight truncate">{business.name}</h1>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight truncate">{business.name}</h1>
             <p className="text-xs text-text-secondary mt-0.5">
               {paid ? (
                 <span className="inline-flex items-center gap-1.5 font-medium text-whatsapp-700">

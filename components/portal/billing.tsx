@@ -18,6 +18,8 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [showPlanModal, setShowPlanModal] = useState(false)
+  const [simulating, setSimulating] = useState<'plan' | 'premium' | null>(null)
+  const isDev = process.env.NODE_ENV !== 'production'
 
   const premiumStatus = sub?.status || 'none'
   const premiumActive = premiumStatus === 'active' && (!sub!.expiresAt || new Date(sub!.expiresAt) > new Date())
@@ -55,6 +57,63 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
     router.refresh()
   }
 
+  // Dev-only: confirm the renewal through the simulated payment path — same
+  // activation helper the real EcoCash webhook runs.
+  async function handleSimulatePlan(payload: { plan: PlanType; hasProAssistance: boolean }) {
+    setSimulating('plan')
+    setError('')
+    setNotice('')
+    try {
+      const res = await fetch('/api/pay/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: 'renewal',
+          business_id: businessId,
+          plan: payload.plan,
+          has_pro_assistance: payload.hasProAssistance,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Simulation failed')
+        return
+      }
+      setShowPlanModal(false)
+      setNotice('Simulated payment confirmed — your listing subscription is active.')
+      router.refresh()
+    } catch {
+      setError('Simulation failed. Please try again.')
+    } finally {
+      setSimulating(null)
+    }
+  }
+
+  // Dev-only: activate premium the same way the admin confirmation does.
+  async function simulatePremium() {
+    setSimulating('premium')
+    setError('')
+    setNotice('')
+    try {
+      const res = await fetch('/api/pay/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'premium', business_id: businessId }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Simulation failed')
+        return
+      }
+      setNotice('Simulated payment confirmed — premium is active.')
+      router.refresh()
+    } catch {
+      setError('Simulation failed. Please try again.')
+    } finally {
+      setSimulating(null)
+    }
+  }
+
   const statusStyle: Record<string, string> = {
     active: 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200',
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -67,7 +126,13 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
 
   return (
     <div className="space-y-6">
-      <PaymentPlanModal open={showPlanModal} onClose={() => setShowPlanModal(false)} onProceed={handlePlanProceed} />
+      <PaymentPlanModal
+        open={showPlanModal}
+        onClose={() => setShowPlanModal(false)}
+        onProceed={handlePlanProceed}
+        onSimulate={isDev ? handleSimulatePlan : undefined}
+        simulating={simulating === 'plan'}
+      />
 
       <div>
         <h2 className="text-lg font-bold text-text-primary">Billing & subscription</h2>
@@ -252,6 +317,21 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
                 Payment is confirmed manually by an admin (gateway coming soon).
               </p>
             </div>
+          )}
+          {isDev && !premiumActive && (
+            <button
+              type="button"
+              onClick={simulatePremium}
+              disabled={simulating !== null}
+              className="mt-3 w-full py-2 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+            >
+              {simulating === 'premium' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  Simulating payment…
+                </span>
+              ) : '⚙ Simulate payment (dev only)'}
+            </button>
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createHash } from 'crypto'
 import { pollTransactionStatus } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
+import { activateListingSubscription } from '@/lib/listing-activation'
 import { logPaymentEvent } from '@/lib/payment-events'
 
 // Paynow server-to-server result update (configured as the integration's
@@ -64,8 +65,62 @@ export async function POST(request: Request) {
   }
 
   const reference = values.reference || ''
+
+  // LISTING-<subId>: a listing subscription paid via /api/pay's automatic
+  // EcoCash push. Confirm and activate without any admin step.
+  if (reference.startsWith('LISTING-')) {
+    const subscriptionId = reference.slice(8)
+    const supabase = getSupabase()
+
+    const { data: sub } = await supabase
+      .from('listing_subscriptions')
+      .select('id, business_id, status, paynow_poll_url')
+      .eq('id', subscriptionId)
+      .maybeSingle()
+
+    if (!sub) {
+      await logPaymentEvent({ eventType: 'webhook_rejected', outcome: 'rejected', detail: { reason: 'listing_sub_not_found', reference }, request })
+      return NextResponse.json({ error: 'Subscription not found' }, { status: 404 })
+    }
+
+    if (sub.paynow_poll_url && values.pollurl && sub.paynow_poll_url !== values.pollurl) {
+      await logPaymentEvent({ eventType: 'webhook_rejected', outcome: 'rejected', businessId: sub.business_id, detail: { reason: 'poll_url_mismatch', reference }, request })
+      return NextResponse.json({ error: 'Poll URL mismatch' }, { status: 409 })
+    }
+
+    // Idempotency: already active.
+    if (sub.status === 'active') return NextResponse.json({ ok: true, status: 'active' })
+
+    const pollUrl = values.pollurl || sub.paynow_poll_url
+    if (!pollUrl) return NextResponse.json({ error: 'No poll URL available' }, { status: 400 })
+
+    const poll = await pollTransactionStatus(pollUrl)
+    if (!poll.ok) return NextResponse.json({ error: 'Status check failed' }, { status: 503 })
+    if (!poll.paid) return NextResponse.json({ ok: true, paynow_status: poll.status })
+
+    await logPaymentEvent({
+      eventType: 'payment_confirmed',
+      businessId: sub.business_id,
+      detail: { via: 'webhook', kind: 'listing', paynowStatus: poll.status },
+      request,
+    })
+
+    await supabase
+      .from('listing_subscriptions')
+      .update({ paynow_paid_at: new Date().toISOString(), paynow_reference: values.paynowreference || null })
+      .eq('id', subscriptionId)
+
+    const result = await activateListingSubscription(supabase, subscriptionId, { autoConfirmed: true })
+    if (!result.ok) {
+      await logPaymentEvent({ eventType: 'activation_failed', outcome: 'error', businessId: sub.business_id, detail: { kind: 'listing', error: result.error }, request })
+      return NextResponse.json({ error: result.error }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, status: 'active', auto: true })
+  }
+
   if (!reference.startsWith('BID-')) {
-    // Not a ranking bid (e.g. future other product) — acknowledge and ignore.
+    // Unknown product — acknowledge and ignore.
     await logPaymentEvent({ eventType: 'webhook_rejected', outcome: 'rejected', detail: { reason: 'unknown_reference', reference }, request })
     return NextResponse.json({ ok: true, ignored: true })
   }

@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { PLAN_CONFIG } from '@/types'
+import type { PlanType } from '@/types'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories as staticCategories } from '@/data/categories'
@@ -51,10 +53,17 @@ export default function ListBusinessForm({
   const [submittedUsername, setSubmittedUsername] = useState('')
   const [isPaidListings, setIsPaidListings] = useState(false)
   // Going-live splash: EcoCash number entry on the success screen.
+  // Post-submit payment flow: package selection → phone entry → feedback.
   const [splashStage, setSplashStage] = useState<'entry' | 'done'>('entry')
   const [splashPhone, setSplashPhone] = useState('')
   const [splashLoading, setSplashLoading] = useState(false)
   const [splashError, setSplashError] = useState('')
+  const [payPlan, setPayPlan] = useState<'1m' | '6m' | '12m'>('1m')
+  // Post-submit payment flow: package selection → phone entry.
+  const [payStage, setPayStage] = useState<'packages' | 'phone'>('packages')
+  // Feedback modal states: 'verified' (simulated success) or 'pending' (awaiting admin).
+  const [payResult, setPayResult] = useState<'none' | 'verified' | 'pending'>('none')
+  const [simulating, setSimulating] = useState(false)
   const [logoMode, setLogoMode] = useState<LogoMode>('url')
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState('')
@@ -527,8 +536,8 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           </>
         )}
 
-        {isPaidListings && (
-          <div className="bg-white border border-amber-200 rounded-3xl p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
+        {isPaidListings && splashStage === 'entry' && payResult === 'none' && (
+          <div className="bg-white border border-amber-200 rounded-3xl p-4 sm:p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
             {/* Splash card header */}
             <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
             <div className="flex items-center gap-3 mb-4">
@@ -538,12 +547,58 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 </svg>
               </div>
               <div>
-                <p className="text-base font-extrabold text-text-primary leading-tight">Go live: pay USD 1</p>
-                <p className="text-xs text-text-secondary">Secure EcoCash payment · {form.name}</p>
+                <p className="text-base font-extrabold text-text-primary leading-tight">Choose a package to go live</p>
+                <p className="text-xs text-text-secondary">Your listing shows in search once payment is confirmed · {form.name}</p>
               </div>
             </div>
 
-            {splashStage === 'entry' ? (
+            {/** Step 1: package picker */}
+            {payStage === 'packages' && (
+              <div className="space-y-2.5">
+                {(Object.keys(PLAN_CONFIG) as PlanType[]).map(key => {
+                  const p = PLAN_CONFIG[key]
+                  const selected = payPlan === key
+                  return (
+                    <button
+                      type="button"
+                      key={key}
+                      onClick={() => setPayPlan(key)}
+                      aria-pressed={selected}
+                      className={`w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
+                        selected ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 bg-white hover:border-amber-300'
+                      }`}
+                    >
+                      <span className="flex items-center gap-3 min-w-0">
+                        <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-amber-500' : 'border-gray-300'}`}>
+                          {selected && <span className="w-2 h-2 rounded-full bg-amber-500" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-bold text-text-primary">{p.label}</span>
+                          <span className="block text-[11px] text-text-secondary">USD ${p.perMonth.toFixed(2)}/mo equivalent</span>
+                        </span>
+                      </span>
+                      <span className="text-right shrink-0">
+                        <span className="block text-base font-extrabold text-text-primary">${p.price.toFixed(0)}</span>
+                        {key !== '1m' && <span className="text-[10px] text-whatsapp-700 font-semibold">save ${((PLAN_CONFIG['1m'].price * p.months - p.price)).toFixed(0)}</span>}
+                      </span>
+                    </button>
+                  )})
+                }
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!splashPhone.trim()) return
+                    setPayStage('phone')
+                  }}
+                  className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition-all mt-3"
+                >
+                  Continue with {PLAN_CONFIG[payPlan].label} — ${PLAN_CONFIG[payPlan].price.toFixed(0)}
+                </button>
+              </div>
+            )}
+
+            {/** Step 2: EcoCash phone entry */}
+            {payStage === 'phone' && (
               <form
                 onSubmit={async e => {
                   e.preventDefault()
@@ -557,7 +612,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       body: JSON.stringify({
                         business_id: businessId,
                         payer_phone: splashPhone.trim(),
-                        plan: '1m',
+                        plan: payPlan,
                       }),
                     })
                     const data = await res.json()
@@ -565,7 +620,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       setSplashError(data.error || 'Could not submit your payment')
                       return
                     }
-                    setSplashStage('done')
+                    setPayResult('pending')
                   } catch {
                     setSplashError('Could not submit your payment. Please try again.')
                   } finally {
@@ -574,6 +629,9 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 }}
                 className="space-y-3"
               >
+                <button type="button" onClick={() => setPayStage('packages')} className="text-xs text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1">
+                  ← Change package ({PLAN_CONFIG[payPlan].label}, ${PLAN_CONFIG[payPlan].price.toFixed(0)})
+                </button>
                 <div>
                   <label className="block text-sm font-semibold text-text-primary mb-1">Your EcoCash number</label>
                   <p className="text-xs text-text-secondary mb-2">
@@ -598,33 +656,139 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Submitting…
                     </span>
-                  ) : 'Pay USD 1 & Go Live'}
+                  ) : `Pay $${PLAN_CONFIG[payPlan].price.toFixed(0)} & Go Live`}
                 </button>
               </form>
-            ) : (
-              <div className="text-center space-y-3 py-2 animate-fade-in">
-                <div className="relative w-14 h-14 mx-auto">
-                  <div className="absolute inset-0 bg-whatsapp-400/20 rounded-full blur-xl animate-pulse" />
-                  <div className="relative w-14 h-14 rounded-full bg-whatsapp-100 flex items-center justify-center">
-                    <svg className="w-7 h-7 text-whatsapp-600 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
-                  </div>
-                </div>
-                <p className="text-sm font-bold text-text-primary">Verifying your payment…</p>
-                <p className="text-xs text-text-secondary leading-relaxed">
-                  You will be verified within <strong className="text-text-primary">15 minutes</strong> and given feedback on your EcoCash number (+{splashPhone.replace(/\D/g, '')}). Once confirmed, your listing goes live.
-                </p>
-                <div className="flex items-center justify-center gap-1.5 text-[11px] text-amber-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  Awaiting admin approval
-                </div>
-              </div>
+            )}
+
+            {/** Simulate payment (dev only) — activates the listing without a real
+                gateway transaction, exactly like admin confirmation would. */}
+            {process.env.NODE_ENV !== 'production' && (
+            <button
+              type="button"
+              disabled={simulating}
+              onClick={async () => {
+                if (!businessId) return
+                setSimulating(true)
+                try {
+                  const res = await fetch('/api/pay/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ business_id: businessId, plan: payPlan }),
+                  })
+                  const data = await res.json()
+                  if (!res.ok) {
+                    setSplashError(data.error || 'Simulation failed')
+                    return
+                  }
+                  setPayResult('verified')
+                } catch {
+                  setSplashError('Simulation failed. Please try again.')
+                } finally {
+                  setSimulating(false)
+                }
+              }}
+              className="w-full py-2.5 mt-2 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+            >
+              {simulating ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                  Simulating payment…
+                </span>
+              ) : '⚙ Simulate payment (dev only)'}
+            </button>
             )}
 
             <p className="text-[11px] text-text-secondary mt-4 text-center">
               Anyone can pay for you. They just need your Business ID <span className="font-mono font-bold">{businessId}</span> at <span className="font-mono">/pay</span>
             </p>
+          </div>
+        )}
+
+        {/** Payment feedback modal */}
+        {payResult !== 'none' && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center px-3 py-4 sm:py-8 bg-black/40 backdrop-blur-sm animate-fade-in overflow-y-auto"
+          >
+            <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4 animate-slide-up my-auto border border-white text-center">
+              {payResult === 'verified' ? (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-whatsapp-100 flex items-center justify-center mx-auto">
+                    <svg className="w-7 h-7 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-text-primary">Payment verified ✓</h3>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Your {PLAN_CONFIG[payPlan].label} package (${PLAN_CONFIG[payPlan].price.toFixed(0)}) was successfully applied to <strong>{form.name || 'your listing'}</strong>. Your listing is now live and visible in search.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPayResult('none')}
+                    className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white shadow-md hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all"
+                  >
+                    Done
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-14 h-14 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                    <svg className="w-7 h-7 text-amber-600 animate-pulse" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="9" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 7v5l3 2" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-extrabold text-text-primary">Payment not verified yet</h3>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${splashPhone.replace(/D/g, '')}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
+                  </p>
+                  {process.env.NODE_ENV !== 'production' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!businessId || simulating) return
+                      setSimulating(true)
+                      try {
+                        const res = await fetch('/api/pay/simulate', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ business_id: businessId, plan: payPlan }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setSplashError(data.error || 'Simulation failed')
+                          return
+                        }
+                        setPayResult('verified')
+                      } catch {
+                        setSplashError('Simulation failed. Please try again.')
+                      } finally {
+                        setSimulating(false)
+                      }
+                    }}
+                    disabled={simulating}
+                    className="w-full py-2.5 rounded-2xl text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all disabled:opacity-60"
+                  >
+                    {simulating ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="w-3.5 h-3.5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                        Simulating payment…
+                      </span>
+                    ) : '⚙ Simulate payment (dev only)'}
+                  </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setPayResult('none')}
+                    className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition-all"
+                  >
+                    Ok, waiting
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -679,7 +843,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
               </svg>
-              Pay USD 1 to Go Live
+              Payment options
             </Link>
           )}
           <Link href={`/`} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
