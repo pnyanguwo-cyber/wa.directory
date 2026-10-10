@@ -15,7 +15,10 @@
 -- 1+2. businesses: kill public INSERT, hide edit_token
 -- ============================================================
 
+-- The live project created this policy as "Public insert" (no "access"),
+-- so drop both spellings to cover every environment.
 DROP POLICY IF EXISTS "Public insert access" ON businesses;
+DROP POLICY IF EXISTS "Public insert" ON businesses;
 
 REVOKE ALL ON public.businesses FROM anon, authenticated;
 GRANT SELECT (

@@ -15,9 +15,10 @@ import AdminSubscriptions from '@/components/admin/admin-subscriptions'
 import AdminAccounts from '@/components/admin/admin-accounts'
 import AdminNameContests from '@/components/admin/admin-name-contests'
 import AdminPaymentEvents from '@/components/admin/admin-payment-events'
+import AdminOrganizations from '@/components/admin/admin-organizations'
 import Splash from '@/components/splash'
 
-type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'addresses' | 'banners' | 'chat' | 'stats' | 'rankings' | 'subscriptions' | 'accounts' | 'contests' | 'payments'
+type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'addresses' | 'banners' | 'chat' | 'stats' | 'rankings' | 'subscriptions' | 'accounts' | 'contests' | 'payments' | 'organizations'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'stats', label: 'Statistics', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z' },
@@ -26,6 +27,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'payments', label: 'Payment Events', icon: 'M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z' },
   { id: 'subscriptions', label: 'Subscriptions', icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5z' },
   { id: 'accounts', label: 'Accounts', icon: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
+  { id: 'organizations', label: 'Organizations', icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21' },
   { id: 'categories', label: 'Categories', icon: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-2.25' },
   { id: 'areas', label: 'Areas', icon: 'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z' },
   { id: 'requests', label: 'Requests', icon: 'M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75' },
@@ -49,16 +51,18 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
       {loggingOut && <Splash label="Logging out..." />}
-      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Mobile: shell padding is tighter (p-4) so content fills the narrow PWA viewport
+          instead of looking jammed inside oversized rounded frames. */}
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl sm:rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">Directory Administration</span>
-            <h1 className="text-2xl font-extrabold text-text-primary tracking-tight">Admin Dashboard</h1>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-whatsapp-700">Directory Administration</span>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight">Admin Dashboard</h1>
           </div>
           <div className="flex items-center gap-2.5">
-            <span className="flex items-center gap-1.5 text-xs text-whatsapp-700 font-medium">
+            <span className="hidden sm:flex items-center gap-1.5 text-xs text-whatsapp-700 font-medium">
               <span className="w-2 h-2 rounded-full bg-whatsapp-500" />
               Logged in
             </span>
@@ -75,23 +79,29 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`h-11 px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
-                tab === t.id
-                  ? 'bg-whatsapp-500 text-white shadow-md'
-                  : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
-              }`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
-              </svg>
-              {t.label}
-            </button>
-          ))}
+        {/* Mobile: compact scrollable pill rail with edge fade so it's obviously scrollable,
+            plus larger touch targets that don't wrap the label. */}
+        <div className="relative -mx-4 sm:mx-0">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-4 sm:px-1 scrollbar-none">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={`h-11 px-3.5 sm:px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 ${
+                  tab === t.id
+                    ? 'bg-whatsapp-500 text-white shadow-md'
+                    : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
+                }`}
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
+                </svg>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[rgb(var(--bg-primary))] to-transparent sm:hidden" />
         </div>
 
         {tab === 'listings' && <AdminListings />}
@@ -100,6 +110,7 @@ export default function AdminPage() {
         {tab === 'payments' && <AdminPaymentEvents />}
         {tab === 'subscriptions' && <AdminSubscriptions />}
         {tab === 'accounts' && <AdminAccounts />}
+        {tab === 'organizations' && <AdminOrganizations />}
         {tab === 'categories' && <AdminCategories />}
         {tab === 'areas' && <AdminAreas />}
         {tab === 'requests' && <AdminRequests />}

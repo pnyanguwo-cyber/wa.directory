@@ -38,6 +38,26 @@ export interface Business {
   username?: string
   payment_status?: 'unpaid' | 'pending' | 'active' | 'expired'
   listing_activated_at?: string
+  // Multi-branch organizations: org_id links a listing to its umbrella org;
+  // is_hq marks the HQ listing; branch_label is the branch's display name
+  // (e.g. "Chinhoyi"). Null org_id = an ordinary single-location business.
+  org_id?: string | null
+  is_hq?: boolean
+  branch_label?: string | null
+}
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string | null
+  bio: string
+  logo_url: string
+  verified: boolean
+  created_at: string
+  // Pre-fill values applied to branches created by the HQ portal.
+  default_logo_url?: string
+  default_categories?: string[]
+  bio_template?: string
 }
 
 export type PlanType = '1m' | '6m' | '12m'

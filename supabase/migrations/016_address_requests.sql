@@ -1,4 +1,4 @@
--- Migration 009: address verification requests.
+-- Migration 016: address verification requests.
 -- Users can request admin verification when their street address fails
 -- geocoding. Admin reviews and either approves (geocodes + marks verified)
 -- or rejects the request.

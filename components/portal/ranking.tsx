@@ -41,12 +41,15 @@ export default function PortalRanking({
   myCity,
   isRemote,
   cities,
+  actingAs,
 }: {
   businessId: string
   myCategories: string[]
   myCity: string
   isRemote: boolean
   cities: string[]
+  // Set when an HQ session is bidding on a branch's behalf.
+  actingAs?: string | null
 }) {
   // Scope state: which of MY categories + which location I'm looking at.
   // Non-nationwide businesses are pinned to their own city.
@@ -149,6 +152,7 @@ export default function PortalRanking({
           city,
           amount: payBid.amount,
           payer_phone: payPhone.trim(),
+          branch_id: businessId,
         }),
       })
       const data = await res.json()
@@ -176,7 +180,7 @@ export default function PortalRanking({
           const cres = await fetch('/api/portal/ranking/confirm', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bid_id: data.bid_id }),
+            body: JSON.stringify({ bid_id: data.bid_id, branch_id: businessId }),
           })
           const cdata = await cres.json()
           if (cres.ok && cdata.activated) {
@@ -223,6 +227,11 @@ export default function PortalRanking({
         <p className="text-xs text-text-secondary mt-0.5">
           One auction, one prize: the #1 search spot for your category and location. Outbid the current holder by at least ${MIN_GAP.toFixed(2)}, pay with EcoCash, and you take #1 instantly.
         </p>
+        {actingAs && (
+          <p className="text-[11px] font-semibold text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 mt-2">
+            Bidding as <b>{actingAs}</b> — this bid and payment apply to that branch&rsquo;s listing.
+          </p>
+        )}
       </div>
 
       {/* Scope picker: my categories × my locations. Nationwide businesses get a

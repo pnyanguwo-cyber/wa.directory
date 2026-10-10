@@ -2,6 +2,62 @@ import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import type { Business } from '@/types'
 import type { StatsEventType } from '@/lib/stats-format'
+import { getPortalActor, resolveActingBusinessId, type PortalActor } from '@/lib/org-auth'
+
+/**
+ * Session + the business the session may act on for this request.
+ * * Branch / single business: always its own listing.
+ * * HQ with a ?branch=<id> param: that branch, but only if it belongs to
+ *   the HQ's org (resolveActingBusinessId enforces this — anything else
+ *   falls back to the HQ's own listing).
+ */
+export async function getActingPortalBusiness(
+  requestedBranchId?: string | null
+): Promise<{ actor: PortalActor; business: Business } | null> {
+  const actor = await getPortalActor()
+  if (!actor) return null
+  const actingId = await resolveActingBusinessId(actor, requestedBranchId)
+  if (actingId === actor.business.id) return { actor, business: actor.business }
+  const { data } = await getSupabase().from('businesses').select('*').eq('id', actingId).maybeSingle()
+  if (!data) return { actor, business: actor.business }
+  return { actor, business: data as Business }
+}
+
+/**
+ * Org-wide stats for the HQ dashboard: per-listing 7-day profile views and
+ * WhatsApp clicks, plus org totals. All queries are scoped by the org's
+ * business ids — computed here, never from client input.
+ */
+export async function getOrgDashboardStats(orgBusinesses: Business[]) {
+  const supabase = getSupabase()
+  const ids = orgBusinesses.map(b => b.id)
+  if (ids.length === 0) return { perBranch: {} as Record<string, { views: number; chats: number }>, orgTotals: { views: 0, chats: 0 } }
+
+  const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
+  const { data } = await supabase
+    .from('daily_stats')
+    .select('business_id, type, count')
+    .in('business_id', ids)
+    .gte('date', since)
+    .in('type', ['profile_view', 'click_whatsapp'])
+
+  const perBranch: Record<string, { views: number; chats: number }> = {}
+  for (const b of orgBusinesses) perBranch[b.id] = { views: 0, chats: 0 }
+  let orgViews = 0
+  let orgChats = 0
+  for (const row of data || []) {
+    const entry = perBranch[row.business_id]
+    if (!entry) continue
+    if (row.type === 'profile_view') {
+      entry.views += Number(row.count)
+      orgViews += Number(row.count)
+    } else {
+      entry.chats += Number(row.count)
+      orgChats += Number(row.count)
+    }
+  }
+  return { perBranch, orgTotals: { views: orgViews, chats: orgChats } }
+}
 
 export async function getPortalBusiness(): Promise<Business | null> {
   const businessId = getBusinessId()

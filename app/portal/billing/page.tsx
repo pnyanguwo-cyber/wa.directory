@@ -1,12 +1,14 @@
 import { redirect } from 'next/navigation'
-import { getPortalBusiness, getSubscription, getListingSubscription } from '@/lib/portal'
+import { getActingPortalBusiness, getSubscription, getListingSubscription } from '@/lib/portal'
 import PortalBilling from '@/components/portal/billing'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PortalBillingPage() {
-  const business = await getPortalBusiness()
-  if (!business) redirect('/login')
+export default async function PortalBillingPage({ searchParams }: { searchParams: { branch?: string } }) {
+  // HQ can open a branch's billing via ?branch=<id> (org-scoped guard).
+  const session = await getActingPortalBusiness(searchParams?.branch)
+  if (!session) redirect('/login')
+  const business = session.business
 
   const [sub, listingSub] = await Promise.all([
     getSubscription(business.id),

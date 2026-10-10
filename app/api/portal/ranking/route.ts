@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getBusinessId } from '@/lib/business-auth'
+import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
@@ -44,10 +44,13 @@ async function loadScope(supabase: ReturnType<typeof getSupabase>, businessId: s
 }
 
 export async function GET(request: Request) {
-  const businessId = getBusinessId()
-  if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-
   const { searchParams } = new URL(request.url)
+  // ?branch=<id> lets an HQ session view a branch's board. The guard inside
+  // getActingPortalBusiness only honors ids within the HQ's own org.
+  const session = await getActingPortalBusiness(searchParams.get('branch'))
+  if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+  const businessId = session.business.id
+
   const category = searchParams.get('category') || ''
   const city = searchParams.get('city') || ''
 
@@ -152,10 +155,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const businessId = getBusinessId()
-  if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+  const body = await request.json().catch(() => ({}))
+  // branch_id: HQ bidding on a branch's behalf (org-scoped, see
+  // getActingPortalBusiness). Branches always act as themselves.
+  const session = await getActingPortalBusiness(body?.branch_id)
+  if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+  const businessId = session.business.id
 
-  const { category, city, amount, payer_phone } = await request.json().catch(() => ({}))
+  const { category, city, amount, payer_phone } = body
   if (!category) {
     await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'missing_category' }, request })
     return NextResponse.json({ error: 'Category is required' }, { status: 400 })

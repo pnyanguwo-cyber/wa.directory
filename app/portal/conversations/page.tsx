@@ -1,13 +1,15 @@
 import { redirect } from 'next/navigation'
-import { getPortalBusiness, isPaidSubscriber } from '@/lib/portal'
+import { getActingPortalBusiness, isPaidSubscriber } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import PortalConversations from '@/components/portal/conversations'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PortalConversationsPage() {
-  const business = await getPortalBusiness()
-  if (!business) redirect('/login')
+export default async function PortalConversationsPage({ searchParams }: { searchParams: { branch?: string } }) {
+  // HQ can read a branch's conversations via ?branch=<id> (org-scoped guard).
+  const session = await getActingPortalBusiness(searchParams?.branch)
+  if (!session) redirect('/login')
+  const business = session.business
 
   const paid = await isPaidSubscriber(business.id)
   if (!paid) redirect('/portal/billing')

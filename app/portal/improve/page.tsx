@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getPortalBusiness, getDailyStats, isPaidSubscriber } from '@/lib/portal'
+import { getActingPortalBusiness, getDailyStats, isPaidSubscriber } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
@@ -90,9 +90,10 @@ async function buildTips(businessId: string, business: Record<string, any>, paid
   return { tips, comparison }
 }
 
-export default async function PortalImprovePage() {
-  const business = await getPortalBusiness()
-  if (!business) redirect('/login')
+export default async function PortalImprovePage({ searchParams }: { searchParams: { branch?: string } }) {
+  const session = await getActingPortalBusiness(searchParams?.branch)
+  if (!session) redirect('/login')
+  const business = session.business
 
   const paid = await isPaidSubscriber(business.id)
   const { tips, comparison } = await buildTips(business.id, business as unknown as Record<string, any>, paid)

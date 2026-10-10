@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
-import { getBusinessId } from '@/lib/business-auth'
+import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 
 export async function POST(request: Request) {
-  const businessId = getBusinessId()
-  if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-
   const body = await request.json().catch(() => null)
+  // branch_id: HQ requesting an upgrade for one of its branches (org-scoped).
+  const session = await getActingPortalBusiness(body?.branch_id)
+  if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+  const businessId = session.business.id
+
   if (body?.businessId && body.businessId !== businessId) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }

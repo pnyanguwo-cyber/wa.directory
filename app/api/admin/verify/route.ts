@@ -20,13 +20,17 @@ export async function POST(request: Request) {
 
     const { data: business } = await supabase
       .from('businesses')
-      .select('phone, name, slug, edit_token')
+      .select('phone, name, slug, edit_token, payment_status')
       .eq('id', id)
       .single()
 
+    // Approving a business makes it live: search only shows listings with
+    // payment_status = 'active', so a pending/expired listing must be
+    // activated here too or the Approve button alone leaves it invisible.
+    const paidThrough = business?.payment_status !== 'active'
     const { error } = await supabase
       .from('businesses')
-      .update({ verified })
+      .update(verified && paidThrough ? { verified, payment_status: 'active' } : { verified })
       .eq('id', id)
 
     if (error) {

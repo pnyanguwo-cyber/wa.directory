@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { Siren, Landmark, ArrowLeft, MapPin, type LucideProps } from 'lucide-react'
 import { CATEGORY_IMAGES } from '@/data/category-images'
 import BusinessCard from '@/components/business-card'
+import YellowCompactCard from '@/components/yellow-compact-card'
 import type { Business } from '@/types'
 
 interface YellowPagesCategory {
@@ -153,7 +154,13 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
                   </h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {list.map(b => (
-                      <BusinessCard key={b.id} business={b} />
+                      <div key={b.id} className="h-full">
+                        {/* Compact info-only card on mobile; full card on sm+ */}
+                        <YellowCompactCard business={b} className="sm:hidden w-full h-full" />
+                        <div className="hidden sm:block h-full">
+                          <BusinessCard business={b} />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>

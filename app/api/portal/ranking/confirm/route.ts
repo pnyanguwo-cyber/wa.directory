@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getBusinessId } from '@/lib/business-auth'
+import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { pollTransactionStatus } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
@@ -12,11 +12,14 @@ import { logPaymentEvent } from '@/lib/payment-events'
 // server-to-server, so activation happens even if the payer closes this page.
 
 export async function POST(request: Request) {
-  const businessId = getBusinessId()
-  if (!businessId) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-
-  const { bid_id } = await request.json().catch(() => ({}))
+  const { bid_id, branch_id } = await request.json().catch(() => ({}))
   if (!bid_id) return NextResponse.json({ error: 'bid_id is required' }, { status: 400 })
+
+  // Session must own the bid: its own business, or (HQ) the org-scoped
+  // branch the bid was placed for.
+  const session = await getActingPortalBusiness(branch_id)
+  if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+  const businessId = session.business.id
 
   const supabase = getSupabase()
 

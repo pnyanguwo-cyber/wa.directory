@@ -144,6 +144,33 @@ async function BusinessContent({ slug }: { slug: string }) {
 
   if (!business) notFound()
 
+  // Organization (multi-branch) context: org identity + sibling locations.
+  // Single-location businesses have no org_id — the queries below are skipped.
+  let org: { id: string; name: string; slug: string | null } | null = null
+  let orgLocations: { id: string; name: string; slug: string | null; city: string; isHq: boolean; branchLabel: string }[] = []
+  if (business.org_id) {
+    const [orgRes, locRes] = await Promise.all([
+      getSupabase().from('organizations').select('id, name, slug').eq('id', business.org_id).maybeSingle(),
+      getSupabase()
+        .from('businesses')
+        .select('id, name, slug, city, is_hq, branch_label, verified')
+        .eq('org_id', business.org_id)
+        .eq('verified', true)
+        .order('is_hq', { ascending: false })
+        .order('branch_label', { ascending: true })
+        .limit(50),
+    ])
+    org = orgRes.data || null
+    orgLocations = (locRes.data || []).map(l => ({
+      id: l.id,
+      name: l.name,
+      slug: l.slug,
+      city: l.city || '',
+      isHq: l.is_hq === true,
+      branchLabel: l.branch_label || '',
+    }))
+  }
+
   const [approvedCategoryNames, approvedAreaNames, statsRes, similarRes, ratingsRes] = await Promise.all([
     getApprovedCategoryNames(),
     getApprovedAreaNames(business.city || ''),
@@ -196,6 +223,7 @@ async function BusinessContent({ slug }: { slug: string }) {
         reviewCount: business.review_count,
       },
     } : {}),
+    ...(org ? { parentOrganization: { '@type': 'Organization', name: org.name } } : {}),
   }
 
   const shareSlug = business.slug || business.id
@@ -317,6 +345,35 @@ async function BusinessContent({ slug }: { slug: string }) {
                   ({business.review_count} review{business.review_count !== 1 ? 's' : ''})
                 </span>
               </div>
+
+              {org && orgLocations.length > 1 && (() => {
+                const others = orgLocations.filter(l => l.id !== business.id)
+                if (others.length === 0) return null
+                return (
+                  <div className="bg-gradient-to-r from-whatsapp-50 to-transparent border border-whatsapp-200 rounded-2xl p-3.5 mb-3 sm:mb-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-whatsapp-700 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                      </svg>
+                      Part of {org.name}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {others.slice(0, 8).map(l => (
+                        <Link
+                          key={l.id}
+                          href={`/business/${l.slug || l.id}`}
+                          className="inline-flex items-center gap-1 bg-white border border-whatsapp-200 rounded-full px-2.5 py-1 text-[11px] font-semibold text-whatsapp-800 hover:bg-whatsapp-50 transition-colors"
+                        >
+                          {l.isHq ? '📍 HQ' : l.branchLabel || l.city || l.name}
+                        </Link>
+                      ))}
+                      {others.length > 8 && (
+                        <span className="text-[11px] text-text-secondary self-center">+{others.length - 8} more</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {monthlyViews > 0 && (
                 <div className="mb-2 sm:mb-4">

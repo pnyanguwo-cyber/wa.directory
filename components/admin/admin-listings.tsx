@@ -28,6 +28,7 @@ interface EditForm {
   logo_url: string
   website: string
   verified: boolean
+  payment_status: string
   address: string
   show_location: boolean
   featured_eligible: boolean
@@ -52,6 +53,7 @@ export default function AdminListings() {
   const [businesses, setBusinesses] = useState<Business[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'verified' | 'pending'>('all')
+  const [filterPay, setFilterPay] = useState<'all' | 'active' | 'pending' | 'expired' | 'unpaid'>('all')
   const [sortBy, setSortBy] = useState<SortOption>('newest')
   const [filterSubscription, setFilterSubscription] = useState<SubscriptionFilter>('all')
   const [filterCategory, setFilterCategory] = useState('')
@@ -77,6 +79,7 @@ export default function AdminListings() {
   const [editForm, setEditForm] = useState<EditForm | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [payBusyId, setPayBusyId] = useState<string | null>(null)
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
 
   useEffect(() => {
@@ -147,6 +150,10 @@ export default function AdminListings() {
     if (filterStatus === 'pending') list = list.filter(b => !b.verified)
     if (filterSubscription === 'premium') list = list.filter(b => subscriptionIds.has(b.id))
     if (filterSubscription === 'basic') list = list.filter(b => !subscriptionIds.has(b.id))
+    if (filterPay !== 'all') {
+      // Older rows may predate the column; treat missing as 'active' (the DB default).
+      list = list.filter(b => ((b.payment_status as string) || 'active') === filterPay)
+    }
     if (filterCategory) list = list.filter(b => b.category?.includes(filterCategory))
     if (filterCity) list = list.filter(b => (b.city || '').toLowerCase() === filterCity.toLowerCase())
     if (search.trim()) {
@@ -173,7 +180,7 @@ export default function AdminListings() {
       }
     })
     return list
-  }, [businesses, search, filterStatus, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds])
+  }, [businesses, search, filterStatus, filterPay, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds])
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))
 
@@ -201,10 +208,11 @@ export default function AdminListings() {
     return [...cities].sort()
   }, [businesses])
 
-  const hasActiveFilters = filterStatus !== 'all' || filterSubscription !== 'all' || filterCategory || filterCity || sortBy !== 'newest'
+  const hasActiveFilters = filterStatus !== 'all' || filterPay !== 'all' || filterSubscription !== 'all' || filterCategory || filterCity || sortBy !== 'newest'
 
   function clearFilters() {
     setFilterStatus('all')
+    setFilterPay('all')
     setFilterSubscription('all')
     setFilterCategory('')
     setFilterCity('')
@@ -216,7 +224,7 @@ export default function AdminListings() {
 
   useEffect(() => {
     setPage(1)
-  }, [search, filterStatus])
+  }, [search, filterStatus, filterPay])
 
   const handleToggleVerify = async (id: string, current: boolean) => {
     setTogglingId(id)
@@ -230,6 +238,29 @@ export default function AdminListings() {
       setBusinesses(prev => prev.map(b => b.id === id ? { ...b, verified: !current } : b))
     } else if (res.status === 401) {
       router.push('/admin-login')
+    }
+  }
+
+  const STATUS_STYLES: Record<string, string> = {
+    active: 'bg-whatsapp-100 text-whatsapp-800',
+    pending: 'bg-amber-100 text-amber-700',
+    expired: 'bg-red-100 text-red-700',
+    unpaid: 'bg-gray-100 text-gray-600',
+  }
+
+  const handleSetPayment = async (id: string, payment_status: string) => {
+    setPayBusyId(id)
+    const { ok, status } = await adminFetch('/api/admin/payment-status', {
+      method: 'POST',
+      body: JSON.stringify({ id, payment_status }),
+    })
+    setPayBusyId(null)
+    if (ok) {
+      setBusinesses(prev => prev.map(b => b.id === id ? { ...b, payment_status: payment_status as Business['payment_status'] } : b))
+    } else if (status === 401) {
+      router.push('/admin-login')
+    } else {
+      refresh()
     }
   }
 
@@ -292,6 +323,7 @@ export default function AdminListings() {
       logo_url: b.logo_url || '',
       website: (b as { website?: string }).website || '',
       verified: b.verified,
+      payment_status: (b as { payment_status?: string }).payment_status || 'active',
       address: b.address || '',
       show_location: b.show_location !== false,
       featured_eligible: b.featured_eligible !== false,
@@ -516,6 +548,20 @@ export default function AdminListings() {
                   Verified (approved)
                 </label>
                 <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Payment status</label>
+                  <select
+                    value={editForm.payment_status}
+                    onChange={e => setEditForm(f => ({ ...f!, payment_status: e.target.value }))}
+                    className="input-field text-sm"
+                  >
+                    <option value="active">Active — visible in search</option>
+                    <option value="pending">Pending — payment awaiting confirmation</option>
+                    <option value="expired">Expired — hidden (lapsed)</option>
+                    <option value="unpaid">Unpaid — hidden</option>
+                  </select>
+                  <p className="text-[11px] text-text-secondary mt-0.5">Only “Active” listings appear in public search.</p>
+                </div>
+                <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Address</label>
                   <input type="text" value={editForm.address} onChange={e => setEditForm(f => ({ ...f!, address: e.target.value }))} className="input-field text-sm" placeholder="e.g. 123 Samora Machel Ave" />
                 </div>
@@ -576,8 +622,7 @@ export default function AdminListings() {
             onChange={e => setSearch(e.target.value)}
             className="input-field pl-10 text-sm py-2.5"
           />
-        </div>
-        <div className="flex gap-1.5">
+        </div>          <div className="flex gap-1.5 overflow-x-auto -mx-1 px-1">
           {(['all', 'verified', 'pending'] as const).map(status => (
             <button
               key={status}
@@ -618,7 +663,7 @@ export default function AdminListings() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Sort by</label>
               <select value={sortBy} onChange={e => setSortBy(e.target.value as SortOption)} className="input-field text-xs py-2 w-full">
@@ -628,6 +673,16 @@ export default function AdminListings() {
                 <option value="name-desc">Name Z→A</option>
                 <option value="rating-desc">Highest rated</option>
                 <option value="reviews-desc">Most reviews</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Payment</label>
+              <select value={filterPay} onChange={e => setFilterPay(e.target.value as typeof filterPay)} className="input-field text-xs py-2 w-full">
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending</option>
+                <option value="expired">Expired</option>
+                <option value="unpaid">Unpaid</option>
               </select>
             </div>
             <div>
@@ -693,13 +748,13 @@ export default function AdminListings() {
 
           <div className="space-y-2.5">
             {paginated.map(b => (
-              <div key={b.id} className="neo-card p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0 flex-1 flex items-center gap-3.5">
+              <div key={b.id} className="neo-card p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3.5">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(b.id)}
                     onChange={() => toggleSelect(b.id)}
-                    className="w-4 h-4 accent-whatsapp-600 shrink-0 cursor-pointer"
+                    className="w-4 h-4 accent-whatsapp-600 shrink-0 cursor-pointer mt-1 sm:mt-0"
                     aria-label={`Select ${b.name}`}
                   />
                   {b.logo_url ? (
@@ -710,8 +765,8 @@ export default function AdminListings() {
                     </div>
                   )}
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-bold text-text-primary text-sm truncate">{b.name}</h3>
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <h3 className="font-bold text-text-primary text-sm truncate max-w-full">{b.name}</h3>
                       {b.verified && (
                         <span className="badge-verified shrink-0">
                           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -721,35 +776,49 @@ export default function AdminListings() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                      <span>{b.category?.slice(0, 2).join(', ')}</span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300" aria-hidden="true" />
-                      <span>{b.city || b.location}</span>
+                    <div className="flex items-center gap-1.5 text-xs text-text-secondary flex-wrap">
+                      <span className="truncate">{b.category?.slice(0, 2).join(', ')}</span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0" aria-hidden="true" />
+                      <span className="truncate">{b.city || b.location}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-text-secondary mt-0.5">
+                    <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[10px] text-text-secondary mt-1">
                       {(b as { business_id?: string }).business_id && (
                         <span className="font-mono">{(b as { business_id: string }).business_id}</span>
                       )}
                       {(b as { username?: string }).username && (
                         <span>@{(b as { username: string }).username}</span>
                       )}
-                      {(b as { payment_status?: string }).payment_status && (b as { payment_status: string }).payment_status !== 'active' && (
-                        <span className={`px-1.5 py-0.5 rounded-full font-bold ${
-                          (b as { payment_status: string }).payment_status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {(b as { payment_status: string }).payment_status}
-                        </span>
-                      )}
+                      {/* Payment status: always visible + inline override so the admin can
+                          make a stuck listing live without hunting through Subscriptions. */}
+                      <span className="relative inline-flex items-center">
+                        <select
+                          value={(b as { payment_status?: string }).payment_status || 'active'}
+                          onChange={e => handleSetPayment(b.id, e.target.value)}
+                          disabled={payBusyId === b.id}
+                          title="Override payment status — only 'active' shows in public search"
+                          className={`appearance-none pl-2 pr-6 py-0.5 rounded-full font-bold text-[10px] uppercase tracking-wide cursor-pointer border-0 outline-none transition-all disabled:opacity-50 ${
+                            STATUS_STYLES[(b as { payment_status?: string }).payment_status || 'active'] || 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          <option value="active">Active ✓</option>
+                          <option value="pending">Pending</option>
+                          <option value="expired">Expired</option>
+                          <option value="unpaid">Unpaid</option>
+                        </select>
+                        <svg className="absolute right-1.5 w-3 h-3 pointer-events-none opacity-60" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 sm:flex-wrap sm:justify-end">
                   {b.verified ? (
                     <button
                       onClick={() => handleToggleVerify(b.id, true)}
                       disabled={togglingId === b.id}
-                      className="h-8 px-3 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50"
+                      className="h-9 px-4 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 flex-1 sm:flex-none"
                       title="Unverify business"
                     >
                       {togglingId === b.id ? '...' : 'Unverify'}
@@ -758,15 +827,15 @@ export default function AdminListings() {
                     <button
                       onClick={() => handleToggleVerify(b.id, false)}
                       disabled={togglingId === b.id}
-                      className="h-8 px-3 text-xs font-medium text-whatsapp-800 bg-whatsapp-100 hover:bg-whatsapp-200 rounded-xl transition-all disabled:opacity-50"
-                      title="Approve business"
+                      className="h-9 px-4 text-xs font-medium text-whatsapp-800 bg-whatsapp-100 hover:bg-whatsapp-200 rounded-xl transition-all disabled:opacity-50 flex-1 sm:flex-none"
+                      title="Approve business (also activates payment)"
                     >
                       {togglingId === b.id ? '...' : 'Approve'}
                     </button>
                   )}
                   <button
                     onClick={() => openEdit(b)}
-                    className="h-8 px-3 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all"
+                    className="h-9 px-4 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all flex-1 sm:flex-none"
                     title="Edit business"
                   >
                     Edit
@@ -774,7 +843,7 @@ export default function AdminListings() {
                   <button
                     onClick={() => setConfirmDelete(b.id)}
                     disabled={deletingId === b.id}
-                    className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
+                    className="h-9 w-9 flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all disabled:opacity-50"
                     title="Delete listing"
                   >
                     {deletingId === b.id ? (

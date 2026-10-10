@@ -1,13 +1,16 @@
 import { redirect } from 'next/navigation'
-import { getPortalBusiness } from '@/lib/portal'
+import { getActingPortalBusiness } from '@/lib/portal'
 import { getApprovedCities } from '@/lib/approved-data'
 import PortalRanking from '@/components/portal/ranking'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PortalRankingPage() {
-  const business = await getPortalBusiness()
-  if (!business) redirect('/login')
+export default async function PortalRankingPage({ searchParams }: { searchParams: { branch?: string } }) {
+  // HQ with ?branch=<id> bids on that branch's behalf; the scoping guard in
+  // getActingPortalBusiness only honors ids inside the HQ's own org.
+  const session = await getActingPortalBusiness(searchParams?.branch)
+  if (!session) redirect('/login')
+  const business = session.business
 
   const categories = (business.category || []).filter(Boolean)
   const isRemote = business.is_remote === true
@@ -22,6 +25,7 @@ export default async function PortalRankingPage() {
       myCity={business.city || ''}
       isRemote={isRemote}
       cities={cities}
+      actingAs={session.actor.role === 'org-hq' && business.id !== session.actor.business.id ? business.name : null}
     />
   )
 }

@@ -4,6 +4,23 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
+-- Umbrella organizations that own multiple branch listings (HQ + branches).
+CREATE TABLE IF NOT EXISTS organizations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE,
+  bio TEXT DEFAULT '',
+  logo_url TEXT DEFAULT '',
+  verified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Shared pre-fill values the HQ applies when creating branches.
+-- bio_template may contain '{branch}' — replaced with the branch label.
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS default_logo_url TEXT DEFAULT '';
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS default_categories TEXT[] DEFAULT '{}';
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS bio_template TEXT DEFAULT '';
+
 CREATE TABLE IF NOT EXISTS businesses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT NOT NULL,
@@ -59,6 +76,9 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address_verified BOOLEAN DEFAULT FALSE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS featured_eligible BOOLEAN DEFAULT TRUE;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_hq BOOLEAN DEFAULT FALSE;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS branch_label TEXT DEFAULT '';
   UPDATE businesses SET slug = lower(regexp_replace(name, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || substr(id::text, 1, 8) WHERE slug IS NULL;
   UPDATE businesses SET edit_token = uuid_generate_v4()::text WHERE edit_token IS NULL;
 EXCEPTION WHEN OTHERS THEN NULL;
@@ -71,6 +91,12 @@ CREATE INDEX IF NOT EXISTS idx_businesses_bio_trgm ON businesses USING gin (bio 
 CREATE INDEX IF NOT EXISTS idx_businesses_category ON businesses USING gin (category);
 CREATE INDEX IF NOT EXISTS idx_businesses_verified ON businesses (verified);
 CREATE INDEX IF NOT EXISTS idx_businesses_rating ON businesses (rating DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_org_hq
+  ON businesses (org_id) WHERE is_hq IS TRUE AND org_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_businesses_org ON businesses (org_id);
+
+ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON organizations FROM anon, authenticated;
 
 ALTER TABLE businesses ENABLE ROW LEVEL SECURITY;
 

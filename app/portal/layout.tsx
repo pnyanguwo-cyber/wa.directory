@@ -1,21 +1,26 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getPortalBusiness, getSubscription } from '@/lib/portal'
+import { getPortalActor } from '@/lib/org-auth'
+import { getSubscription } from '@/lib/portal'
 import PortalTabs from '@/components/portal-tabs'
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const business = await getPortalBusiness()
-  if (!business) redirect('/login')
+  const actor = await getPortalActor()
+  if (!actor) redirect('/login')
 
+  const business = actor.business
   const sub = await getSubscription(business.id)
   const paid = sub?.status === 'active' && (!sub.expiresAt || new Date(sub.expiresAt) > new Date())
+  const isHq = actor.role === 'org-hq'
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:py-8">
       <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0">
-            <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">Business Portal</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">
+              {isHq ? 'Organization Portal · HQ' : actor.role === 'org-branch' ? `${actor.orgName} · Branch Portal` : 'Business Portal'}
+            </span>
             <h1 className="text-2xl font-extrabold text-text-primary tracking-tight truncate">{business.name}</h1>
             <p className="text-xs text-text-secondary mt-0.5">
               {paid ? (
@@ -27,11 +32,19 @@ export default async function PortalLayout({ children }: { children: React.React
                   <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Free plan: 7 days of history, 3 tips
                 </span>
               )}
+              {actor.role === 'org-branch' && (
+                <span className="ml-2 text-text-secondary">Part of {actor.orgName}</span>
+              )}
             </p>
+            {isHq && (
+              <p className="text-[11px] text-whatsapp-700 mt-1 font-medium">
+                HQ account: you can view and manage every branch of {actor.orgName}.
+              </p>
+            )}
           </div>
         </div>
 
-        <PortalTabs />
+        <PortalTabs isHq={isHq} />
 
         {!business.verified && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
@@ -42,7 +55,7 @@ export default async function PortalLayout({ children }: { children: React.React
               Your listing is pending approval
             </p>
             <p className="text-xs text-amber-800 leading-relaxed">
-              Customers can't find you yet. An admin will review your listing shortly: you'll be notified here once you're live.
+              Customers can&apos;t find you yet. An admin will review your listing shortly: you&apos;ll be notified here once you&apos;re live.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               <Link

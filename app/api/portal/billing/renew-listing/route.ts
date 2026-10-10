@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getBusinessId } from '@/lib/business-auth'
+import { getActingPortalBusiness } from '@/lib/portal'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
@@ -13,11 +13,13 @@ function getSupabase() {
 }
 
 export async function POST(request: Request) {
-  const businessId = getBusinessId()
-  if (!businessId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
   try {
     const body = await request.json().catch(() => ({}))
+    // branch_id: HQ renewing a branch's listing on its behalf (org-scoped).
+    const session = await getActingPortalBusiness(body?.branch_id)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const businessId = session.business.id
+
     const plan: PlanType = body.plan || '1m'
     const hasProAssistance: boolean = body.hasProAssistance || false
 
