@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 
 export const dynamic = 'force-dynamic'
@@ -12,10 +12,7 @@ export async function GET(request: Request) {
   const offset = Math.max(Number(searchParams.get('offset')) || 0, 0)
   const sort = searchParams.get('sort') === 'newest' ? 'newest' : 'rating'
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabase()
 
   let query = supabase
     .from('businesses')

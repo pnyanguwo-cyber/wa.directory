@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { matchCategory } from '@/data/categories'
 
 export const dynamic = 'force-dynamic'
@@ -12,10 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ suggestions: [] })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabase()
 
   const conditions = [`name.ilike.%${q}%`]
   const matchedCat = matchCategory(q)
