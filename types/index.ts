@@ -49,6 +49,15 @@ export interface Business {
   site_hero?: string
   site_services?: string
   site_contact_email?: string
+  // Per-section colours for the auto-generated website.
+  // Empty string / missing key = use the built-in default for that section.
+  site_theme?: {
+    header?: string
+    hero?: string
+    shop?: string
+    contact?: string
+    accent?: string
+  } | null
 }
 
 export interface BusinessItem {

@@ -3,6 +3,25 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
+type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
+type SiteTheme = Record<ThemeKey, string>
+
+const THEME_ROWS: { key: ThemeKey; label: string; hint: string }[] = [
+  { key: 'header', label: 'Header', hint: 'Top bar with your business name' },
+  { key: 'hero', label: 'Hero / About', hint: 'The main intro section' },
+  { key: 'shop', label: 'Shop', hint: 'Panel behind your item listings' },
+  { key: 'contact', label: 'Contact', hint: 'The contact section panel' },
+  { key: 'accent', label: 'Accent', hint: 'Buttons and price badges' },
+]
+
+const PRESETS: string[] = ['#25D366', '#0F766E', '#2563EB', '#4F46E5', '#D97706', '#E11D48', '#334155', '#111827']
+
+const EMPTY_THEME: SiteTheme = { header: '', hero: '', shop: '', contact: '', accent: '' }
+
+function cleanHex(v: string): string {
+  return v.replace(/[^#0-9a-fA-F]/g, '').slice(0, 7)
+}
+
 export default function PortalSite({
   businessId,
   businessName,
@@ -10,6 +29,7 @@ export default function PortalSite({
   siteHero,
   siteServices,
   siteContactEmail,
+  siteTheme,
 }: {
   businessId: string
   businessName: string
@@ -17,12 +37,20 @@ export default function PortalSite({
   siteHero: string
   siteServices: string
   siteContactEmail: string
+  siteTheme?: Partial<Record<ThemeKey, string>> | null
 }) {
   const router = useRouter()
   const [hero, setHero] = useState(siteHero)
   const [services, setServices] = useState(siteServices)
   const [contactEmail, setContactEmail] = useState(siteContactEmail)
   const [siteEnabled, setSiteEnabled] = useState(generateSite)
+  const [theme, setTheme] = useState<SiteTheme>({
+    header: siteTheme?.header || '',
+    hero: siteTheme?.hero || '',
+    shop: siteTheme?.shop || '',
+    contact: siteTheme?.contact || '',
+    accent: siteTheme?.accent || '',
+  })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -40,6 +68,7 @@ export default function PortalSite({
           site_hero: hero,
           site_services: services,
           site_contact_email: contactEmail,
+          site_theme: theme,
         }),
       })
       const data = await res.json()
@@ -86,6 +115,67 @@ export default function PortalSite({
           {siteEnabled
             ? 'Your website is live and customers can browse your shop.'
             : 'Your website is turned off. Customers will see your existing website link instead.'}
+        </p>
+      </div>
+
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-text-primary">Colours</h3>
+          <p className="text-xs text-text-secondary mt-0.5">Pick a colour for each section of your website. Leave empty to use the default.</p>
+        </div>
+        <div className="space-y-4">
+          {THEME_ROWS.map(row => (
+            <div key={row.key} className="rounded-2xl border border-gray-200/80 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-text-primary">{row.label}</p>
+                  <p className="text-[11px] text-text-secondary mt-0.5">{row.hint}</p>
+                </div>
+                {theme[row.key] !== '' && (
+                  <button
+                    type="button"
+                    onClick={() => setTheme(t => ({ ...t, [row.key]: '' }))}
+                    className="text-[11px] font-medium text-text-secondary hover:text-text-primary underline underline-offset-2 shrink-0"
+                  >
+                    Reset to default
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-2.5">
+                <input
+                  type="color"
+                  value={theme[row.key] || '#ffffff'}
+                  onChange={e => { setTheme(t => ({ ...t, [row.key]: e.target.value.toUpperCase() })); setNotice('') }}
+                  aria-label={`${row.label} colour`}
+                  className="w-10 h-10 rounded-xl border border-gray-200 bg-white p-1 cursor-pointer shrink-0"
+                />
+                <input
+                  type="text"
+                  value={theme[row.key]}
+                  onChange={e => { setTheme(t => ({ ...t, [row.key]: cleanHex(e.target.value) })); setNotice('') }}
+                  placeholder="Default"
+                  className="input-field w-28 font-mono text-sm shrink-0"
+                  maxLength={7}
+                  spellCheck={false}
+                />
+                <div className="flex flex-wrap gap-1.5 min-w-0">
+                  {PRESETS.map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => { setTheme(t => ({ ...t, [row.key]: p })); setNotice('') }}
+                      aria-label={`Use preset ${p}`}
+                      className={`w-6 h-6 rounded-full border transition-transform hover:scale-110 ${theme[row.key].toUpperCase() === p ? 'ring-2 ring-offset-1 ring-whatsapp-600 border-transparent' : 'border-gray-200'}`}
+                      style={{ backgroundColor: p }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-text-secondary mt-3">
+          Tip: for dark colours the text on your website switches to white automatically.
         </p>
       </div>
 

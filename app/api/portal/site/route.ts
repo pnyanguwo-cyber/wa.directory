@@ -5,6 +5,33 @@ import { getSupabase } from '@/lib/supabase-server'
 const MAX_TEXT = 2000
 const MAX_EMAIL = 320
 
+// Whitelisted per-section theme keys; values must be '' (default) or strict #RRGGBB.
+const THEME_KEYS = ['header', 'hero', 'shop', 'contact', 'accent'] as const
+type ThemeKey = (typeof THEME_KEYS)[number]
+const HEX_RE = /^#[0-9a-fA-F]{6}$/
+
+function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return null
+  const src = input as Record<string, unknown>
+  const out: Record<ThemeKey, string> = { header: '', hero: '', shop: '', contact: '', accent: '' }
+  let touched = false
+  for (const key of THEME_KEYS) {
+    const raw = src[key]
+    if (typeof raw === 'string') {
+      const v = raw.trim()
+      if (v === '') {
+        out[key] = ''
+        touched = true
+      } else if (HEX_RE.test(v)) {
+        out[key] = v.toUpperCase()
+        touched = true
+      }
+      // Invalid values are dropped (left as default).
+    }
+  }
+  return touched ? out : null
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
@@ -16,17 +43,24 @@ export async function POST(request: Request) {
     const site_services = typeof body?.site_services === 'string' ? body.site_services.trim().slice(0, MAX_TEXT) : null
     const site_contact_email = typeof body?.site_contact_email === 'string' ? body.site_contact_email.trim().slice(0, MAX_EMAIL) : null
     const generate_site = typeof body?.generate_site === 'boolean' ? body.generate_site : null
+    const theme = parseSiteTheme(body?.site_theme)
 
     const updates: {
       generate_site?: boolean
       site_hero?: string
       site_services?: string
       site_contact_email?: string
+      site_theme?: Record<ThemeKey, string> | null
     } = {}
     if (generate_site !== null) updates.generate_site = generate_site
     if (site_hero !== null) updates.site_hero = site_hero
     if (site_services !== null) updates.site_services = site_services
     if (site_contact_email !== null) updates.site_contact_email = site_contact_email
+    if (theme !== null) {
+      // All-defaults theme clears the column so the site falls back to built-in styling.
+      const allDefault = THEME_KEYS.every(k => theme[k] === '')
+      updates.site_theme = allDefault ? null : theme
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
