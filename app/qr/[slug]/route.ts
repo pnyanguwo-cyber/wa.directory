@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,10 +8,7 @@ export async function GET(
   { params }: { params: { slug: string } }
 ) {
   const { slug } = params
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = getSupabase()
 
   const { data: business } = await supabase
     .from('businesses')

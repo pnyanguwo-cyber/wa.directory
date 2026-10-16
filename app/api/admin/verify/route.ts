@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
 
@@ -13,10 +13,7 @@ export async function POST(request: Request) {
 
     const { id, verified, reason } = await request.json()
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { data: business } = await supabase
       .from('businesses')

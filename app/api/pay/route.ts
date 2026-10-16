@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isValidBusinessId } from '@/lib/business-id'
 import { usernameMatches } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
@@ -7,13 +7,6 @@ import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 // Search for businesses by ID, username, phone, and name — all strategies run
 // and results are merged (deduped by id, priority order preserved), with each

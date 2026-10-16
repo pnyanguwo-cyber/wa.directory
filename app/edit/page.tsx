@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import EditBusinessForm from '@/components/edit-business-form'
 import { getApprovedCategories, getApprovedAreas } from '@/lib/approved-data'
 
@@ -17,10 +17,7 @@ export default async function EditPage({
     redirect('/')
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = getSupabase()
 
   const { data: business } = await supabase
     .from('businesses')

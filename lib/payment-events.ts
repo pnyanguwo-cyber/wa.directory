@@ -13,7 +13,7 @@
 //   activation          · #1 takeover completed
 
 import { createHash } from 'crypto'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import type { NextRequest } from 'next/server'
 
 type PaymentEventOutcome = 'ok' | 'error' | 'rejected' | 'pending'
@@ -43,13 +43,6 @@ function hashIp(ip: string): string {
   if (!ip) return ''
   const secret = process.env.BUSINESS_AUTH_SECRET || 'wa-directory-ip-hash'
   return createHash('sha256').update(`${secret}:${ip}`).digest('hex').slice(0, 32)
-}
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
 }
 
 export async function logPaymentEvent(input: PaymentEventInput): Promise<void> {

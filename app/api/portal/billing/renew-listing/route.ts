@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 export async function POST(request: Request) {
   try {

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { createHash } from 'crypto'
 import { pollTransactionStatus } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
@@ -16,13 +16,6 @@ import { logPaymentEvent } from '@/lib/payment-events'
 //      poll URL (hash-verified response) before flipping anything.
 //   3. The reference (BID-<bidId>) is matched against the stored poll URL so
 //      a forged reference can't touch an unrelated bid.
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
 
 function verifyPaynowHash(values: Record<string, string>, integrationKey: string): boolean {
   let string = ''

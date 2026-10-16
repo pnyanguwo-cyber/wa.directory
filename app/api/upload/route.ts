@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 
 // Allow only genuine PNG / JPEG / WebP, detected by magic bytes rather than the
 // client-supplied MIME type or filename extension. This rejects SVG (which can
@@ -43,10 +43,7 @@ export async function POST(req: NextRequest) {
     // Filename and content type are derived server-side, never from the client.
     const fileName = `public/${Date.now()}_${Math.random().toString(36).slice(2)}.${match.ext}`
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { error: uploadError } = await supabase.storage
       .from('logos')
