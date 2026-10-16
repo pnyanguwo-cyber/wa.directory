@@ -556,6 +556,19 @@ async function BusinessContent({ slug }: { slug: string }) {
                           Website
                         </a>
                       )}
+                      {business.generate_site && (
+                        <a
+                          href={`/site/${business.slug || business.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a10 10 0 1 0 10 10c0-5.5-4.5-10-10-10Z" />
+                          </svg>
+                          My Website
+                        </a>
+                      )}
                       {business.catalog_link && (
                         <a
                           href={business.catalog_link}

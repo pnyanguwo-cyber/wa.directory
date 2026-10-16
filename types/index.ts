@@ -44,6 +44,23 @@ export interface Business {
   org_id?: string | null
   is_hq?: boolean
   branch_label?: string | null
+  // Auto-website controls + editable site sections.
+  generate_site?: boolean
+  site_hero?: string
+  site_services?: string
+  site_contact_email?: string
+}
+
+export interface BusinessItem {
+  id: string
+  business_id: string
+  name: string
+  slug: string
+  price: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  business?: { name: string; slug: string; city?: string } | null
 }
 
 export interface Organization {

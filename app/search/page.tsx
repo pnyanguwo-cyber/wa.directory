@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import BusinessCard from '@/components/business-card'
+import ItemCard from '@/components/item-card'
 import ImpressionPing from '@/components/impression-ping'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
@@ -11,6 +12,7 @@ import { matchCategory } from '@/data/categories'
 import { expandSearchQuery } from '@/lib/gemini'
 import { orderSearchResults } from '@/lib/ranking'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
+import type { BusinessItem } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -73,6 +75,20 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   dataQuery = dataQuery.limit(RESULT_LIMIT)
 
   const [{ data: rawBusinesses }, { count }] = await Promise.all([dataQuery, countQuery])
+
+  // Item search: match the query against live businesses' shop items.
+  let items: BusinessItem[] = []
+  if (q && q.trim()) {
+    const itemsRes = await supabase
+      .from('business_items')
+      .select('id, business_id, name, slug, price, is_active, businesses!inner(name, slug, city)')
+      .eq('is_active', true)
+      .eq('businesses.payment_status', 'active')
+      .ilike('name', `%${q.trim()}%`)
+      .limit(20)
+    items = ((itemsRes.data || []) as unknown as BusinessItem[]) || []
+  }
+
   const total = count ?? rawBusinesses?.length ?? 0
   const matchedCategory = matchCategory(q)
   const city = findCityInQuery(q)
@@ -120,6 +136,16 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
               <BusinessCard key={b.id} business={b} />
             ))}
           </div>
+          {q && items.length > 0 && (
+            <div className="mt-6">
+              <h3 className="text-lg font-bold text-text-primary mb-3">Items</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {items.map(item => (
+                  <ItemCard key={item.id} item={item} />
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </>

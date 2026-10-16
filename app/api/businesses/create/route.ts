@@ -5,6 +5,7 @@ import { categories as staticCategories } from '@/data/categories'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 import { generateBusinessId } from '@/lib/business-id'
 import { normalizeUsername, suggestUsername } from '@/lib/username'
+import { generateSiteContent } from '@/lib/site-generation'
 
 // Yellow Pages (special public-service) categories get a priority admin alert
 // so councils/police/fire listings are verified fast.
@@ -47,6 +48,10 @@ export async function POST(request: Request) {
       lat,
       lng,
       address_verified,
+      generate_site,
+      site_hero,
+      site_services,
+      site_contact_email,
     } = body || {}
 
     // --- Validation ---
@@ -157,6 +162,9 @@ export async function POST(request: Request) {
     let inserted: { id: string; slug: string | null } | null = null
     let lastError: string | null = null
 
+    // Auto-website: owners can opt out; when opted in we generate hero + services copy.
+    const generateSite = body?.generate_site !== false
+
     // Check if this is a Yellow Pages (free) listing
     const isYellowPages = cleanCategories.some(c => SPECIAL_CATEGORIES.has(c))
 
@@ -193,6 +201,8 @@ export async function POST(request: Request) {
           address_verified: address_verified === true,
           show_location: show_location !== false,
           edit_token: editToken,
+          generate_site: generateSite === true,
+          site_contact_email: typeof site_contact_email === 'string' && site_contact_email.trim() ? site_contact_email.trim() : '',
           verified: false,
           rating: 0,
           review_count: 0,
@@ -206,6 +216,24 @@ export async function POST(request: Request) {
 
     if (!inserted) {
       return NextResponse.json({ error: lastError || 'Could not create the listing. Please try again.' }, { status: 500 })
+    }
+
+    // Auto-website: generate hero + services copy when the owner opted in.
+    if (generateSite) {
+      try {
+        const content = await generateSiteContent({
+          businessName: name.trim(),
+          category: cleanCategories[0] || '',
+          bio: typeof bio === 'string' ? bio.trim() : '',
+          city: cleanCity,
+        })
+        await supabase
+          .from('businesses')
+          .update({ site_hero: content.hero, site_services: content.services })
+          .eq('id', inserted.id)
+      } catch {
+        // Non-blocking: the site falls back to template copy when generation fails.
+      }
     }
 
     // Yellow Pages submission: priority WhatsApp to the admin (authoritative —
