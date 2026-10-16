@@ -59,13 +59,6 @@ export async function getOrgDashboardStats(orgBusinesses: Business[]) {
   return { perBranch, orgTotals: { views: orgViews, chats: orgChats } }
 }
 
-export async function getPortalBusiness(): Promise<Business | null> {
-  const businessId = getBusinessId()
-  if (!businessId) return null
-  const { data } = await getSupabase().from('businesses').select('*').eq('id', businessId).maybeSingle()
-  return data || null
-}
-
 export async function getSubscription(businessId: string): Promise<{
   status: string
   expiresAt: string | null
@@ -113,9 +106,6 @@ export async function getListingSubscription(businessId: string): Promise<{
     proAssistance: data.pro_assistance || false,
   }
 }
-
-const RANGES = { '7': 7, '30': 30, '90': 90 } as const
-export type StatsRange = keyof typeof RANGES | 'all'
 
 export async function getDailyStats(businessId: string, days: number | null) {
   const supabase = getSupabase()

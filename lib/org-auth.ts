@@ -70,16 +70,6 @@ export async function resolveActingBusinessId(
   return data?.id || actor.business.id
 }
 
-/** Branch ids (including the HQ listing itself) the actor may act upon. */
-export async function listAccessibleBusinessIds(actor: PortalActor): Promise<string[]> {
-  if (actor.role !== 'org-hq') return [actor.business.id]
-  const { data } = await getSupabase()
-    .from('businesses')
-    .select('id')
-    .eq('org_id', actor.orgId)
-  return (data || []).map(b => b.id)
-}
-
 /** All listings in the actor's org, HQ first, for dashboards/switchers. */
 export async function listOrgBranches(orgId: string): Promise<Business[]> {
   const { data } = await getSupabase()

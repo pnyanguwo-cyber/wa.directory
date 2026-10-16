@@ -73,20 +73,6 @@ export async function getApprovedCities(): Promise<ApprovedCity[]> {
   }
 }
 
-export async function getApprovedCityNames(): Promise<Set<string>> {
-  const rows = await getApprovedCities()
-  return new Set(rows.map(r => r.name))
-}
-
-export function categoryIcon(
-  name: string,
-  approved: ApprovedCategory[]
-): string {
-  return approved.find(c => c.name === name)?.icon ||
-    staticCategories.find(c => c.name === name)?.icon ||
-    '📋'
-}
-
 export function matchCategoryAgainst(input: string, approved: ApprovedCategory[]): string {
   const lower = input.toLowerCase().trim()
   if (!lower) return 'Other'

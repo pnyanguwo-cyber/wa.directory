@@ -2,8 +2,6 @@
 // Usernames are lowercase, letters + numbers + underscores only.
 // Smart search treats hyphens, spaces, and underscores as interchangeable.
 
-const USERNAME_REGEX = /^[a-z][a-z0-9_]{2,29}$/
-
 // Normalize a display name into a username:
 // "John's Plumbing" -> "johns_plumbing"
 // "A.B.C. Enterprises" -> "abc_enterprises"
@@ -17,15 +15,10 @@ export function normalizeUsername(input: string): string {
     .slice(0, 30)                    // max 30 chars
 }
 
-// Validate a username: must be 3-30 chars, lowercase letters + numbers + underscores
-export function isValidUsername(username: string): boolean {
-  return USERNAME_REGEX.test(username)
-}
-
 // For smart search: normalize a search query to match usernames
 // "johns-plumbing" -> "johns_plumbing"
 // "Johns Plumbing" -> "johns_plumbing"
-export function normalizeForSearch(input: string): string {
+function normalizeForSearch(input: string): string {
   return input
     .toLowerCase()
     .replace(/[^a-z0-9\s_-]/g, '')

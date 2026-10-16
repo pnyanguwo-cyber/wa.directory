@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { isValidBusinessId } from '@/lib/business-id'
-import { normalizeForSearch, usernameMatches } from '@/lib/username'
+import { usernameMatches } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'

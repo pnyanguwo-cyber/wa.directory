@@ -33,17 +33,6 @@ export function canonicalPhone(raw: string): string {
   return DEFAULT_COUNTRY + digits
 }
 
-// Do two phone strings refer to the same number? Accepts any mix of formats
-// on either side (stored value or user input).
-export function phoneMatches(input: string, stored: string): boolean {
-  if (!input || !stored) return false
-  const a = stripNoise(input)
-  const b = stripNoise(stored)
-  if (!a || !b) return false
-  if (a === b) return true
-  return canonicalPhone(input) === canonicalPhone(stored)
-}
-
 // Voice numbers (landlines & hotlines) are stored EXACTLY as entered, in
 // national format — 024 2123456 stays 0242123456, 999 stays 999. Forcing
 // them into +263… would corrupt them (a hotline is not dialable as
