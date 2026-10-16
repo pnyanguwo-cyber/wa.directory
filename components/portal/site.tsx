@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 
 type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
 type SiteTheme = Record<ThemeKey, string>
@@ -30,6 +31,7 @@ export default function PortalSite({
   siteServices,
   siteContactEmail,
   siteTheme,
+  siteSocials,
 }: {
   businessId: string
   businessName: string
@@ -38,6 +40,7 @@ export default function PortalSite({
   siteServices: string
   siteContactEmail: string
   siteTheme?: Partial<Record<ThemeKey, string>> | null
+  siteSocials?: Partial<Record<SocialKey, string>> | null
 }) {
   const router = useRouter()
   const [hero, setHero] = useState(siteHero)
@@ -50,6 +53,22 @@ export default function PortalSite({
     shop: siteTheme?.shop || '',
     contact: siteTheme?.contact || '',
     accent: siteTheme?.accent || '',
+  })
+  const [socials, setSocials] = useState<Record<SocialKey, string>>({
+    twitter: siteSocials?.twitter || '',
+    instagram: siteSocials?.instagram || '',
+    facebook: siteSocials?.facebook || '',
+    linkedin: siteSocials?.linkedin || '',
+    tiktok: siteSocials?.tiktok || '',
+    youtube: siteSocials?.youtube || '',
+  })
+  const [socialTicked, setSocialTicked] = useState<Record<SocialKey, boolean>>({
+    twitter: !!siteSocials?.twitter,
+    instagram: !!siteSocials?.instagram,
+    facebook: !!siteSocials?.facebook,
+    linkedin: !!siteSocials?.linkedin,
+    tiktok: !!siteSocials?.tiktok,
+    youtube: !!siteSocials?.youtube,
   })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -69,6 +88,7 @@ export default function PortalSite({
           site_services: services,
           site_contact_email: contactEmail,
           site_theme: theme,
+          site_socials: socials,
         }),
       })
       const data = await res.json()
@@ -77,6 +97,14 @@ export default function PortalSite({
         return
       }
       setNotice('Site settings saved.')
+      setSocialTicked({
+        twitter: !!socials.twitter,
+        instagram: !!socials.instagram,
+        facebook: !!socials.facebook,
+        linkedin: !!socials.linkedin,
+        tiktok: !!socials.tiktok,
+        youtube: !!socials.youtube,
+      })
       router.refresh()
     } catch {
       setError('Could not save site settings. Check your connection and try again.')
@@ -115,6 +143,43 @@ export default function PortalSite({
           {siteEnabled
             ? 'Your website is live and customers can browse your shop.'
             : 'Your website is turned off. Customers will see your existing website link instead.'}
+        </p>
+      </div>
+
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+        <div className="mb-4">
+          <h3 className="text-sm font-bold text-text-primary">Social profiles</h3>
+          <p className="text-xs text-text-secondary mt-0.5">Tick the networks you're on and add your page link. Shown on your website and profile.</p>
+        </div>
+        <div className="space-y-3">
+          {SOCIAL_KEYS.map(key => (
+            <div key={key} className="rounded-2xl border border-gray-200/80 p-3.5">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={socialTicked[key]}
+                  onChange={e => { setSocialTicked(t => ({ ...t, [key]: e.target.checked })); setNotice('') }}
+                  className="w-4 h-4 accent-whatsapp-600 shrink-0"
+                />
+                <span className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                  <SocialIcon platform={key} className="w-4 h-4 text-text-secondary" />
+                  I have a {SOCIAL_META[key].label} page
+                </span>
+              </label>
+              {socialTicked[key] && (
+                <input
+                  type="url"
+                  value={socials[key]}
+                  onChange={e => { setSocials(s => ({ ...s, [key]: e.target.value.slice(0, 200) })); setNotice('') }}
+                  placeholder={SOCIAL_META[key].placeholder}
+                  className="input-field w-full mt-2.5 text-sm"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-text-secondary mt-3">
+          Only links matching the network's web address are saved. Untick a network to remove it.
         </p>
       </div>
 

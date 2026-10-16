@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { Business, BusinessItem } from '@/types'
+import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -36,7 +37,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   let { data: business } = await getSupabase()
     .from('businesses')
     .select(
-        'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme'
+      'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme, site_socials'
     )
     .eq('slug', params.slug)
     .single() as { data: Business | null }
@@ -45,7 +46,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
     const { data: fallback } = await getSupabase()
       .from('businesses')
       .select(
-      'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme'
+        'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme, site_socials'
       )
       .eq('id', params.slug)
       .single() as { data: Business | null }
@@ -101,6 +102,12 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   const heroDark = heroBg ? isDark(heroBg) : false
   const shopDark = shopBg ? isDark(shopBg) : false
   const contactDark = contactBg ? isDark(contactBg) : false
+
+  // Social profiles linked by the business (only set platforms are rendered).
+  const socialsRaw = (business.site_socials || {}) as Partial<Record<SocialKey, string>>
+  const socialLinks = SOCIAL_KEYS
+    .map(key => ({ key, url: (socialsRaw[key] || '').trim() }))
+    .filter(s => s.url.length > 0)
 
   return (
     <div className="min-h-screen bg-surface">
@@ -215,6 +222,26 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
               </p>
             )}
           </div>
+          {socialLinks.length > 0 && (
+            <div className="pt-2">
+              <p className={`text-[11px] font-semibold uppercase tracking-wider mb-2 ${contactDark ? 'text-white/70' : 'text-text-secondary'}`}>Follow us</p>
+              <div className="flex flex-wrap gap-2">
+                {socialLinks.map(s => (
+                  <a
+                    key={s.key}
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={SOCIAL_META[s.key].label}
+                    title={SOCIAL_META[s.key].label}
+                    className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors ${contactDark ? 'bg-white/10 border-white/30 text-white hover:bg-white/20' : 'bg-surface border-gray-200/80 text-text-secondary hover:text-whatsapp-700 hover:border-whatsapp-300'}`}
+                  >
+                    <SocialIcon platform={s.key} className="w-4 h-4" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </div>

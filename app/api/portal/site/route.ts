@@ -32,6 +32,46 @@ function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
   return touched ? out : null
 }
 
+// Whitelisted social keys; values must be '' (unset) or an https URL on the platform's domain.
+const SOCIAL_KEYS = ['twitter', 'instagram', 'facebook', 'linkedin', 'tiktok', 'youtube'] as const
+type SocialKey = (typeof SOCIAL_KEYS)[number]
+const SOCIAL_DOMAINS: Record<SocialKey, string[]> = {
+  twitter: ['twitter.com', 'x.com'],
+  instagram: ['instagram.com'],
+  facebook: ['facebook.com', 'fb.com'],
+  linkedin: ['linkedin.com'],
+  tiktok: ['tiktok.com'],
+  youtube: ['youtube.com', 'youtu.be'],
+}
+const MAX_SOCIAL_URL = 200
+
+function parseSiteSocials(input: unknown): Record<SocialKey, string> | null {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return null
+  const src = input as Record<string, unknown>
+  const out: Record<SocialKey, string> = { twitter: '', instagram: '', facebook: '', linkedin: '', tiktok: '', youtube: '' }
+  let touched = false
+  for (const key of SOCIAL_KEYS) {
+    const raw = src[key]
+    if (typeof raw !== 'string') continue
+    const v = raw.trim().slice(0, MAX_SOCIAL_URL)
+    if (v === '') {
+      out[key] = ''
+      touched = true
+    } else if (/^https?:\/\//i.test(v)) {
+      try {
+        const host = new URL(v).hostname.replace(/^www\./, '').toLowerCase()
+        if (SOCIAL_DOMAINS[key].some(d => host === d || host.endsWith(`.${d}`))) {
+          out[key] = v
+          touched = true
+        }
+      } catch {
+        // Invalid URL: dropped (left as default).
+      }
+    }
+  }
+  return touched ? out : null
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
@@ -44,6 +84,7 @@ export async function POST(request: Request) {
     const site_contact_email = typeof body?.site_contact_email === 'string' ? body.site_contact_email.trim().slice(0, MAX_EMAIL) : null
     const generate_site = typeof body?.generate_site === 'boolean' ? body.generate_site : null
     const theme = parseSiteTheme(body?.site_theme)
+    const socials = parseSiteSocials(body?.site_socials)
 
     const updates: {
       generate_site?: boolean
@@ -51,6 +92,7 @@ export async function POST(request: Request) {
       site_services?: string
       site_contact_email?: string
       site_theme?: Record<ThemeKey, string> | null
+      site_socials?: Record<SocialKey, string> | null
     } = {}
     if (generate_site !== null) updates.generate_site = generate_site
     if (site_hero !== null) updates.site_hero = site_hero
@@ -60,6 +102,11 @@ export async function POST(request: Request) {
       // All-defaults theme clears the column so the site falls back to built-in styling.
       const allDefault = THEME_KEYS.every(k => theme[k] === '')
       updates.site_theme = allDefault ? null : theme
+    }
+    if (socials !== null) {
+      // No links stored clears the column entirely.
+      const allEmpty = SOCIAL_KEYS.every(k => socials[k] === '')
+      updates.site_socials = allEmpty ? null : socials
     }
 
     if (Object.keys(updates).length === 0) {

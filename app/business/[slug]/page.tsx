@@ -21,6 +21,7 @@ import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
 import { cleanBio } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
+import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 
 import ReviewSection from '@/components/review-section'
 
@@ -143,6 +144,12 @@ async function BusinessContent({ slug }: { slug: string }) {
   }
 
   if (!business) notFound()
+
+  // Social profiles linked by the business (only set platforms are rendered).
+  const socialsRaw = (business.site_socials || {}) as Partial<Record<SocialKey, string>>
+  const socialLinks = SOCIAL_KEYS
+    .map(key => ({ key, url: (socialsRaw[key] || '').trim() }))
+    .filter(s => s.url.length > 0)
 
   // Organization (multi-branch) context: org identity + sibling locations.
   // Single-location businesses have no org_id — the queries below are skipped.
@@ -583,6 +590,26 @@ async function BusinessContent({ slug }: { slug: string }) {
                         </a>
                       )}
                     </div>
+                    {socialLinks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-2">Follow us</p>
+                        <div className="flex flex-wrap gap-2">
+                          {socialLinks.map(s => (
+                            <a
+                              key={s.key}
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={SOCIAL_META[s.key].label}
+                              title={SOCIAL_META[s.key].label}
+                              className="w-9 h-9 rounded-xl bg-surface border border-gray-200/80 flex items-center justify-center text-text-secondary hover:text-whatsapp-700 hover:border-whatsapp-300 transition-colors"
+                            >
+                              <SocialIcon platform={s.key} className="w-4 h-4" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Location & Directions */}

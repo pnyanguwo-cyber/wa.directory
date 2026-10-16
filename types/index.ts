@@ -58,6 +58,16 @@ export interface Business {
     contact?: string
     accent?: string
   } | null
+  // Optional social profiles shown on the auto-generated website + profile page.
+  // Empty string / missing key = the platform is not linked.
+  site_socials?: {
+    twitter?: string
+    instagram?: string
+    facebook?: string
+    linkedin?: string
+    tiktok?: string
+    youtube?: string
+  } | null
 }
 
 export interface BusinessItem {
