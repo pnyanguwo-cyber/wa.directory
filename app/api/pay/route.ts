@@ -45,46 +45,30 @@ async function searchBusinesses(supabase: ReturnType<typeof getSupabase>, query:
     }
   }
 
-  // 1. Exact business ID match (WA-XXXXXX)
-  if (isValidBusinessId(trimmed)) {
-    const { data } = await supabase
-      .from('businesses')
-      .select(SELECT)
-      .eq('business_id', trimmed)
-      .maybeSingle()
-    add(data ? [data] : [], 'business_id')
-  }
-
-  // 2. Phone number search (strip non-digits)
+  // 1. Exact business ID match + 2. phone search are conditional; all four
+  // strategies are independent queries — fetch in parallel, then merge in
+  // priority order (first match wins tagging).
+  const idQuery = isValidBusinessId(trimmed)
+    ? supabase.from('businesses').select(SELECT).eq('business_id', trimmed).maybeSingle()
+    : null
   const digits = trimmed.replace(/\D/g, '')
-  if (digits.length >= 9) {
-    const { data } = await supabase
-      .from('businesses')
-      .select(SELECT)
-      .eq('phone', digits)
-      .limit(10)
-    add(data, 'phone')
-  }
+  const phoneQuery = digits.length >= 9
+    ? supabase.from('businesses').select(SELECT).eq('phone', digits).limit(10)
+    : null
+  const [idRes, phoneRes, allBizRes, nameRes] = await Promise.all([
+    idQuery,
+    phoneQuery,
+    supabase.from('businesses').select(SELECT).not('username', 'is', null).limit(100),
+    supabase.from('businesses').select(SELECT).ilike('name', `%${trimmed}%`).limit(10),
+  ])
 
-  // 3. Username search (smart match)
-  const { data: allBiz } = await supabase
-    .from('businesses')
-    .select(SELECT)
-    .not('username', 'is', null)
-    .limit(100)
-
+  if (idRes) add(idRes.data ? [idRes.data] : [], 'business_id')
+  add(phoneRes?.data || null, 'phone')
   add(
-    (allBiz || []).filter(b => b.username && usernameMatches(trimmed, b.username)),
+    (allBizRes.data || []).filter(b => b.username && usernameMatches(trimmed, b.username)),
     'username'
   )
-
-  // 4. Name search (fuzzy)
-  const { data: nameResults } = await supabase
-    .from('businesses')
-    .select(SELECT)
-    .ilike('name', `%${trimmed}%`)
-    .limit(10)
-  add(nameResults, 'name')
+  add(nameRes.data, 'name')
 
   return Array.from(found.values())
 }
@@ -121,12 +105,18 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    // Find the business
-    const { data: business } = await supabase
-      .from('businesses')
-      .select('id, name, username, payment_status, category')
-      .eq('business_id', business_id)
-      .maybeSingle()
+    // Find the business + the special (Yellow Pages) categories — independent.
+    const [{ data: business }, { data: specialCats }] = await Promise.all([
+      supabase
+        .from('businesses')
+        .select('id, name, username, payment_status, category')
+        .eq('business_id', business_id)
+        .maybeSingle(),
+      supabase
+        .from('categories')
+        .select('name')
+        .eq('special', true),
+    ])
 
     if (!business) {
       return NextResponse.json({ error: 'Business not found' }, { status: 404 })
@@ -136,12 +126,6 @@ export async function POST(request: Request) {
     if (business.payment_status === 'active') {
       return NextResponse.json({ error: 'This listing is already active' }, { status: 400 })
     }
-
-    // Check if Yellow Pages (free)
-    const { data: specialCats } = await supabase
-      .from('categories')
-      .select('name')
-      .eq('special', true)
 
     const isFree = business.category?.some((c: string) =>
       (specialCats || []).some(sc => sc.name === c)

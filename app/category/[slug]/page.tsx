@@ -99,13 +99,14 @@ async function CategoryResults({ category, location }: { category: string; locat
     `city.ilike.%${location}%,location.ilike.%${location}%`
   )
 
-  const { data: rawBusinesses } = await filtered
-    .order('rating', { ascending: false })
-    .limit(100)
+  // Blurb generation (Gemini) and the business fetch are independent — run together.
+  const [{ data: rawBusinesses }, seoText] = await Promise.all([
+    filtered.order('rating', { ascending: false }).limit(100),
+    generateSEOBlurb(matchedCategory, location),
+  ])
 
   const businesses = await orderSearchResults(rawBusinesses || [], matchedCategory, location, `${matchedCategory}-${location}`)
   const count = businesses.length
-  const seoText = await generateSEOBlurb(matchedCategory, location)
 
   const jsonLd = {
     '@context': 'https://schema.org',

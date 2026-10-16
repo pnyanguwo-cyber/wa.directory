@@ -32,22 +32,22 @@ export default async function EditPage({
     redirect('/')
   }
 
-  const [approvedCategories, approvedAreas] = await Promise.all([
+  const [approvedCategories, approvedAreas, requestsRes, accountRes] = await Promise.all([
     getApprovedCategories(),
     getApprovedAreas(),
+    supabase
+      .from('feature_requests')
+      .select('type, name, city')
+      .eq('business_id', business.id)
+      .eq('status', 'pending'),
+    supabase
+      .from('business_accounts')
+      .select('id')
+      .eq('business_id', business.id)
+      .maybeSingle(),
   ])
-
-  const { data: pendingRequests } = await supabase
-    .from('feature_requests')
-    .select('type, name, city')
-    .eq('business_id', business.id)
-    .eq('status', 'pending')
-
-  const { data: existingAccount } = await supabase
-    .from('business_accounts')
-    .select('id')
-    .eq('business_id', business.id)
-    .maybeSingle()
+  const pendingRequests = requestsRes.data
+  const existingAccount = accountRes.data
 
   return (
     <main className="min-h-screen py-8 px-4">

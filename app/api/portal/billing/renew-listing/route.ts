@@ -29,29 +29,25 @@ export async function POST(request: Request) {
 
     const supabase = getSupabase()
 
-    // Get business info
-    const { data: business } = await supabase
-      .from('businesses')
-      .select('id, name, username, phone, payment_status')
-      .eq('id', businessId)
-      .maybeSingle()
+    // Get business info + the special (Yellow Pages) categories in parallel.
+    // The business row already carries `category`, so no second query is needed.
+    const [{ data: business }, { data: specialCats }] = await Promise.all([
+      supabase
+        .from('businesses')
+        .select('id, name, username, phone, payment_status, category')
+        .eq('id', businessId)
+        .maybeSingle(),
+      supabase
+        .from('categories')
+        .select('name')
+        .eq('special', true),
+    ])
 
     if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
 
     // Check if Yellow Pages (free)
-    const { data: specialCats } = await supabase
-      .from('categories')
-      .select('name')
-      .eq('special', true)
-
-    const { data: bizCats } = await supabase
-      .from('businesses')
-      .select('category')
-      .eq('id', businessId)
-      .maybeSingle()
-
-    const isFree = bizCats?.category?.some((c: string) =>
-      (specialCats || []).some(sc => sc.name === c)
+    const isFree = (business.category || []).some((c: string) =>
+      (specialCats || []).some((sc: { name: string }) => sc.name === c)
     )
     if (isFree) {
       return NextResponse.json({ error: 'Yellow Pages listings are free' }, { status: 400 })

@@ -74,20 +74,20 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   }
   dataQuery = dataQuery.limit(RESULT_LIMIT)
 
-  const [{ data: rawBusinesses }, { count }] = await Promise.all([dataQuery, countQuery])
+  // Item search runs alongside the business queries (no dependency between
+  // them), so every search costs one parallel round instead of two.
+  const itemsQuery = q && q.trim()
+    ? supabase
+        .from('business_items')
+        .select('id, business_id, name, slug, price, is_active, businesses!inner(name, slug, city)')
+        .eq('is_active', true)
+        .eq('businesses.payment_status', 'active')
+        .ilike('name', `%${q.trim()}%`)
+        .limit(20)
+    : null
 
-  // Item search: match the query against live businesses' shop items.
-  let items: BusinessItem[] = []
-  if (q && q.trim()) {
-    const itemsRes = await supabase
-      .from('business_items')
-      .select('id, business_id, name, slug, price, is_active, businesses!inner(name, slug, city)')
-      .eq('is_active', true)
-      .eq('businesses.payment_status', 'active')
-      .ilike('name', `%${q.trim()}%`)
-      .limit(20)
-    items = ((itemsRes.data || []) as unknown as BusinessItem[]) || []
-  }
+  const [{ data: rawBusinesses }, { count }, itemsRes] = await Promise.all([dataQuery, countQuery, itemsQuery])
+  const items = ((itemsRes?.data || []) as unknown as BusinessItem[]) || []
 
   const total = count ?? rawBusinesses?.length ?? 0
   const matchedCategory = matchCategory(q)

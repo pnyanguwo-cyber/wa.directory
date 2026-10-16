@@ -206,30 +206,31 @@ export async function POST(request: Request) {
 
   const period = currentPeriodStart()
 
-  // One live (unpaid) bid at a time per scope — reuse it when re-bidding.
-  const { data: existing } = await supabase
-    .from('bids')
-    .select('id, amount')
-    .eq('business_id', businessId)
-    .eq('category', category)
-    .eq('city', city || '')
-    .eq('period', period)
-    .eq('status', 'pending')
-    .maybeSingle()
-
-  // Current #1 holder for this scope, covering the target month (or the
-  // running month when next month has no holder yet).
-  const { data: holderSpot } = await supabase
-    .from('rank_spots')
-    .select('monthly_fee, business_id')
-    .eq('category', category)
-    .eq('city', city || '')
-    .eq('position', 1)
-    .eq('status', 'active')
-    .gte('period_end', period)
-    .order('period_start', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // The pending-bid reuse check and the current #1 holder lookup are
+  // independent — fetch together. (The fallback holder lookup below stays
+  // sequential because it depends on the result.)
+  const [{ data: existing }, { data: holderSpot }] = await Promise.all([
+    supabase
+      .from('bids')
+      .select('id, amount')
+      .eq('business_id', businessId)
+      .eq('category', category)
+      .eq('city', city || '')
+      .eq('period', period)
+      .eq('status', 'pending')
+      .maybeSingle(),
+    supabase
+      .from('rank_spots')
+      .select('monthly_fee, business_id')
+      .eq('category', category)
+      .eq('city', city || '')
+      .eq('position', 1)
+      .eq('status', 'active')
+      .gte('period_end', period)
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   const { data: fallbackSpot } = holderSpot
     ? { data: null }

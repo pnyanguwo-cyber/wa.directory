@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { getPortalActor, listOrgBranches, listPendingBranchInvites, getOrgDefaults } from '@/lib/org-auth'
-import { getOrgDashboardStats, getLifetimeTotals } from '@/lib/portal'
+import { getOrgDashboardStats } from '@/lib/portal'
 import { getApprovedCategories, getApprovedCities } from '@/lib/approved-data'
 import { getSupabase } from '@/lib/supabase-server'
 import OrgBranches from '@/components/portal/org-branches'
@@ -29,7 +29,8 @@ export default async function PortalBranchesPage() {
   // Which pending branches already claimed their portal account? Resend only
   // makes sense for unclaimed ones, but we surface the state either way.
   const claimed = new Set<string>()
-  if (pending.length > 0) {
+  async function loadClaimed() {
+    if (pending.length === 0) return
     const { data: accounts } = await getSupabase()
       .from('business_accounts')
       .select('business_id')
@@ -37,15 +38,26 @@ export default async function PortalBranchesPage() {
     for (const a of accounts || []) claimed.add(a.business_id)
   }
 
-  const { perBranch, orgTotals } = await getOrgDashboardStats(branches)
+  // Lifetime views per branch for the table: one batched query instead of
+  // one query per branch.
+  const lifetimeViews = new Map<string, number>()
+  async function loadLifetimeViews() {
+    if (branches.length === 0) return
+    const { data } = await getSupabase()
+      .from('daily_stats')
+      .select('business_id, count')
+      .eq('type', 'profile_view')
+      .in('business_id', branches.map(b => b.id))
+    for (const r of data || []) {
+      lifetimeViews.set(r.business_id, (lifetimeViews.get(r.business_id) || 0) + Number(r.count))
+    }
+  }
 
-  // Lifetime views per branch for the table.
-  const lifetimeRows = await Promise.all(
-    branches.map(async b => {
-      const totals = await getLifetimeTotals(b.id)
-      return totals['profile_view'] || 0
-    })
-  )
+  const [{ perBranch, orgTotals }] = await Promise.all([
+    getOrgDashboardStats(branches),
+    loadClaimed(),
+    loadLifetimeViews(),
+  ])
 
   const rows: BranchRow[] = branches.map((b, i) => ({
     id: b.id,
@@ -59,7 +71,7 @@ export default async function PortalBranchesPage() {
     verified: b.verified === true,
     views7d: perBranch[b.id]?.views === undefined ? 0 : perBranch[b.id]!.views,
     chats7d: perBranch[b.id]?.chats === undefined ? 0 : perBranch[b.id]!.chats,
-    lifetimeViews: lifetimeRows[i] || 0,
+    lifetimeViews: lifetimeViews.get(b.id) || 0,
   }))
 
   const invites: PendingInvite[] = pending.map(b => ({
