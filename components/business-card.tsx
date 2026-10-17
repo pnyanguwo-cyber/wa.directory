@@ -8,16 +8,11 @@ import CategoryDoodle from '@/components/category-doodle'
 import TrackLink from '@/components/track-link'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio } from '@/lib/utils'
+import { cleanBio, getInitials } from '@/lib/utils'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, whatsappHref, callHref } from '@/components/contact'
 
 function LogoInitials({ name, url }: { name: string; url?: string }) {
-  const initials = name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  const initials = getInitials(name)
 
   if (url) {
     return (

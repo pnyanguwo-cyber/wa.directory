@@ -21,11 +21,12 @@ import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
 import { cleanBio } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
-import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
+import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
+import { SITE_URL } from '@/lib/site-url'
+import { getInitials } from '@/lib/utils'
+import { digitsOnly } from '@/lib/phone'
 
 import ReviewSection from '@/components/review-section'
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -79,12 +80,7 @@ function Stars({ rating }: { rating: number }) {
 }
 
 function LogoDisplay({ name, url }: { name: string; url?: string }) {
-  const initials = name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  const initials = getInitials(name)
 
   if (url) {
     return (
@@ -146,10 +142,7 @@ async function BusinessContent({ slug }: { slug: string }) {
   if (!business) notFound()
 
   // Social profiles linked by the business (only set platforms are rendered).
-  const socialsRaw = (business.site_socials || {}) as Partial<Record<SocialKey, string>>
-  const socialLinks = SOCIAL_KEYS
-    .map(key => ({ key, url: (socialsRaw[key] || '').trim() }))
-    .filter(s => s.url.length > 0)
+  const socialLinks = getSocialLinks(business.site_socials)
 
   // Organization (multi-branch) context: org identity + sibling locations.
   // Single-location businesses have no org_id — the queries below are skipped.
@@ -234,7 +227,7 @@ async function BusinessContent({ slug }: { slug: string }) {
   }
 
   const shareSlug = business.slug || business.id
-  const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const phoneClean = digitsOnly(business.phone || '')
   const yellow = isYellowPages(business.category)
   // Voice listings (landlines & hotlines) have no WhatsApp chat — a Call button replaces it.
   const voice = business.phone_type === 'voice'

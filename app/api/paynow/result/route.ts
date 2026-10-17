@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
-import { createHash } from 'crypto'
-import { pollTransactionStatus } from '@/lib/paynow'
+import { pollTransactionStatus, verifyHash, parseUrlencoded } from '@/lib/paynow'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
 import { activateListingSubscription } from '@/lib/listing-activation'
 import { logPaymentEvent } from '@/lib/payment-events'
@@ -17,28 +16,6 @@ import { logPaymentEvent } from '@/lib/payment-events'
 //   3. The reference (BID-<bidId>) is matched against the stored poll URL so
 //      a forged reference can't touch an unrelated bid.
 
-function verifyPaynowHash(values: Record<string, string>, integrationKey: string): boolean {
-  let string = ''
-  for (const key of Object.keys(values)) {
-    if (key === 'hash') continue
-    string += values[key]
-  }
-  string += integrationKey.toLowerCase()
-  return values.hash === createHash('sha512').update(string).digest('hex').toUpperCase()
-}
-
-function parseUrlencoded(body: string): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const pair of body.split('&')) {
-    const idx = pair.indexOf('=')
-    if (idx < 0) continue
-    const k = decodeURIComponent(pair.slice(0, idx).replace(/\+/g, '%20'))
-    const v = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, '%20'))
-    out[k] = v
-  }
-  return out
-}
-
 export async function POST(request: Request) {
   const integrationKey = process.env.PAYNOW_INTEGRATION_KEY
   if (!integrationKey) {
@@ -47,7 +24,7 @@ export async function POST(request: Request) {
 
   const body = await request.text()
   const values = parseUrlencoded(body)
-  if (!values.hash || !verifyPaynowHash(values, integrationKey)) {
+  if (!values.hash || !verifyHash(values, integrationKey)) {
     await logPaymentEvent({
       eventType: 'webhook_rejected',
       outcome: 'rejected',

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
+import { adminGuard } from '@/lib/admin-auth'
 
 // One authenticated endpoint for the admin Listings tab — replaces the three
 // browser-side anon queries (businesses, categories, active subscriptions).
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
   const [businessesRes, categoriesRes, subsRes] = await Promise.all([

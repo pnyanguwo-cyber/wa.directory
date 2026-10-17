@@ -2,10 +2,10 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase-server'
 import QrCard from '@/components/qr-card'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
 
 export const dynamic = 'force-dynamic'
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 export default async function MyQrPage({ params }: { params: { slug: string } }) {
   const supabase = getSupabase()
@@ -21,7 +21,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
 
   const key = business.slug || business.id
   const profileUrl = `${SITE_URL}/business/${key}`
-  const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const phoneClean = digitsOnly(business.phone || '')
   // Voice-only listings have no WhatsApp chat — the QR page dials instead.
   const voiceOnly = business.phone_type === 'voice'
   const chatMsg = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)

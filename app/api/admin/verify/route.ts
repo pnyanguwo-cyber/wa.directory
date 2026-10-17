@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
 
 export async function POST(request: Request) {
   try {
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     if (verified && business?.phone) {
-      const to = '+' + business.phone.replace(/\D/g, '')
+      const to = '+' + digitsOnly(business.phone)
       const link = `${SITE_URL}/business/${business.slug || id}`
       sendWhatsAppTemplate(
         to,
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     // Rejected / unverified: tell the owner why (optional admin note) and
     // give them their private edit link so they can fix and resubmit.
     if (!verified && business?.phone) {
-      const to = '+' + business.phone.replace(/\D/g, '')
+      const to = '+' + digitsOnly(business.phone)
       const editLink = business.edit_token
         ? `${SITE_URL}/edit?token=${business.edit_token}`
         : `${SITE_URL}/business/${business.slug || id}`

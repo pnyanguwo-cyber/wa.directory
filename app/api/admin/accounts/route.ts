@@ -3,9 +3,13 @@ import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import bcrypt from 'bcryptjs'
+import { adminGuard } from '@/lib/admin-auth'
+import { SITE_URL } from '@/lib/site-url'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
   const { data: accounts } = await supabase
@@ -15,9 +19,7 @@ export async function GET() {
     .limit(300)
 
   const ids = [...new Set((accounts || []).map(a => a.business_id))]
-  const { data: businesses } = ids.length
-    ? await supabase.from('businesses').select('id, name, slug, phone').in('id', ids)
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, ids, 'id, name, slug, phone')
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
@@ -27,7 +29,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -69,7 +72,7 @@ export async function POST(request: Request) {
               '🔑 *Your WA Directory password was reset*',
               '',
               `New password: ${new_password}`,
-              'Log in at ' + (process.env.SITE_URL || 'https://wadirectory.co.zw') + '/login and change it if you wish.',
+              'Log in at ' + (SITE_URL) + '/login and change it if you wish.',
             ].join('\n')
           ).catch(() => {})
         }

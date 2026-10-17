@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
+import { slugify } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -15,10 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name, category, and phone are required' }, { status: 400 })
     }
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
+    const slug = slugify(name)
 
     const supabase = getSupabase()
 

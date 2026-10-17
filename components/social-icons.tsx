@@ -41,6 +41,17 @@ export const SOCIAL_META: Record<SocialKey, { label: string; icon: string; domai
 
 export const SOCIAL_KEYS = Object.keys(SOCIAL_META) as SocialKey[]
 
+// Trimmed, non-empty social links from a business's site_socials column,
+// in the canonical platform order.
+export function getSocialLinks(
+  siteSocials: unknown
+): Array<{ key: SocialKey; url: string }> {
+  const raw = (siteSocials || {}) as Partial<Record<SocialKey, string>>
+  return SOCIAL_KEYS
+    .map(key => ({ key, url: (raw[key] || '').trim() }))
+    .filter(s => s.url.length > 0)
+}
+
 export function SocialIcon({ platform, className }: { platform: SocialKey; className?: string }) {
   return (
     <svg className={className} fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">

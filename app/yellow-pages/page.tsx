@@ -4,10 +4,9 @@ import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { categories as staticCategories } from '@/data/categories'
 import YellowPagesGrid from '@/components/yellow-pages-grid'
+import { SITE_URL } from '@/lib/site-url'
 
 export const revalidate = 300
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 const YELLOW_PAGES = staticCategories.filter(c => c.special)
 const YELLOW_PAGES_NAMES = YELLOW_PAGES.map(c => c.name)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { normalizeUsername } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function POST(request: Request) {
   try {
@@ -56,7 +57,7 @@ export async function POST(request: Request) {
 
     // Notify admin via WhatsApp
     if (process.env.ADMIN_WHATSAPP) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [

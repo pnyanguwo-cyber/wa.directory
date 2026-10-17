@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
+import { slugify } from '@/lib/utils'
 
 export async function GET() {
   const session = await getActingPortalBusiness()
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       .insert({
         business_id: businessId,
         name,
-        slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 60) || `item-${Date.now()}`,
+        slug: slugify(name) || `item-${Date.now()}`,
         price,
         is_active,
       })

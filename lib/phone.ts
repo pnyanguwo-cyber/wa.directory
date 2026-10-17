@@ -10,6 +10,12 @@ function stripNoise(raw: string): string {
   return raw.replace(/[^0-9]/g, '')
 }
 
+// Just the digits of any phone input — no normalization. Many checks and
+// wa.me links only care about digits.
+export function digitsOnly(raw: string): string {
+  return (raw || '').replace(/\D/g, '')
+}
+
 // Full international digits (no '+') for a number entered alongside a
 // selected country code. Used at registration/listing time.
 export function toFullPhone(countryCode: string, raw: string): string {

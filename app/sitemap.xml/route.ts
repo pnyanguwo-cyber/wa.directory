@@ -1,7 +1,8 @@
 import { getSupabase } from '@/lib/supabase-server'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function GET() {
-  const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+  const siteUrl = SITE_URL
 
   const { data: businesses } = await getSupabase()
     .from('businesses')

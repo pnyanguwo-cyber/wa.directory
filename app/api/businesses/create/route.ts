@@ -6,6 +6,8 @@ import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 import { generateBusinessId } from '@/lib/business-id'
 import { normalizeUsername, suggestUsername } from '@/lib/username'
 import { generateSiteContent } from '@/lib/site-generation'
+import { SITE_URL } from '@/lib/site-url'
+import { slugify } from '@/lib/utils'
 
 // Yellow Pages (special public-service) categories get a priority admin alert
 // so councils/police/fire listings are verified fast.
@@ -14,11 +16,7 @@ const SPECIAL_CATEGORIES = new Set(staticCategories.filter(c => c.special).map(c
 const WA_MSG = 'Hi%2C%20I%20found%20you%20on%20WA%20Directory'
 
 function generateSlug(name: string): string {
-  const base = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 50) || 'business'
+  const base = slugify(name, 50) || 'business'
   return `${base}-${Math.random().toString(36).slice(2, 8)}`
 }
 
@@ -236,7 +234,7 @@ export async function POST(request: Request) {
     // Yellow Pages submission: priority WhatsApp to the admin (authoritative —
     // sent server-side so it fires even if the client never does).
     if (isYellowPages && process.env.ADMIN_WHATSAPP) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
@@ -264,7 +262,7 @@ export async function POST(request: Request) {
     // status, edit link) it is used — business-initiated plain text only
     // delivers inside Meta's 24h customer-service window.
     {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       const editLink = `${siteUrl}/edit?token=${editToken}`
       const payLink = `${siteUrl}/pay`
       const { sendWhatsAppMessage, sendWhatsAppTemplate } = await import('@/lib/whatsapp')

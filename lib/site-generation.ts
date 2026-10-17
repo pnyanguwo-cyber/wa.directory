@@ -1,6 +1,5 @@
 import { getCached, setCached } from './ai-cache'
-
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+import { callGemini } from './gemini'
 
 export interface SiteContent {
   hero: string
@@ -26,36 +25,22 @@ export async function generateSiteContent(input: {
 
   if (!process.env.GEMINI_API_KEY) return fallback
 
-  try {
-    const res = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: `Write website copy for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Return ONLY a JSON object with two string keys: "hero" (a short friendly headline + intro, max 2 sentences) and "services" (a short services overview, max 3 sentences). No markdown, no keys other than hero/services, no explanation.`,
-              },
-            ],
-          },
-        ],
-      }),
-    })
+  const text = await callGemini(
+    `Write website copy for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Return ONLY a JSON object with two string keys: "hero" (a short friendly headline + intro, max 2 sentences) and "services" (a short services overview, max 3 sentences). No markdown, no keys other than hero/services, no explanation.`
+  ) || ''
 
-    const data = await res.json()
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
-    const match = text.match(/\{[\s\S]*?\}/)
-    if (match) {
+  const match = text.match(/\{[\s\S]*?\}/)
+  if (match) {
+    try {
       const parsed = JSON.parse(match[0]) as Partial<SiteContent>
       if (parsed.hero && typeof parsed.hero === 'string' && parsed.hero.trim()) {
         const content: SiteContent = { hero: parsed.hero.trim().slice(0, 500), services: parsed.services?.trim() || fallback.services }
         await setCached(cacheKey, content)
         return content
       }
+    } catch {
+      // Malformed JSON from the model → fall through to the default copy.
     }
-  } catch {
-    // Fall through to the default copy.
   }
 
   return fallback

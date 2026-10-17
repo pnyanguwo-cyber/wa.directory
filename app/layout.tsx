@@ -7,6 +7,7 @@ import Footer from '@/components/footer'
 import BannerStrip from '@/components/banner-strip'
 import WhatsAppSupportButton from '@/components/whatsapp-support-button'
 import Image from 'next/image'
+import { SITE_URL } from '@/lib/site-url'
 
 const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
 const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
@@ -26,7 +27,7 @@ const inter = localFont({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.SITE_URL || 'https://wadirectory.co.zw'),
+  metadataBase: new URL(SITE_URL),
   title: 'WA Directory - Find any business on WhatsApp',
   description: 'AI finds shops, services, prices instantly',
   manifest: '/manifest.webmanifest',

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
-import { isAdmin } from '@/lib/admin-auth'
+import { adminGuard } from '@/lib/admin-auth'
 
 const ALLOWED = new Set(['active', 'pending', 'expired', 'unpaid'])
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const { id, payment_status } = await request.json()

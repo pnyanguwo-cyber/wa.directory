@@ -14,7 +14,7 @@ import QrCard from '@/components/qr-card'
 import RequestConfirmModal from '@/components/request-confirm-modal'
 import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
 import { Smartphone, PhoneCall } from 'lucide-react'
-import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+import { toFullPhone, normalizeVoicePhone, digitsOnly } from '@/lib/phone'
 import { normalizeUsername } from '@/lib/username'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 
@@ -153,7 +153,7 @@ export default function ListBusinessForm({
   const router = useRouter()
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
-  const rawPhoneDigits = form.phone.replace(/\D/g, '')
+  const rawPhoneDigits = digitsOnly(form.phone)
   const isHotline = rawPhoneDigits.length > 0 && rawPhoneDigits.length <= 5
   const phoneError = !form.phone
     ? null
@@ -778,11 +778,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   </h3>
                   {autoEcocash ? (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Check <strong>{splashPhone ? `+${splashPhone.replace(/\D/g, '')}` : 'your phone'}</strong> for the EcoCash prompt and enter your PIN. Your <strong>{PLAN_CONFIG[payPlan].label}</strong> listing goes live <strong className="text-text-primary">automatically</strong> the moment the payment succeeds — this screen updates by itself. No admin approval needed.
+                      Check <strong>{splashPhone ? `+${digitsOnly(splashPhone)}` : 'your phone'}</strong> for the EcoCash prompt and enter your PIN. Your <strong>{PLAN_CONFIG[payPlan].label}</strong> listing goes live <strong className="text-text-primary">automatically</strong> the moment the payment succeeds — this screen updates by itself. No admin approval needed.
                     </p>
                   ) : (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${splashPhone.replace(/\D/g, '')}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
+                      Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${digitsOnly(splashPhone)}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
                     </p>
                   )}
                   {paymentSimulationEnabled() && (

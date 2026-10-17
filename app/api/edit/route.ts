@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+import { slugify } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -27,10 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid or expired edit token' }, { status: 401 })
     }
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
+    const slug = slugify(name)
 
     // Voice listings (landlines & hotlines) keep national format + Call button.
     const isVoice = phone_type === 'voice'

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
+import { digitsOnly } from '@/lib/phone'
 
 export async function POST(request: Request) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request: Request) {
 
     // Best-effort removal notice to each owner (non-blocking).
     for (const b of doomed || []) {
-      const digits = (b.phone || '').replace(/\D/g, '')
+      const digits = digitsOnly(b.phone || '')
       if (!digits) continue
       sendWhatsAppMessage(
         '+' + digits,

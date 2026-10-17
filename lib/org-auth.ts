@@ -1,6 +1,7 @@
 import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import type { Business } from '@/types'
+import { slugify } from '@/lib/utils'
 
 export type PortalActor =
   | { role: 'business'; business: Business }
@@ -213,7 +214,7 @@ export async function createOrgBranch(input: {
 
   if (error || !created) return { error: error?.message || 'Could not create the branch' }
 
-  const slug = `${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 50) || 'branch'}-${created.id.slice(0, 8)}`
+  const slug = `${slugify(displayName, 50) || 'branch'}-${created.id.slice(0, 8)}`
   await supabase.from('businesses').update({ slug }).eq('id', created.id)
 
   return { id: created.id, slug, editToken }

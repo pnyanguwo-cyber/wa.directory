@@ -1,10 +1,6 @@
 import Link from 'next/link'
 import type { BusinessItem } from '@/types'
-
-function formatPrice(price: number | string | null | undefined): string {
-  const n = Number(price ?? 0)
-  return `$${(Number.isFinite(n) ? n : 0).toFixed(2)}`
-}
+import { formatPrice } from '@/lib/utils'
 
 export default function ItemCard({ item }: { item: BusinessItem }) {
   const href = `/business/${item.business?.slug || item.business_id}`

@@ -11,6 +11,7 @@
 // to 'ecocash'.
 
 import { createHash } from 'crypto'
+import { digitsOnly } from '@/lib/phone'
 
 const REMOTE_TRANSACTION_URL = 'https://www.paynow.co.zw/interface/remotetransaction'
 
@@ -52,14 +53,14 @@ function generateHash(values: Record<string, string>, integrationKey: string): s
   return createHash('sha512').update(string).digest('hex').toUpperCase()
 }
 
-function verifyHash(values: Record<string, string>, integrationKey: string): boolean {
+export function verifyHash(values: Record<string, string>, integrationKey: string): boolean {
   if (!values.hash) return false
   return values.hash === generateHash(values, integrationKey)
 }
 
 // Paynow answers with an application/x-www-form-urlencoded body. Values were
 // urlencoded by us on the way in; decode with + as space, like the SDK does.
-function parseUrlencoded(body: string): Record<string, string> {
+export function parseUrlencoded(body: string): Record<string, string> {
   const out: Record<string, string> = {}
   for (const pair of body.split('&')) {
     const idx = pair.indexOf('=')
@@ -73,7 +74,7 @@ function parseUrlencoded(body: string): Record<string, string> {
 
 // Normalize a Zimbabwean EcoCash number to what Paynow expects (077… / 078… / 071…).
 export function normalizeEcoCashPhone(raw: string): string {
-  let digits = raw.replace(/\D/g, '')
+  let digits = digitsOnly(raw)
   if (digits.startsWith('263')) digits = '0' + digits.slice(3)
   else if (!digits.startsWith('0') && digits.length === 9) digits = '0' + digits
   return digits

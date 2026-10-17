@@ -2,9 +2,13 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { adminGuard } from '@/lib/admin-auth'
+import { SITE_URL } from '@/lib/site-url'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
 
@@ -25,9 +29,7 @@ export async function GET() {
   for (const s of spotsRes.data || []) bizIds.add(s.business_id)
   for (const b of bidsRes.data || []) bizIds.add(b.business_id)
 
-  const { data: businesses } = bizIds.size
-    ? await supabase.from('businesses').select('id, name, slug, phone').in('id', [...bizIds])
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, [...bizIds], 'id, name, slug, phone')
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
@@ -45,7 +47,8 @@ function monthRange(): { start: string; end: string } {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -195,7 +198,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -292,7 +296,7 @@ export async function PATCH(request: Request) {
           .from('businesses')
           .select('id, phone')
           .in('id', [...affected.keys()])
-        const portalUrl = `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/portal/ranking`
+        const portalUrl = `${SITE_URL}/portal/ranking`
         for (const biz of affectedBiz || []) {
           const info = affected.get(biz.id)
           if (!info || !biz.phone) continue

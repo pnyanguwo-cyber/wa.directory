@@ -12,6 +12,7 @@ import { CATEGORY_IMAGES } from '@/data/category-images'
 import { generateSEOBlurb } from '@/lib/gemini'
 import { getApprovedCategories, matchCategoryAgainst } from '@/lib/approved-data'
 import { orderSearchResults } from '@/lib/ranking'
+import { SITE_URL } from '@/lib/site-url'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -125,7 +126,7 @@ async function CategoryResults({ category, location }: { category: string; locat
         item: {
           '@type': 'LocalBusiness',
           name: b.name,
-          url: `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/business/${b.slug || b.id}`,
+          url: `${SITE_URL}/business/${b.slug || b.id}`,
         },
       })),
     },

@@ -6,6 +6,7 @@ import LogoImage from '@/components/logo-image'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import type { PlanType } from '@/types'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import { digitsOnly } from '@/lib/phone'
 
 interface Business {
   id: string
@@ -635,7 +636,7 @@ export default function PayPage() {
                 </button>
                 <button
                   onClick={handlePay}
-                  disabled={loading || !payerPhone.trim() || payerPhone.replace(/\D/g, '').length < 9}
+                  disabled={loading || !payerPhone.trim() || digitsOnly(payerPhone).length < 9}
                   className="btn-primary flex-1"
                 >
                   {loading ? (
@@ -701,11 +702,11 @@ export default function PayPage() {
                 </p>
               ) : autoEcoCash ? (
                 <p className="text-xs text-text-secondary mb-6 leading-relaxed">
-                  Check the phone +{payerPhone.replace(/\D/g, '')} for an EcoCash prompt and enter your PIN. Your listing goes live <strong> automatically</strong> the moment payment succeeds — this page updates by itself.
+                  Check the phone +{digitsOnly(payerPhone)} for an EcoCash prompt and enter your PIN. Your listing goes live <strong> automatically</strong> the moment payment succeeds — this page updates by itself.
                 </p>
               ) : (
                 <p className="text-xs text-text-secondary mb-6 leading-relaxed">
-                  Admin will verify the EcoCash transaction from +{payerPhone.replace(/\D/g, '')} and activate the listing shortly.
+                  Admin will verify the EcoCash transaction from +{digitsOnly(payerPhone)} and activate the listing shortly.
                 </p>
               )}
 

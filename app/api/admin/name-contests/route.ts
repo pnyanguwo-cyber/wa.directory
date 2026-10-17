@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { adminGuard } from '@/lib/admin-auth'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
   const { data: contests } = await supabase
@@ -14,9 +17,7 @@ export async function GET() {
     .limit(100)
 
   const businessIds = [...new Set((contests || []).filter(c => c.business_id).map(c => c.business_id))]
-  const { data: businesses } = businessIds.length
-    ? await supabase.from('businesses').select('id, name, username, city').in('id', businessIds)
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, businessIds, 'id, name, username, city')
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
@@ -29,7 +30,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()

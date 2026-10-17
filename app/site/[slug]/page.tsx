@@ -4,7 +4,9 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import type { Business, BusinessItem } from '@/types'
-import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
+import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
+import { digitsOnly } from '@/lib/phone'
+import { formatPrice, getInitials } from '@/lib/utils'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -29,9 +31,6 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   }
 }
 
-function formatPrice(price: number): string {
-  return `$${Number(price || 0).toFixed(2)}`
-}
 
 export default async function BusinessSitePage({ params }: { params: { slug: string } }) {
   let { data: business } = await getSupabase()
@@ -73,15 +72,10 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
   const hero = business.site_hero || content.hero
   const services = business.site_services || content.services
-  const phoneClean = (business.phone || '').replace(/\D/g, '')
+  const phoneClean = digitsOnly(business.phone || '')
   const whatsappHref = business.whatsapp_link || (phoneClean ? `https://wa.me/${phoneClean}?text=${encodeURIComponent(`Hi ${business.name}, I found you through WA Directory.`)}` : business.whatsapp_link || '')
   const email = business.site_contact_email || ''
-  const initials = business.name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  const initials = getInitials(business.name)
   const itemList = (itemsRes.data as BusinessItem[]) || []
 
   // Per-section colours chosen by the business ('' / missing key = built-in default).
@@ -104,10 +98,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   const contactDark = contactBg ? isDark(contactBg) : false
 
   // Social profiles linked by the business (only set platforms are rendered).
-  const socialsRaw = (business.site_socials || {}) as Partial<Record<SocialKey, string>>
-  const socialLinks = SOCIAL_KEYS
-    .map(key => ({ key, url: (socialsRaw[key] || '').trim() }))
-    .filter(s => s.url.length > 0)
+  const socialLinks = getSocialLinks(business.site_socials)
 
   return (
     <div className="min-h-screen bg-surface">

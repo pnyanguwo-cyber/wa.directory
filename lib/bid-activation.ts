@@ -8,6 +8,7 @@
 
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 function monthEnd(): string {
   const now = new Date()
@@ -131,7 +132,7 @@ export async function notifyAdminTakeover(bid: {
       `Paynow ref: ${bid.paynow_reference || 'n/a'}`,
       'EcoCash confirmed automatically via Paynow.',
       '',
-      `Review: ${process.env.SITE_URL || 'https://wadirectory.co.zw'}/admin`,
+      `Review: ${SITE_URL}/admin`,
     ].join('\n')
   ).catch(() => {})
 }

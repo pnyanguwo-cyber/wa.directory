@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { isAdmin } from '@/lib/admin-auth'
+import { adminGuard } from '@/lib/admin-auth'
 import { getSupabase } from '@/lib/supabase-server'
+import { slugify } from '@/lib/utils'
 
 // Admin-only management of organizations (HQ + branches).
 // Actions:
@@ -11,7 +12,8 @@ import { getSupabase } from '@/lib/supabase-server'
 //   POST { action: 'delete' }  — delete the org (branches become standalone)
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
   const [orgsRes, branchesRes] = await Promise.all([
@@ -35,7 +37,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const body = await request.json().catch(() => ({}))
   const action = body?.action
@@ -56,10 +59,7 @@ export async function POST(request: Request) {
     if (!hq) return NextResponse.json({ error: 'HQ listing not found' }, { status: 404 })
     if (hq.org_id) return NextResponse.json({ error: 'That listing is already part of an organization' }, { status: 400 })
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
+    const slug = slugify(name)
 
     const { data: org, error } = await supabase
       .from('organizations')

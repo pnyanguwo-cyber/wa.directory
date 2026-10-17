@@ -6,6 +6,7 @@
 // in search instantly.
 
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -69,7 +70,7 @@ export async function activateListingSubscription(
       .maybeSingle()
 
     if (business?.phone) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       sendWhatsAppMessage(
         business.phone,
         [

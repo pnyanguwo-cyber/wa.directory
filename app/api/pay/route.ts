@@ -7,6 +7,8 @@ import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
 
 // Search for businesses by ID, username, phone, and name — all strategies run
 // and results are merged (deduped by id, priority order preserved), with each
@@ -44,7 +46,7 @@ async function searchBusinesses(supabase: ReturnType<typeof getSupabase>, query:
   const idQuery = isValidBusinessId(trimmed)
     ? supabase.from('businesses').select(SELECT).eq('business_id', trimmed).maybeSingle()
     : null
-  const digits = trimmed.replace(/\D/g, '')
+  const digits = digitsOnly(trimmed)
   const phoneQuery = digits.length >= 9
     ? supabase.from('businesses').select(SELECT).eq('phone', digits).limit(10)
     : null
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Business ID and payer phone are required' }, { status: 400 })
     }
 
-    const payerClean = payer_phone.replace(/\D/g, '')
+    const payerClean = digitsOnly(payer_phone)
     if (payerClean.length < 9) {
       return NextResponse.json({ error: 'Invalid payer phone number' }, { status: 400 })
     }
@@ -209,7 +211,7 @@ export async function POST(request: Request) {
 
     // Notify admin via WhatsApp (manual fallback signal — never blocks)
     if (process.env.ADMIN_WHATSAPP) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [

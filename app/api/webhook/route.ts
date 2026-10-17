@@ -7,10 +7,10 @@ import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
-
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
 // if WHATSAPP_APP_SECRET is unset, no inbound payload can be authenticated, so
 // forged messages (toll fraud, fake listings, fake ratings) are rejected.
@@ -305,7 +305,7 @@ async function sendSearchResults(from: string, text: string) {
     const chatLink = isVoiceBiz
       ? ''
       : b.phone
-        ? `https://wa.me/${String(b.phone).replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
+        ? `https://wa.me/${digitsOnly(b.phone)}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
         : `${SITE_URL}/go/${b.id}`
     lines.push(
       [

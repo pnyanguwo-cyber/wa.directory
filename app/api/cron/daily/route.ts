@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 function authorized(request: Request): boolean {
   if (request.headers.get('x-vercel-cron') === '1') return true
   const secret = process.env.CRON_SECRET
   return !!secret && request.headers.get('authorization') === `Bearer ${secret}`
 }
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 async function notifyExpiringSpots(supabase: ReturnType<typeof getSupabase>) {
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)

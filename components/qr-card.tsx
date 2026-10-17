@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { getInitials } from '@/lib/utils'
 
 export type QrColorTheme = 'emerald' | 'obsidian' | 'royal' | 'rose' | 'cyber' | 'classic' | 'transparent'
 export type FrameStyle = 'luxury-card' | 'minimal' | 'poster' | 'counter-stand' | 'raw-qr'
@@ -307,14 +308,7 @@ export default function QrCard({
   const theme = QR_THEMES[currentTheme]
   const displayName = businessName || title || 'Official WhatsApp Business'
   const displayLocation = location || 'Zimbabwe'
-  const initials =
-    displayName
-      .split(' ')
-      .filter(Boolean)
-      .map(w => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) || 'WA'
+  const initials = getInitials(displayName, 'WA')
 
   const fontClass =
     fontStyle === 'serif' ? 'font-serif' : fontStyle === 'mono' ? 'font-mono' : 'font-sans'

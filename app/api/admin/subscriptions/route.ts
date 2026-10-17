@@ -3,6 +3,9 @@ import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { activateListingSubscription } from '@/lib/listing-activation'
+import { adminGuard } from '@/lib/admin-auth'
+import { SITE_URL } from '@/lib/site-url'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date)
@@ -11,7 +14,8 @@ function addDays(date: Date, days: number): Date {
 }
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
 
@@ -23,9 +27,7 @@ export async function GET() {
     .limit(300)
 
   const ids = [...new Set((subs || []).map(s => s.business_id))]
-  const { data: businesses } = ids.length
-    ? await supabase.from('businesses').select('id, name, slug, phone').in('id', ids)
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, ids, 'id, name, slug, phone')
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
@@ -38,9 +40,7 @@ export async function GET() {
     .limit(300)
 
   const listingIds = [...new Set((listingSubs || []).map(s => s.business_id))]
-  const { data: listingBusinesses } = listingIds.length
-    ? await supabase.from('businesses').select('id, name, slug, phone, business_id, username, city, payment_status').in('id', listingIds)
-    : { data: [] }
+  const listingBusinesses = await fetchBusinessesByIds(supabase, listingIds, 'id, name, slug, phone, business_id, username, city, payment_status')
 
   const listingBizById = new Map((listingBusinesses || []).map(b => [b.id, b]))
 
@@ -54,7 +54,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -101,7 +102,7 @@ export async function POST(request: Request) {
               '',
               `Enjoy full statistics, conversations, bidding and competitor insights until ${expiresAt.toISOString().slice(0, 10)}.`,
               '',
-              'Open your portal to explore: ' + (process.env.SITE_URL || 'https://wadirectory.co.zw') + '/portal',
+              'Open your portal to explore: ' + (SITE_URL) + '/portal',
             ].join('\n')
           ).catch(() => {})
         }

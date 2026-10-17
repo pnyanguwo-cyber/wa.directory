@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
         `Business: *${business.name}*`,
         `Phone: ${business.phone}`,
         '',
-        `Confirm payment & activate: ${process.env.SITE_URL || 'https://wadirectory.co.zw'}/admin`,
+        `Confirm payment & activate: ${SITE_URL}/admin`,
       ].join('\n')
     ).catch(() => {})
   }

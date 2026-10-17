@@ -4,6 +4,7 @@ import { getActingPortalBusiness } from '@/lib/portal'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function POST(request: Request) {
   try {
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
 
     // Notify admin
     if (process.env.ADMIN_WHATSAPP) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       const planLabel = PLAN_CONFIG[plan].label
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
