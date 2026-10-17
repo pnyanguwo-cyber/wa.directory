@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { categories as staticCategories, matchCategory as staticMatch } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -13,7 +14,10 @@ export interface ApprovedArea {
   name: string
 }
 
-export async function getApprovedCategories(): Promise<ApprovedCategory[]> {
+// Categories/areas/cities change rarely — cache the DB reads for 5 minutes so
+// hot paths (webhook turns, listing/edit gates, directory pages) don't hit
+// Supabase on every request. Falls back to the bundled static data below.
+const fetchApprovedCategories = unstable_cache(async (): Promise<ApprovedCategory[]> => {
   try {
     const { data } = await getSupabase()
       .from('categories')
@@ -23,6 +27,10 @@ export async function getApprovedCategories(): Promise<ApprovedCategory[]> {
     if (data && data.length > 0) return data as ApprovedCategory[]
   } catch {}
   return staticCategories.map(c => ({ name: c.name, icon: c.icon, keywords: c.keywords }))
+}, ['approved-categories'], { revalidate: 300 })
+
+export async function getApprovedCategories(): Promise<ApprovedCategory[]> {
+  return fetchApprovedCategories()
 }
 
 
@@ -31,7 +39,7 @@ export async function getApprovedCategoryNames(): Promise<Set<string>> {
   return new Set(rows.map(r => r.name))
 }
 
-export async function getApprovedAreas(): Promise<ApprovedArea[]> {
+const fetchApprovedAreas = unstable_cache(async (): Promise<ApprovedArea[]> => {
   try {
     const { data } = await getSupabase()
       .from('areas')
@@ -41,6 +49,10 @@ export async function getApprovedAreas(): Promise<ApprovedArea[]> {
   } catch {
     return []
   }
+}, ['approved-areas'], { revalidate: 300 })
+
+export async function getApprovedAreas(): Promise<ApprovedArea[]> {
+  return fetchApprovedAreas()
 }
 
 
@@ -53,7 +65,7 @@ export interface ApprovedCity {
   name: string
 }
 
-export async function getApprovedCities(): Promise<ApprovedCity[]> {
+const fetchApprovedCities = unstable_cache(async (): Promise<ApprovedCity[]> => {
   const staticCityNames = new Set(zimbabweCities.map(c => c.name))
   try {
     const { data } = await getSupabase()
@@ -71,6 +83,10 @@ export async function getApprovedCities(): Promise<ApprovedCity[]> {
   } catch {
     return zimbabweCities.map(c => ({ name: c.name }))
   }
+}, ['approved-cities'], { revalidate: 300 })
+
+export async function getApprovedCities(): Promise<ApprovedCity[]> {
+  return fetchApprovedCities()
 }
 
 export function matchCategoryAgainst(input: string, approved: ApprovedCategory[]): string {

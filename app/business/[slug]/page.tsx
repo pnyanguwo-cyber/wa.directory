@@ -3,11 +3,11 @@ import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
 import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, callHref } from '@/components/contact'
 import ShareButton from '@/components/share-button'
-import QrCard from '@/components/qr-card'
 import StatsPing from '@/components/stats-ping'
 import TrackLink from '@/components/track-link'
 import BusinessCard from '@/components/business-card'
@@ -19,12 +19,15 @@ import type { Business } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio } from '@/lib/utils'
+import { cleanBio, getInitials } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
 import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
 import { SITE_URL } from '@/lib/site-url'
-import { getInitials } from '@/lib/utils'
 import { digitsOnly } from '@/lib/phone'
+
+// Lazy: qrcode.react + the QR studio stay out of the profile page's main chunk;
+// the QR renders lower on the page inside the contact grid.
+const QrCard = dynamic(() => import('@/components/qr-card'))
 
 import ReviewSection from '@/components/review-section'
 

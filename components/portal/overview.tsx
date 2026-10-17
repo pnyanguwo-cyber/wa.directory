@@ -2,8 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { STAT_EVENT_LABELS, STAT_EVENT_COLORS, getEventLabel, csvEscape } from '@/lib/stats-format'
-import QrCard from '@/components/qr-card'
+
+// Lazy: the QR studio bundle is only needed when the QR card panel is open.
+const QrCard = dynamic(() => import('@/components/qr-card'))
 
 type Range = '7' | '30' | '90' | 'all'
 

@@ -9,9 +9,8 @@ export default async function PortalPage({ searchParams }: { searchParams: { bra
   if (!session) redirect('/login')
   const business = session.business
 
-  const paid = await isPaidSubscriber(business.id)
-
-  const [rows, lifetime] = await Promise.all([
+  const [paid, rows, lifetime] = await Promise.all([
+    isPaidSubscriber(business.id),
     getDailyStats(business.id, 90),
     getLifetimeTotals(business.id),
   ])

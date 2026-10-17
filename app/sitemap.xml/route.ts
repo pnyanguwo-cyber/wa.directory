@@ -1,6 +1,11 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { SITE_URL } from '@/lib/site-url'
 
+// ISR: regenerate the sitemap once a day instead of hitting the businesses
+// table on every crawler request (the CDN-level max-age below still smooths
+// hourly fetches).
+export const revalidate = 86400
+
 export async function GET() {
   const siteUrl = SITE_URL
 

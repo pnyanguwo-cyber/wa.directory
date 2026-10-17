@@ -1,9 +1,12 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import lazy from 'next/dynamic'
 import { getSupabase } from '@/lib/supabase-server'
-import QrCard from '@/components/qr-card'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
+
+// Lazy: keeps qrcode.react out of the main chunk; the QR loads below it.
+const QrCard = lazy(() => import('@/components/qr-card'))
 
 export const dynamic = 'force-dynamic'
 
