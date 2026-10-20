@@ -104,7 +104,7 @@ export async function sendInteractiveList(
   buttonLabel = 'Choose a business'
 ) {
   const safeRows = rows.slice(0, 10).map(r => ({
-    row_id: clip(r.id, 200),
+    id: clip(r.id, 200),
     title: clip(r.title, 24),
     description: r.description ? clip(r.description, 72) : undefined,
   }))
@@ -120,7 +120,7 @@ export async function sendInteractiveList(
       },
     },
     clip(body, 1024),
-    `${safeRows.length} rows: ${safeRows.map(r => r.row_id).join(',')}`
+    `${safeRows.length} rows: ${safeRows.map(r => r.id).join(',')}`
   )
 }
 
