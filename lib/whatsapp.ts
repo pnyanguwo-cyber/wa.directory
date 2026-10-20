@@ -120,7 +120,7 @@ export async function sendInteractiveList(
       },
     },
     clip(body, 1024),
-    `${safeRows.length} rows: ${safeRows.map(r => r.id).join(',')}`
+    `${safeRows.length} rows: ${safeRows.map(r => `${r.id}: ${r.title}${r.description ? ` (${r.description})` : ''}`).join(' | ')}`
   )
 }
 

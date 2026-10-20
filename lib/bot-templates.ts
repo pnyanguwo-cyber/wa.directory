@@ -214,13 +214,29 @@ export function renderResultsListBody(
   ].join('\n')
 }
 
+/** Price segment for list rows: same logic as searchCardPriceLine, but rows
+ * are plain text (no markdown), so backticks are stripped. */
+function rowPriceLine(card: ResultCard): string {
+  if (card.item) {
+    return card.item.price != null
+      ? `${card.item.name}: ${monoUSD(card.item.price).replace(/`/g, '')}`
+      : `${card.item.name}: Price not listed`
+  }
+  const range = monoPrice(card.priceRange).replace(/`/g, '')
+  return range ? `💰 ${range}` : ''
+}
+
 /** Tappable rows for the results list (Ordering matches numbered replies). */
 export function resultRows(cards: ResultCard[]): InteractiveRow[] {
-  return cards.map((c, i) => ({
-    id: `sel_${i + 1}`,
-    title: `${i + 1}. ${c.name}`,
-    description: `📍 ${displayLocation(c.city, c.area)}${c.km != null ? ` ~${Math.round(c.km)} km` : ''}`,
-  }))
+  return cards.map((c, i) => {
+    const price = rowPriceLine(c)
+    const desc = `📍 ${displayLocation(c.city, c.area)}${c.km != null ? ` ~${Math.round(c.km)} km` : ''}${price ? ` · ${price}` : ''}`
+    return {
+      id: `sel_${i + 1}`,
+      title: `${i + 1}. ${c.name}`,
+      description: desc,
+    }
+  })
 }
 
 /** Main menu (opened by menu / hi / hello). Rows are by convention in route. */
