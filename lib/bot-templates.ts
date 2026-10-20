@@ -116,13 +116,28 @@ export interface DetailData {
   phone: string | null
   /** 'whatsapp' | 'voice' | null */
   phoneType: string | null
-  chatLink: string | null
 }
 
-function chatNowLink(name: string, phoneDigits: string, stored: string | null): string {
-  if (stored) return stored
-  const text = encodeURIComponent(`Hi ${name}, I found you on WA Directory`)
-  return `https://wa.me/${phoneDigits}?text=${text}`
+/** Readable phone display: +263 772 234 002. */
+export function formatPhone(raw: string | null | undefined): string {
+  const digits = (raw || '').replace(/[^0-9]/g, '')
+  if (!digits) return ''
+  const cc = digits.slice(0, 3)
+  const rest = digits.slice(3).replace(/(\d{3})(?=\d)/g, '$1 ')
+  return `+${cc} ${rest}`
+}
+
+/** The /go redirect: logs attribution + transcript marker, then opens the
+ * business WhatsApp chat with the prefill text. */
+export function chatCtaUrl(businessId: string, customerPhone: string): string {
+  const base = `${SITE_URL}/go/${businessId}`
+  const params = new URLSearchParams({ f: customerPhone || '', via: 'WhatsApp bot' })
+  return `${base}?${params.toString()}`
+}
+
+/** Body for the native chat button that follows the detail card. */
+export function renderChatPrompt(name: string): string {
+  return `Tap below to start a WhatsApp chat with ${name}.`
 }
 
 /**
@@ -157,11 +172,8 @@ export function renderDetailCard(b: DetailData): string {
   const hasDigits = digits.length > 0
   lines.push('')
   lines.push('*Contact*')
-  if (isVoice) {
-    lines.push(hasDigits ? `📞 +${digits} (voice line, no WhatsApp)` : `🔗 ${listingUrl(b)}`)
-  } else if (hasDigits) {
-    lines.push(`📞 +${digits}`)
-    lines.push(`💬 ${chatNowLink(b.name, digits, b.chatLink)}`)
+  if (hasDigits) {
+    lines.push(isVoice ? `📞 ${formatPhone(digits)} (voice line, no WhatsApp)` : `📞 ${formatPhone(digits)}`)
   } else {
     lines.push(`🔗 ${listingUrl(b)}`)
   }

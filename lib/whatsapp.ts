@@ -1,13 +1,13 @@
 const WHATSAPP_API = 'https://graph.facebook.com/v18.0'
 
-async function postToWhatsApp(phoneNumberId: string, accessToken: string, payload: unknown) {
+async function postToWhatsApp(phoneNumberId: string, accessToken: string, payload: unknown): Promise<boolean> {
   try {
     // Test mode: log instead of sending so message-flow changes can be
     // validated end-to-end without delivering anything to real users.
     if (process.env.WHATSAPP_DRY_RUN === '1') {
       const p = payload as { to?: string; text?: { body?: string } }
       console.log(`[whatsapp][dry-run] to=${p.to ?? '(n/a)'}\n${p.text?.body ?? JSON.stringify(payload)}`)
-      return
+      return true
     }
     const res = await fetch(`${WHATSAPP_API}/${phoneNumberId}/messages`, {
       method: 'POST',
@@ -21,9 +21,12 @@ async function postToWhatsApp(phoneNumberId: string, accessToken: string, payloa
     if (!res.ok) {
       const err = await res.text()
       console.error('[whatsapp] Send failed:', err)
+      return false
     }
+    return true
   } catch (err) {
     console.error('[whatsapp] Network error:', err)
+    return false
   }
 }
 
@@ -72,7 +75,36 @@ async function postInteractive(
   interactive: Record<string, unknown>,
   bodyForLog: string,
   summaryForLog: string
-) {
+): Promise<boolean> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return false
+  }
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(
+      `[whatsapp][dry-run][${kind}] to=${to} (${summaryForLog})\n${bodyForLog}`
+    )
+    return true
+  }
+
+  return postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: { type: kind, ...interactive },
+  })
+}
+
+/**
+ * CTA-URL message: body text with one native button that opens a link.
+ * Some WhatsApp Business Accounts don't support cta_url yet (recent rollout),
+ * so a failure degrades to plain text carrying the same (short) link.
+ */
+export async function sendCtaUrl(to: string, body: string, displayText: string, url: string) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
 
@@ -81,19 +113,36 @@ async function postInteractive(
     return
   }
 
+  const cleanBody = clip(body, 1024)
   if (process.env.WHATSAPP_DRY_RUN === '1') {
     console.log(
-      `[whatsapp][dry-run][${kind}] to=${to} (${summaryForLog})\n${bodyForLog}`
+      `[whatsapp][dry-run][cta_url] to=${to} [${clip(displayText, 25)}] → ${url}\n${cleanBody}`
     )
     return
   }
 
-  await postToWhatsApp(phoneNumberId, accessToken, {
+  const ok = await postToWhatsApp(phoneNumberId, accessToken, {
     messaging_product: 'whatsapp',
     to,
     type: 'interactive',
-    interactive: { type: kind, ...interactive },
+    interactive: {
+      type: 'cta_url',
+      body: { text: cleanBody },
+      action: {
+        name: 'cta_url',
+        parameters: { display_text: clip(displayText, 25), url },
+      },
+    },
   })
+
+  if (!ok) {
+    await postToWhatsApp(phoneNumberId, accessToken, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: `${cleanBody}\n\n💬 ${url}` },
+    })
+  }
 }
 
 /** List message: a body plus a button that opens tappable rows. */

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons } from '@/lib/whatsapp'
+import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl } from '@/lib/whatsapp'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -15,6 +15,8 @@ import {
   resultRows,
   renderMainMenuBody,
   renderDetailCard,
+  renderChatPrompt,
+  chatCtaUrl,
   renderEmptyResults,
   renderInvalidSelection,
   FALLBACK_HELP_LINES,
@@ -701,10 +703,10 @@ async function sendResultDetail(
   const supabase = getSupabase()
   const { data: row } = await supabase
     .from('businesses')
-    .select(`${BOT_BIZ_COLUMNS}, whatsapp_link`)
+    .select(BOT_BIZ_COLUMNS)
     .eq('id', stub.id)
     .maybeSingle()
-  const b = row as (BotBusinessRow & { whatsapp_link: string | null }) | null
+  const b = row as BotBusinessRow | null
 
   if (!b) {
     await sendWhatsAppMessage(from, 'That listing is not available anymore. Type your search again.')
@@ -733,7 +735,6 @@ async function sendResultDetail(
     items: ((itemRows as { name: string; price: number | null }[]) || []).slice(),
     phone: b.phone,
     phoneType: b.phone_type,
-    chatLink: b.whatsapp_link,
   })
   if (msg.length <= 1020) {
     await sendInteractiveButtons(from, msg, [
@@ -742,6 +743,18 @@ async function sendResultDetail(
     ])
   } else {
     await sendWhatsAppMessage(from, msg)
+  }
+
+  // Native "Chat on WhatsApp" button (cta_url): skipped for voice-only
+  // listings where there is nothing to chat with.
+  const digits = (b.phone || '').replace(/[^0-9]/g, '')
+  if (digits && b.phone_type !== 'voice') {
+    await sendCtaUrl(
+      from,
+      renderChatPrompt(b.name),
+      '💬 Chat on WhatsApp',
+      chatCtaUrl(b.id, from)
+    )
   }
 
   // Selection analytics — 'bot_select' requires migration 023 to be applied;
