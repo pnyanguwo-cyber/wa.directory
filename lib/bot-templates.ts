@@ -1,4 +1,5 @@
 import { SITE_URL } from './site-url'
+import type { InteractiveRow } from './whatsapp'
 
 // The literal phrase that ties a customer chat to our attribution message:
 // written by /go/[id] when a customer opens a business chat, and matched by
@@ -170,6 +171,8 @@ export function renderDetailCard(b: DetailData): string {
     '',
     '🔗 View full listing',
     listingUrl(b),
+    '',
+    'Reply *back* to go back, or send a new search.',
   ].join('\n')
 }
 
@@ -189,6 +192,58 @@ export function renderEmptyResults(term: string): string {
 
 export function renderInvalidSelection(count: number): string {
   return `That number is not on the list: reply *1* to *${count}* to view business details, or send a new search.`
+}
+
+// ── Interactive screens ───────────────────────────────────────────────────
+
+/** Body for the native list-message version of the results screen. */
+export function renderResultsListBody(
+  termDisplay: string,
+  cityLabel: string | null,
+  count: number
+): string {
+  const header = cityLabel
+    ? `*${capFirst(termDisplay)} near ${cityLabel}*`
+    : `*${capFirst(termDisplay)} (countrywide)*`
+  return [
+    header,
+    '',
+    `I found ${count} matching listing${count === 1 ? '' : 's'} in the current directory.`,
+    '',
+    'Tap a business below, reply with a number, or send a new search.',
+  ].join('\n')
+}
+
+/** Tappable rows for the results list (Ordering matches numbered replies). */
+export function resultRows(cards: ResultCard[]): InteractiveRow[] {
+  return cards.map((c, i) => ({
+    id: `sel_${i + 1}`,
+    title: `${i + 1}. ${c.name}`,
+    description: `📍 ${displayLocation(c.city, c.area)}${c.km != null ? ` ~${Math.round(c.km)} km` : ''}`,
+  }))
+}
+
+/** Main menu (opened by menu / hi / hello). Rows are by convention in route. */
+export function renderMainMenuBody(): string {
+  return [
+    '*WA Directory* 🤖',
+    'Find any product or service on WhatsApp, near you.',
+    '',
+    'Tap an option:',
+  ].join('\n')
+}
+
+/** Body for the nearby-towns results screen as a native list message. */
+export function renderNearbyListBody(
+  termDisplay: string,
+  city: string,
+  count: number
+): string {
+  return [
+    `No ${termDisplay} in *${city}*. Nearest:`,
+    '',
+    `Tap a business below to view details, or try *whole country*.`,
+  ].join('\n')
 }
 
 /** Safe outbound error note shown to customers (rare; nothing is exposed). */

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons } from '@/lib/whatsapp'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -10,9 +10,10 @@ import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import {
   CHAT_OPEN_MARKER,
-  monoUSD,
-  renderResultsMessage,
-  renderNearbyMessage,
+  renderResultsListBody,
+  renderNearbyListBody,
+  resultRows,
+  renderMainMenuBody,
   renderDetailCard,
   renderEmptyResults,
   renderInvalidSelection,
@@ -309,17 +310,30 @@ async function sendAskTown(from: string, term: string, again = false) {
   }
   const cities = zimbabweCities.slice(0, 8).map(c => c.name).join(', ')
   msg += `e.g. ${cities}…\n\nReply *whole country* to search everywhere.`
-  await sendWhatsAppMessage(from, msg)
+  if (msg.length <= 1020) {
+    await sendInteractiveButtons(from, msg, [
+      { id: 'whole_country', title: '🌍 Whole country' },
+      { id: 'cancel', title: '✖ Cancel' },
+    ])
+  } else {
+    await sendWhatsAppMessage(from, msg)
+  }
 }
 
 async function sendAskTerm(from: string, city: string | null) {
+  let msg: string
   if (city) {
-    await sendWhatsAppMessage(
-      from,
-      `What do you need in *${city}*?\n\n(e.g. plumber, bread, salon…)`
-    )
+    msg = `What do you need in *${city}*?\n\n(e.g. plumber, bread, salon…)`
   } else {
-    await sendWhatsAppMessage(from, 'What product or service are you looking for? (e.g. plumber, bread, salon…)')
+    msg = 'What product or service are you looking for? (e.g. plumber, bread, salon…)'
+  }
+  if (msg.length <= 1020) {
+    await sendInteractiveButtons(from, msg, [
+      { id: 'whole_country', title: '🌍 Whole country' },
+      { id: 'cancel', title: '✖ Cancel' },
+    ])
+  } else {
+    await sendWhatsAppMessage(from, msg)
   }
 }
 
@@ -385,6 +399,156 @@ function toCard(r: BotResult): ResultCard {
 // Search message rendering moved to lib/bot-templates.ts (Stage 2). The
 // toCard mapper above adapts tier results to the template's pruned shape.
 
+// ── Interactive routing helpers ───────────────────────────────────────────
+// Deterministic ids only: anything unknown falls back to a friendly prompt
+// with the session preserved, so a stale or forged payload cannot trap
+// users in a dead end.
+
+async function startFreshSearchPrompt(from: string) {
+  await clearSession(from)
+  await sendWhatsAppMessage(
+    from,
+    'Tell me what you need + your town, e.g. *"bread chinhoyi"* or *"plumber harare"*.'
+  )
+}
+
+async function sendMainMenu(from: string) {
+  await clearSession(from)
+  await sendInteractiveList(
+    from,
+    renderMainMenuBody(),
+    [
+      { id: 'menu_search', title: '🔍 Search' },
+      { id: 'menu_register', title: '🏪 Register' },
+      { id: 'menu_help', title: 'ℹ️ Help' },
+    ],
+    'Main menu'
+  )
+}
+
+async function startRegister(from: string) {
+  await saveSession(from, 'name', {})
+  await sendWhatsAppMessage(
+    from,
+    [
+      "Great, let's list your business on WA Directory! 🎉",
+      '',
+      'First, what is your *business name*?',
+      'Send *cancel* anytime to stop.',
+    ].join('\n')
+  )
+}
+
+// Where the search came from — makes ⬅ Back able to restore the last prompt.
+function originOf(prev: ChatSession | null): NonNullable<ChatSessionData['origin']> {
+  if (prev?.step === 'search_loc') return 'search_loc'
+  if (prev?.step === 'search_term') return 'search_term'
+  return 'free'
+}
+
+function pendingFields(prev: ChatSession | null): ChatSessionData {
+  return {
+    origin: originOf(prev),
+    pending_search_term: prev?.step === 'search_loc' ? prev.data.pending_search_term : undefined,
+    pending_city: prev?.step === 'search_term' ? prev.data.pending_city : undefined,
+  }
+}
+
+/**
+ * ⬅ Back handler. detail → list; list → the prompting question that preceded
+ * the search; prompt screens → the generic search prompt.
+ */
+async function goBack(from: string, session: ChatSession | null) {
+  const data = session?.data || {}
+  if (session?.step === 'browse') {
+    const cards = data.results || []
+    if (data.lastScreen === 'detail' && cards.length > 0) {
+      await saveSession(from, 'browse', { ...data, lastScreen: 'list' })
+      await sendInteractiveList(
+        from,
+        renderResultsListBody(data.lastTerm || 'search', data.lastCity ?? null, cards.length),
+        resultRows(cards),
+        'Choose a business'
+      )
+      return
+    }
+    if (data.origin === 'search_term') {
+      await saveSession(from, 'search_term', { pending_city: data.pending_city || '' })
+      await sendAskTerm(from, data.pending_city || null)
+      return
+    }
+    if (data.origin === 'search_loc') {
+      await saveSession(from, 'search_loc', { pending_search_term: data.pending_search_term || '' })
+      await sendAskTown(from, data.pending_search_term || '', false)
+      return
+    }
+  }
+  await startFreshSearchPrompt(from)
+}
+
+/** Single router for every interactive id the bot can send. */
+async function handleAction(from: string, session: ChatSession | null, action: string) {
+  const sel = action.match(/^sel_([1-9])$/)
+  if (sel) {
+    if (session?.step === 'browse') {
+      const cards = session.data.results || []
+      const pick = Number(sel[1])
+      if (pick > 0 && pick <= cards.length) {
+        await sendResultDetail(from, session, pick)
+      } else if (cards.length > 0) {
+        await sendWhatsAppMessage(from, renderInvalidSelection(cards.length))
+      } else {
+        await startFreshSearchPrompt(from)
+      }
+      return
+    }
+    await startFreshSearchPrompt(from)
+    return
+  }
+
+  switch (action) {
+    case 'back':
+      await goBack(from, session)
+      return
+    case 'new_search':
+    case 'menu_search':
+      await startFreshSearchPrompt(from)
+      return
+    case 'menu_register':
+      await clearSession(from)
+      await startRegister(from)
+      return
+    case 'menu_help':
+      await sendWhatsAppMessage(from, HELP_TEXT)
+      return
+    case 'cancel':
+      await clearSession(from)
+      await sendWhatsAppMessage(from, HELP_TEXT)
+      return
+    case 'whole_country':
+      if (session?.step === 'search_loc' && session.data.pending_search_term) {
+        await clearSession(from)
+        await runSearchAndReply(from, {
+          term: session.data.pending_search_term,
+          city: null,
+          nationwide: true,
+        })
+        return
+      }
+      if (session?.step === 'search_term') {
+        await sendAskTerm(from, null)
+        return
+      }
+      await startFreshSearchPrompt(from)
+      return
+    default:
+      await sendWhatsAppMessage(
+        from,
+        "That option isn't available. Reply *menu* for the main menu, or send a search."
+      )
+  }
+}
+
 async function runSearchAndReply(from: string, p: ParsedQuery) {
   const supabase = getSupabase()
   const term = p.term.toLowerCase()
@@ -449,11 +613,21 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
         .sort((x, y) => (x.km ?? 999999) - (y.km ?? 999999))
         .slice(0, 3)
       const termDisplay = p.term || category.toLowerCase()
-      const msg = renderNearbyMessage(termDisplay, city, results.map(toCard))
+      const cards = results.map(toCard)
+      const prev = await getSession(from)
       await saveSession(from, 'browse', {
-        results: results.map(r => ({ id: r.biz.id, name: r.biz.name })),
+        ...pendingFields(prev),
+        results: cards,
+        lastScreen: 'list',
+        lastTerm: termDisplay,
+        lastCity: city,
       })
-      await sendWhatsAppMessage(from, msg)
+      await sendInteractiveList(
+        from,
+        renderNearbyListBody(termDisplay, city, cards.length),
+        resultRows(cards),
+        'Choose a business'
+      )
       recordBotEvents(results.map(r => r.biz)).catch(() => {})
       return
     }
@@ -466,10 +640,21 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
 
   const top = results.slice(0, 5)
   const termDisplay = p.term || category.toLowerCase()
+  const prev = await getSession(from)
+  const cards = top.map(toCard)
   await saveSession(from, 'browse', {
-    results: top.map(r => ({ id: r.biz.id, name: r.biz.name })),
+    ...pendingFields(prev),
+    results: cards,
+    lastScreen: 'list',
+    lastTerm: termDisplay,
+    lastCity: city,
   })
-  await sendWhatsAppMessage(from, renderResultsMessage(termDisplay, city, top.map(toCard)))
+  await sendInteractiveList(
+    from,
+    renderResultsListBody(termDisplay, city, cards.length),
+    resultRows(cards),
+    'Choose a business'
+  )
   recordBotEvents(top.map(r => r.biz)).catch(() => {})
 }
 
@@ -536,6 +721,8 @@ async function sendResultDetail(
     .order('price', { ascending: true })
     .limit(3)
 
+  await saveSession(from, 'browse', { ...session.data, lastScreen: 'detail' })
+
   const msg = renderDetailCard({
     name: b.name,
     slug: b.slug,
@@ -548,7 +735,14 @@ async function sendResultDetail(
     phoneType: b.phone_type,
     chatLink: b.whatsapp_link,
   })
-  await sendWhatsAppMessage(from, msg)
+  if (msg.length <= 1020) {
+    await sendInteractiveButtons(from, msg, [
+      { id: 'back', title: '⬅ Back' },
+      { id: 'new_search', title: '↺ New search' },
+    ])
+  } else {
+    await sendWhatsAppMessage(from, msg)
+  }
 
   // Selection analytics — 'bot_select' requires migration 023 to be applied;
   // the insert is best-effort so nothing breaks before then.
@@ -856,17 +1050,28 @@ export async function POST(request: Request) {
 
     for (const message of value.messages) {
       const from = message.from
-      const text = message.text?.body?.trim() || ''
+      const text = (message.text?.body || '').trim()
+      // Native taps arrive as interactive replies carrying a deterministic id
+      // (set by our own list/button payloads). They route beside plain text.
+      const action =
+        message.interactive?.button_reply?.id ||
+        message.interactive?.list_reply?.id ||
+        ''
 
-      if (!text) continue
+      if (!text && !action) continue
 
-      console.log(`WhatsApp message from ${from}: ${text}`)
+      console.log(`WhatsApp message from ${from}: ${text || `[${action}]`}`)
 
       let session = await getSession(from)
       const lower = text.toLowerCase()
 
+      if (action) {
+        await handleAction(from, session, action)
+        continue
+      }
+
       if (session?.step === 'rating') {
-        if (lower === 'cancel' || lower === 'help') {
+        if (lower === 'cancel' || lower === 'help' || lower === 'back') {
           await clearSession(from)
           await sendWhatsAppMessage(from, HELP_TEXT)
           continue
@@ -881,6 +1086,10 @@ export async function POST(request: Request) {
         if (lower === 'cancel' || lower === 'help') {
           await clearSession(from)
           await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        if (lower === 'back' || lower === '0') {
+          await startFreshSearchPrompt(from)
           continue
         }
         const p = parseQuery(text)
@@ -911,6 +1120,10 @@ export async function POST(request: Request) {
         if (lower === 'cancel' || lower === 'help') {
           await clearSession(from)
           await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        if (lower === 'back' || lower === '0') {
+          await startFreshSearchPrompt(from)
           continue
         }
         const p = parseQuery(text)
@@ -946,6 +1159,10 @@ export async function POST(request: Request) {
           await sendWhatsAppMessage(from, HELP_TEXT)
           continue
         }
+        if (lower === 'back' || lower === '0') {
+          await goBack(from, session)
+          continue
+        }
         const results = session.data.results || []
         const m = text.trim().match(/^([1-9])(?![0-9])/)
         if (m && results.length > 0) {
@@ -976,20 +1193,16 @@ export async function POST(request: Request) {
       }
 
       if (/^(register|list me|list|sign me up|add my business)/.test(lower)) {
-        await saveSession(from, 'name', {})
-        await sendWhatsAppMessage(
-          from,
-          [
-            'Great, let\'s list your business on WA Directory! 🎉',
-            '',
-            'First, what is your *business name*?',
-            'Send *cancel* anytime to stop.',
-          ].join('\n')
-        )
+        await startRegister(from)
         continue
       }
 
-      if (lower === 'help' || lower === 'hi' || lower === 'hello') {
+      if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
+        await sendMainMenu(from)
+        continue
+      }
+
+      if (lower === 'help') {
         await sendWhatsAppMessage(from, HELP_TEXT)
         continue
       }

@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase-server'
+import type { ResultCard } from './bot-templates'
 
 export interface ChatSessionData {
   name?: string
@@ -10,6 +11,21 @@ export interface ChatSessionData {
   city?: string
   area?: string
   rating_pending?: string
+  // ── Bot search flow ────────────────────────────────────────────────
+  // Term typed by the user while waiting for a town ("Which town?").
+  pending_search_term?: string
+  // Town captured first, waiting for the search term ("What do you need in X?").
+  pending_city?: string
+  // Render-ready numbered results currently on screen (taps + typed picks
+  // route through the same order).
+  results?: ResultCard[]
+  // What the user is currently looking at, for ⬅ Back routing.
+  lastScreen?: 'list' | 'detail'
+  // Where the search originated, so Back can restore the previous prompt.
+  origin?: 'search_loc' | 'search_term' | 'free'
+  // Search label of the current results, for Back re-rendering.
+  lastTerm?: string
+  lastCity?: string | null
 }
 
 export interface ChatSession {
