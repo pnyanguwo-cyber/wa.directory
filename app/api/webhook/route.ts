@@ -5,10 +5,20 @@ import { getSession, saveSession, clearSession, type ChatSession, type ChatSessi
 import { getSupabase } from '@/lib/supabase-server'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
-import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
+import {
+  CHAT_OPEN_MARKER,
+  monoUSD,
+  renderResultsMessage,
+  renderNearbyMessage,
+  renderDetailCard,
+  renderEmptyResults,
+  renderInvalidSelection,
+  FALLBACK_HELP_LINES,
+  type ResultCard,
+} from '@/lib/bot-templates'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
@@ -32,19 +42,7 @@ const STOPWORDS = new Set([
   'some', 'get', 'any', 'have', 'just', 'like', 'of', 'on', 'my', 'your',
 ])
 
-const HELP_TEXT = [
-  '*WA Directory Bot* 🤖',
-  'Find any business on WhatsApp or list your own.',
-  '',
-  '*Search:* type what you need + town',
-  'e.g. "phone harare", "plumber in bulawayo", "i am looking for a salon"',
-  '',
-  '*List your business:* send *register*',
-  '*Cancel:* send *cancel*',
-  '*Help:* send *help*',
-  '',
-  `Website: ${SITE_URL}`,
-].join('\n')
+const HELP_TEXT = FALLBACK_HELP_LINES(SITE_URL).join('\n')
 
 function generateSlug(name: string): string {
   return (
@@ -54,13 +52,6 @@ function generateSlug(name: string): string {
       .replace(/(^-|-$)/g, '')
       .slice(0, 50) || 'business'
   )
-}
-
-function cleanQuery(text: string, cityName?: string): string {
-  let t = text.toLowerCase()
-  if (cityName) t = t.replace(new RegExp(cityName.toLowerCase(), 'g'), ' ')
-  const words = t.split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOPWORDS.has(w))
-  return words.join(' ')
 }
 
 function findCity(text: string): string | null {
@@ -79,6 +70,62 @@ function findArea(city: string, text: string): string | null {
     if (lower.includes(a.toLowerCase())) return a
   }
   return null
+}
+
+// ── Product / location search helpers ────────────────────────────────────
+
+interface BotBusinessRow {
+  id: string
+  name: string
+  slug: string | null
+  category: string[] | null
+  city: string | null
+  area: string | null
+  price_range: string | null
+  rating: number
+  review_count: number | null
+  phone: string | null
+  phone_type: string | null
+  lat: number | null
+  lng: number | null
+}
+
+const BOT_BIZ_COLUMNS =
+  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng'
+
+interface ParsedQuery {
+  term: string
+  city: string | null
+  nationwide: boolean
+}
+
+const NATIONWIDE_RE =
+  /(whole country|country ?wide|nation ?wide|everywhere|anywhere|all (of )?(the )?(cities|towns)|across zimbabwe|all over zimbabwe|\bzimbabwe\b)/i
+
+function parseQuery(text: string): ParsedQuery {
+  const nationwide = NATIONWIDE_RE.test(text)
+  const city = findCity(text)
+  let t = text.toLowerCase()
+  if (nationwide) t = t.replace(NATIONWIDE_RE, ' ')
+  if (city) t = t.replace(new RegExp(city.toLowerCase(), 'g'), ' ')
+  const words = t.split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOPWORDS.has(w))
+  return { term: words.join(' '), city, nationwide }
+}
+
+function haversineKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 6371
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)))
 }
 
 async function recordBotEvents(businesses: { id: string }[]) {
@@ -110,7 +157,7 @@ async function appendTranscript(from: string, text: string, fromBot = false) {
     const row = (logs || []).find(l => {
       const arr = Array.isArray(l.messages) ? l.messages : []
       const last = arr.length ? arr[arr.length - 1] : null
-      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes('opened your chat')
+      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes(CHAT_OPEN_MARKER)
     })
 
     if (!row) return
@@ -213,7 +260,7 @@ async function promptRatingIfDue(from: string): Promise<ChatSession | null> {
     const opened = (logs || []).find(l => {
       const arr = Array.isArray(l.messages) ? l.messages : []
       const last = arr.length ? arr[arr.length - 1] : null
-      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes('opened your chat')
+      return last && typeof last === 'object' && (last as any).from === 'bot' && String((last as any).text || '').includes(CHAT_OPEN_MARKER)
     })
 
     if (!opened?.business_id) return null
@@ -253,78 +300,263 @@ async function promptRatingIfDue(from: string): Promise<ChatSession | null> {
   }
 }
 
-async function sendSearchResults(from: string, text: string) {
-  const city = findCity(text)
-  const query = cleanQuery(text, city || undefined)
-  const approved = await getApprovedCategories()
-  const category = matchCategoryAgainst(query || text, approved)
-
-  const orFilters: string[] = []
-  if (query) {
-    orFilters.push(`name.ilike.%${query}%`)
-    orFilters.push(`bio.ilike.%${query}%`)
+async function sendAskTown(from: string, term: string, again = false) {
+  let msg = ''
+  if (!again && term) {
+    msg = `*${term}* 👍 Which town are you in?\n\n`
+  } else {
+    msg = `Which town are you in?\n\n`
   }
-  if (category !== 'Other') orFilters.push(`category.cs.{${category}}`)
+  const cities = zimbabweCities.slice(0, 8).map(c => c.name).join(', ')
+  msg += `e.g. ${cities}…\n\nReply *whole country* to search everywhere.`
+  await sendWhatsAppMessage(from, msg)
+}
+
+async function sendAskTerm(from: string, city: string | null) {
   if (city) {
-    orFilters.push(`city.ilike.%${city}%`)
-    orFilters.push(`location.ilike.%${city}%`)
-    orFilters.push(`area.ilike.%${city}%`)
-  }
-
-  const supabase = getSupabase()
-  let req = supabase.from('businesses').select(BUSINESS_CARD_COLUMNS).eq('verified', true)
-  if (orFilters.length > 0) req = req.or(orFilters.join(','))
-  req = req.order('rating', { ascending: false }).limit(5)
-
-  const { data: businesses } = await req
-
-  if (!businesses || businesses.length === 0) {
     await sendWhatsAppMessage(
       from,
-      [
-        `No results found for *"${text}"*.`,
-        '',
-        'Try: "find plumber in bulawayo", "phone harare", or "catering in chitungwiza".',
-        'Send *help* for tips.',
-      ].join('\n')
+      `What do you need in *${city}*?\n\n(e.g. plumber, bread, salon…)`
     )
+  } else {
+    await sendWhatsAppMessage(from, 'What product or service are you looking for? (e.g. plumber, bread, salon…)')
+  }
+}
+
+function bizMatchesQuery(
+  b: BotBusinessRow,
+  lowerTerm: string,
+  category: string
+): boolean {
+  const catHit = category !== 'Other' && (b.category || []).includes(category)
+  const nameHit = lowerTerm.length >= 3 && (b.name || '').toLowerCase().includes(lowerTerm)
+  return catHit || nameHit
+}
+
+interface BotResult {
+  biz: BotBusinessRow
+  item: { name: string; price: number | null } | null
+  km?: number
+}
+
+// Cheapest matching item per business (the product tier). Priced items win
+// ordering; a business that only lists an unpriced match stays visible via
+// the "Price not listed" card instead of vanishing from results.
+async function fetchMatchingItems(
+  bizIds: string[],
+  term: string
+): Promise<Map<string, { name: string; price: number | null }>> {
+  const out = new Map<string, { name: string; price: number | null }>()
+  if (bizIds.length === 0 || term.length < 3) return out
+  const { data } = await getSupabase()
+    .from('business_items')
+    .select('business_id, name, price')
+    .in('business_id', bizIds)
+    .eq('is_active', true)
+    .ilike('name', `%${term}%`)
+    .order('price', { ascending: true })
+    .limit(200)
+  for (const it of (data as { business_id: string; name: string; price: number | null }[]) || []) {
+    const cur = out.get(it.business_id)
+    if (it.price != null) {
+      if (!cur || cur.price == null || it.price < cur.price) {
+        out.set(it.business_id, { name: it.name, price: it.price })
+      }
+    } else if (!cur) {
+      out.set(it.business_id, { name: it.name, price: null })
+    }
+  }
+  return out
+}
+
+// Search-tier result → template card (pruned to what presentation needs).
+function toCard(r: BotResult): ResultCard {
+  return {
+    id: r.biz.id,
+    name: r.biz.name,
+    city: r.biz.city,
+    area: r.biz.area,
+    km: r.km ?? null,
+    item: r.item,
+    priceRange: r.biz.price_range,
+  }
+}
+
+// Search message rendering moved to lib/bot-templates.ts (Stage 2). The
+// toCard mapper above adapts tier results to the template's pruned shape.
+
+async function runSearchAndReply(from: string, p: ParsedQuery) {
+  const supabase = getSupabase()
+  const term = p.term.toLowerCase()
+  const city = p.nationwide ? null : p.city
+
+  // - Tier A: in-town category/name matches, best rated first
+  // - Tier B (when A misses): in-town named products with exact prices
+  // - Tier C (when the town has nothing): nearest towns, ranked by km
+  const scopeReq = supabase.from('businesses').select(BOT_BIZ_COLUMNS).eq('verified', true)
+  const { data: scopeRows } = city ? await scopeReq.eq('city', city) : await scopeReq
+  const scope = (scopeRows as BotBusinessRow[]) || []
+
+  const category = p.term ? matchCategoryAgainst(p.term, await getApprovedCategories()) : 'Other'
+
+  if (scope.length === 0 && city) {
+    // Requested town has no verified businesses at all — fall straight
+    // through to the nationwide experience so the user never dead-ends.
+    await runSearchAndReply(from, { ...p, city: null, nationwide: true })
     return
   }
 
-  recordBotEvents(businesses)
+  let results: BotResult[] = []
+  const candidates = scope.filter(b => bizMatchesQuery(b, term, category))
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    const itemMap = await fetchMatchingItems(candidates.map(b => b.id), term)
+    results = candidates.map(b => ({ biz: b, item: itemMap.get(b.id) || null }))
+  } else if (term.length >= 3) {
+    const itemMap = await fetchMatchingItems(scope.map(b => b.id), term)
+    const ownerIds = new Set(itemMap.keys())
+    results = scope.filter(b => ownerIds.has(b.id)).map(b => ({ biz: b, item: itemMap.get(b.id)! }))
+  }
 
-  const lines: string[] = []
-  lines.push(
-    `Top ${businesses.length} result${businesses.length > 1 ? 's' : ''} for *${query || category}*${city ? ` in *${city}*` : ''}:`
-  )
-  businesses.forEach((b, i) => {
-    const area = [b.area, b.city].filter(Boolean).join(', ') || b.location || 'Zimbabwe'
-    // Voice-only listings (landlines & hotlines) have no WhatsApp chat —
-    // point customers at the profile instead of a broken wa.me link.
-    const isVoiceBiz = b.phone_type === 'voice'
-    const chatLink = isVoiceBiz
-      ? ''
-      : b.phone
-        ? `https://wa.me/${digitsOnly(b.phone)}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`
-        : `${SITE_URL}/go/${b.id}`
-    lines.push(
-      [
-        `${i + 1}. *${b.name}*`,
-        `📍 ${area}`,
-        b.price_range ? `💰 ${b.price_range}` : '',
-        b.rating > 0 ? `⭐ ${b.rating.toFixed(1)} (${b.review_count || 0})` : '',
-        chatLink ? `👉 Chat: ${chatLink}` : '',
-        `🔗 ${SITE_URL}/business/${b.slug || b.id}`,
-      ]
-        .filter(Boolean)
-        .join('\n')
-    )
+  if (results.length === 0 && city) {
+    // Nearby tier: same matching in other towns, ranked by distance
+    const { data: allRows } = await supabase
+      .from('businesses')
+      .select(BOT_BIZ_COLUMNS)
+      .eq('verified', true)
+    const all = (allRows as BotBusinessRow[]) || []
+    const nearCandidates = all
+      .filter(b => b.city !== city && bizMatchesQuery(b, term, category))
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    if (nearCandidates.length > 0) {
+      const originRows = all.filter(b => b.city === city && b.lat != null && b.lng != null)
+      let origin: { lat: number; lng: number } | null = null
+      if (originRows.length > 0) {
+        origin = {
+          lat: originRows.reduce((s, b) => s + (b.lat || 0), 0) / originRows.length,
+          lng: originRows.reduce((s, b) => s + (b.lng || 0), 0) / originRows.length,
+        }
+      }
+      const itemMap = await fetchMatchingItems(nearCandidates.map(b => b.id), term)
+      results = nearCandidates
+        .map(b => ({
+          biz: b,
+          item: itemMap.get(b.id) || null,
+          km: origin && b.lat != null && b.lng != null
+            ? haversineKm(origin.lat, origin.lng, b.lat, b.lng)
+            : undefined,
+        }))
+        .sort((x, y) => (x.km ?? 999999) - (y.km ?? 999999))
+        .slice(0, 3)
+      const termDisplay = p.term || category.toLowerCase()
+      const msg = renderNearbyMessage(termDisplay, city, results.map(toCard))
+      await saveSession(from, 'browse', {
+        results: results.map(r => ({ id: r.biz.id, name: r.biz.name })),
+      })
+      await sendWhatsAppMessage(from, msg)
+      recordBotEvents(results.map(r => r.biz)).catch(() => {})
+      return
+    }
+  }
+
+  if (results.length === 0) {
+    await sendWhatsAppMessage(from, renderEmptyResults(p.term || category.toLowerCase()))
+    return
+  }
+
+  const top = results.slice(0, 5)
+  const termDisplay = p.term || category.toLowerCase()
+  await saveSession(from, 'browse', {
+    results: top.map(r => ({ id: r.biz.id, name: r.biz.name })),
   })
-  lines.push('', 'Send *help* for more options.')
+  await sendWhatsAppMessage(from, renderResultsMessage(termDisplay, city, top.map(toCard)))
+  recordBotEvents(top.map(r => r.biz)).catch(() => {})
+}
 
-  const resultMessage = lines.join('\n\n')
-  await sendWhatsAppMessage(from, resultMessage)
-  appendTranscript(from, resultMessage, true)
+async function dispatchSearch(from: string, text: string) {
+  const p = parseQuery(text)
+
+  if (!p.term && !p.nationwide && p.city) {
+    // Town only — ask what they need in that town
+    await saveSession(from, 'search_term', { pending_city: p.city })
+    await sendAskTerm(from, p.city)
+    return
+  }
+
+  if (!p.term) {
+    if (p.nationwide) {
+      await saveSession(from, 'search_term', { pending_city: '' })
+      await sendAskTerm(from, null)
+    } else {
+      await sendWhatsAppMessage(
+        from,
+        'Tell me what you need + your town, e.g. *"bread chinhoyi"* or *"plumber harare"*.'
+      )
+    }
+    return
+  }
+
+  if (!p.nationwide && !p.city) {
+    // Product/service only — ask for the town first
+    await saveSession(from, 'search_loc', { pending_search_term: p.term })
+    await sendAskTown(from, p.term)
+    return
+  }
+
+  await runSearchAndReply(from, p)
+}
+
+async function sendResultDetail(
+  from: string,
+  session: ChatSession,
+  pick: number
+) {
+  const results = session.data.results || []
+  const stub = results[pick - 1]
+  const supabase = getSupabase()
+  const { data: row } = await supabase
+    .from('businesses')
+    .select(`${BOT_BIZ_COLUMNS}, whatsapp_link`)
+    .eq('id', stub.id)
+    .maybeSingle()
+  const b = row as (BotBusinessRow & { whatsapp_link: string | null }) | null
+
+  if (!b) {
+    await sendWhatsAppMessage(from, 'That listing is not available anymore. Type your search again.')
+    await clearSession(from)
+    return
+  }
+
+  const { data: itemRows } = await supabase
+    .from('business_items')
+    .select('name, price')
+    .eq('business_id', b.id)
+    .eq('is_active', true)
+    .not('price', 'is', null)
+    .order('price', { ascending: true })
+    .limit(3)
+
+  const msg = renderDetailCard({
+    name: b.name,
+    slug: b.slug,
+    city: b.city,
+    area: b.area,
+    rating: b.rating,
+    reviewCount: b.review_count,
+    items: ((itemRows as { name: string; price: number | null }[]) || []).slice(),
+    phone: b.phone,
+    phoneType: b.phone_type,
+    chatLink: b.whatsapp_link,
+  })
+  await sendWhatsAppMessage(from, msg)
+
+  // Selection analytics — 'bot_select' requires migration 023 to be applied;
+  // the insert is best-effort so nothing breaks before then.
+  try {
+    await supabase
+      .from('stats_events')
+      .insert({ business_id: b.id, type: 'bot_select', category: '', city: b.city || '' })
+  } catch {}
 }
 
 async function publishBusiness(from: string, session: ChatSession) {
@@ -630,7 +862,7 @@ export async function POST(request: Request) {
 
       console.log(`WhatsApp message from ${from}: ${text}`)
 
-      const session = await getSession(from)
+      let session = await getSession(from)
       const lower = text.toLowerCase()
 
       if (session?.step === 'rating') {
@@ -640,6 +872,95 @@ export async function POST(request: Request) {
           continue
         }
         await handleRatingReply(from, session, text)
+        continue
+      }
+
+      // ── Bot search conversation steps ─────────────────────────────────
+      if (session?.step === 'search_loc') {
+        // Waiting for the user's town (term already captured)
+        if (lower === 'cancel' || lower === 'help') {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        const p = parseQuery(text)
+        if (p.nationwide || p.city) {
+          const pendingTerm = session.data.pending_search_term || ''
+          if (p.term) {
+            // The reply was a full query — honor the latest intent
+            await runSearchAndReply(from, { term: p.term, city: p.city ?? null, nationwide: p.nationwide })
+          } else if (pendingTerm) {
+            await runSearchAndReply(from, {
+              term: pendingTerm,
+              city: p.city ?? null,
+              nationwide: p.nationwide,
+            })
+          } else {
+            await saveSession(from, 'search_term', { pending_city: p.city || '' })
+            await sendAskTerm(from, p.city)
+          }
+          continue
+        }
+        // Not a town — re-ask
+        await sendAskTown(from, session.data.pending_search_term || '', true)
+        continue
+      }
+
+      if (session?.step === 'search_term') {
+        // Waiting for the search term (town already captured)
+        if (lower === 'cancel' || lower === 'help') {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        const p = parseQuery(text)
+        const pendingCity = session.data.pending_city || ''
+        if (p.term) {
+          const city = p.nationwide ? null : p.city ?? (pendingCity || null)
+          await runSearchAndReply(from, {
+            term: p.term,
+            city,
+            nationwide: p.nationwide || (!city && !pendingCity),
+          })
+          continue
+        }
+        if (p.nationwide) {
+          await saveSession(from, 'search_term', { pending_city: '' })
+          await sendAskTerm(from, null)
+          continue
+        }
+        if (p.city) {
+          // They typed another town — update and keep asking for the term
+          await saveSession(from, 'search_term', { pending_city: p.city })
+          await sendAskTerm(from, p.city)
+          continue
+        }
+        await sendAskTerm(from, pendingCity || null)
+        continue
+      }
+
+      if (session?.step === 'browse') {
+        // Numbered results are on screen; "1"-"5" opens the contact card
+        if (lower === 'cancel' || lower === 'help') {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+        const results = session.data.results || []
+        const m = text.trim().match(/^([1-9])(?![0-9])/)
+        if (m && results.length > 0) {
+          const pick = Number(m[1])
+          if (pick <= results.length) {
+            await sendResultDetail(from, session, pick)
+            continue
+          }
+          await sendWhatsAppMessage(from, renderInvalidSelection(results.length))
+          continue
+        }
+        // Anything else is a fresh search — drop the list and re-dispatch
+        await clearSession(from)
+        session = null
+        await dispatchSearch(from, text)
         continue
       }
 
@@ -679,7 +1000,7 @@ export async function POST(request: Request) {
         continue
       }
 
-      await sendSearchResults(from, text)
+      await dispatchSearch(from, text)
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
