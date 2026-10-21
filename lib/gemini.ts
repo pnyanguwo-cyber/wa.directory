@@ -6,23 +6,29 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 // Single Gemini entry point: posts one prompt, returns the trimmed first
 // candidate text — or null when the call fails or the response is empty.
 // Callers own their fallback copy and caching.
-export async function callGemini(prompt: string): Promise<string | null> {
+const GEMINI_TIMEOUT = 8_000
+
+async function fetchGemini(body: unknown): Promise<string | null> {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT)
   try {
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: prompt }],
-        }],
-      }),
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
     })
-
     const data = await res.json()
     return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
   } catch {
     return null
+  } finally {
+    clearTimeout(timer)
   }
+}
+
+export async function callGemini(prompt: string): Promise<string | null> {
+  return fetchGemini({ contents: [{ parts: [{ text: prompt }] }] })
 }
 
 // Multimodal twin of callGemini for voice notes and photos: text and
@@ -34,18 +40,7 @@ export interface GeminiPart {
 }
 
 export async function callGeminiParts(parts: GeminiPart[]): Promise<string | null> {
-  try {
-    const res = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }] }),
-    })
-
-    const data = await res.json()
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-  } catch {
-    return null
-  }
+  return fetchGemini({ contents: [{ parts }] })
 }
 
 const SEO_BLURB_FALLBACK = (category: string, location: string) =>

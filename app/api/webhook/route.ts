@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl, markRead, sendLocationRequest } from '@/lib/whatsapp'
+import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl, markRead, sendLocationRequest, sendReaction } from '@/lib/whatsapp'
 import { orderSearchResults } from '@/lib/ranking'
+import { expandSearchQuery } from '@/lib/gemini'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
@@ -509,7 +510,7 @@ async function sendFormUpdate(from: string, state: ListingFormState, tailNote?: 
 
 // Tap on ↗ Publish: the webapp's mandatory set (name + approved category +
 // valid phone) gates submission; anything missing is listed for the user.
-async function tryPublishForm(from: string, session: ChatSession) {
+async function tryPublishForm(from: string, session: ChatSession, msgId?: string) {
   const state = session.data.list || {}
   const missing = missingRequired(state)
   if (missing.length > 0) {
@@ -535,7 +536,7 @@ async function tryPublishForm(from: string, session: ChatSession) {
     whatsapp_username: state.username,
     description: state.description,
   }
-  await publishBusiness(from, { phone: from, step: 'confirm', data: merged })
+  await publishBusiness(from, { phone: from, step: 'confirm', data: merged }, msgId)
   await clearSession(from)
 }
 
@@ -1058,7 +1059,7 @@ async function goBack(from: string, session: ChatSession | null) {
 }
 
 /** Single router for every interactive id the bot can send. */
-async function handleAction(from: string, session: ChatSession | null, action: string) {
+async function handleAction(from: string, session: ChatSession | null, action: string, msgId?: string) {
   const sel = action.match(/^sel_([1-9][0-9]?)$/)
   if (sel) {
     if (session?.step === 'browse') {
@@ -1132,7 +1133,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       return
     case 'list_publish': {
       if (session?.step === 'list_form') {
-        await tryPublishForm(from, session)
+        await tryPublishForm(from, session, msgId)
       } else {
         await startRegister(from)
       }
@@ -1251,7 +1252,10 @@ async function runSearchAndReply(
   if (scope.length === 0 && city) {
     // Requested town has no verified businesses at all — fall straight
     // through to the nationwide experience so the user never dead-ends.
-    await runSearchAndReply(from, { ...p, city: null, nationwide: true })
+    await runSearchAndReply(from, { ...p, city: null, nationwide: true }, {
+      ...opts,
+      nationwideTried: true,
+    })
     return
   }
 
@@ -1382,7 +1386,45 @@ async function runSearchAndReply(
   }
 
   if (results.length === 0) {
-    await sendWhatsAppMessage(from, renderEmptyResults(p.term || category.toLowerCase()))
+    const missTerm = p.term || category.toLowerCase()
+    if (missTerm.length >= 3) {
+      // Slow path ahead (AI expansion / fallback search) — flip the typing
+      // indicator on the original message first.
+      if (opts?.replyTo) await markRead(opts.replyTo, true).catch(() => {})
+      // Rescue 1 — AI alias sweep: Gemini suggests synonym/category terms;
+      // the first alias that matches renders the real search screen.
+      if (!opts?.aliased) {
+        const aliases = (await expandSearchQuery(missTerm))
+          .map(s => s.trim().toLowerCase())
+          .filter(s => s && s !== missTerm.toLowerCase())
+        for (const alias of aliases.slice(0, 3)) {
+          const aliasResults = scope.filter(b =>
+            bizMatchesQuery(b, alias, category)
+          )
+          if (aliasResults.length > 0) {
+            await runSearchAndReply(from, {
+              term: alias,
+              city: p.city,
+              nationwide: p.nationwide,
+              origin: p.origin,
+            }, { ...opts, aliased: true })
+            return
+          }
+        }
+      }
+      // Rescue 2 — no matches in the user's town (or near-them point):
+      // repeat the sweep countrywide so they never dead-end.
+      if ((p.city || p.origin) && !opts?.nationwideTried) {
+        await runSearchAndReply(from, {
+          term: p.term,
+          city: null,
+          nationwide: true,
+          origin: null,
+        }, { replyTo: opts?.replyTo, aliased: opts?.aliased, nationwideTried: true })
+        return
+      }
+    }
+    await sendWhatsAppMessage(from, renderEmptyResults(missTerm), opts?.replyTo)
     return
   }
 
@@ -1525,7 +1567,7 @@ async function sendResultDetail(
   } catch {}
 }
 
-async function publishBusiness(from: string, session: ChatSession) {
+async function publishBusiness(from: string, session: ChatSession, msgId?: string) {
   const data = session.data
   const name = data.name?.trim() || ''
   const description = data.description?.trim() || ''
@@ -1602,6 +1644,10 @@ async function publishBusiness(from: string, session: ChatSession) {
     }
   }
 
+  // ✅ React to the tap the user sent — a lightweight thumbs-up confirmation
+  // that the form truly landed before the long status message arrives.
+  if (msgId) await sendReaction(from, msgId, '✅').catch(() => {})
+
   await sendWhatsAppMessage(
     from,
     [
@@ -1644,7 +1690,7 @@ async function publishBusiness(from: string, session: ChatSession) {
   }
 }
 
-async function continueRegistration(from: string, session: ChatSession, text: string) {
+async function continueRegistration(from: string, session: ChatSession, text: string, msgId?: string) {
   const data = session.data
   const t = text.trim()
 
@@ -1766,7 +1812,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
 
     case 'confirm': {
       if (/^(yes|y|publish|confirm|go)/i.test(t)) {
-        await publishBusiness(from, session)
+        await publishBusiness(from, session, msgId)
         await clearSession(from)
       } else if (/^(no|n|cancel)/i.test(t)) {
         await clearSession(from)
@@ -1907,7 +1953,7 @@ export async function POST(request: Request) {
         let session = contactSession
 
         if (action) {
-          await handleAction(from, session, action)
+          await handleAction(from, session, action, msgId)
           continue
         }
 
@@ -2150,7 +2196,7 @@ export async function POST(request: Request) {
         }
 
         if (session?.step && lower !== 'cancel' && lower !== 'help') {
-          await continueRegistration(from, session, text)
+          await continueRegistration(from, session, text, msgId)
           continue
         }
 
