@@ -5,6 +5,7 @@ import { orderSearchResults } from '@/lib/ranking'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
+import { upsertBotContact, markBotContactOptOut, sweepIdleNudges } from '@/lib/bot-contacts'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
@@ -240,9 +241,18 @@ async function handleRatingReply(from: string, session: ChatSession | null, text
   const rating = Number(match[1])
   const comment = text.trim().slice(match[0].length).trim().replace(/^[-–—:.]\s*/, '')
 
+  // Portal review display gets richer when we know the customer's name
+  // (captured from their WhatsApp profile during conversations).
+  const { data: contact } = await supabase
+    .from('bot_contacts')
+    .select('name')
+    .eq('phone', from)
+    .maybeSingle()
+
   await supabase.from('ratings').insert({
     business_id: business.id,
     customer_phone: from,
+    name: (contact?.name || '').slice(0, 120),
     rating,
     comment: comment.slice(0, 500),
   })
@@ -1179,6 +1189,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'ok' }, { status: 200 })
     }
 
+    // Piggyback the idle-nudge sweep on inbound traffic (serverless can't
+    // self-wake). Best-effort, never blocks message handling.
+    if (value.messages.some((m: { id?: string }) => typeof m.id === 'string' && m.id)) {
+      sweepIdleNudges(async (phone, body) => {
+        await sendWhatsAppMessage(phone, body)
+      })
+    }
+
     for (const message of value.messages) {
       // Meta redelivers webhooks it has not acknowledged in time; record each
       // message id and skip duplicates. Fail-open on DB trouble: a rare
@@ -1199,6 +1217,7 @@ export async function POST(request: Request) {
       const from = typeof message.from === 'string' ? message.from : ''
       try {
         const text = (message.text?.body || '').trim()
+        const lower = text.toLowerCase()
         // Native taps arrive as interactive replies carrying a deterministic id
         // (set by our own list/button payloads). They route beside plain text.
         const action =
@@ -1210,8 +1229,18 @@ export async function POST(request: Request) {
 
         console.log(`WhatsApp message from ${from}: ${text || `[${action}]`}`)
 
-        let session = await getSession(from)
-        const lower = text.toLowerCase()
+        // Customer base: one row per number, profile name when Meta send it.
+        const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
+        let contactSession = await getSession(from)
+        if (lower === 'stop') {
+          await markBotContactOptOut(from)
+          await clearSession(from)
+          await sendWhatsAppMessage(from, 'Okay 👌 You will not hear from us again. Reply *help* if you ever want to browse again.')
+          continue
+        } else {
+          await upsertBotContact(from, waName, contactSession?.step || '')
+        }
+        let session = contactSession
 
         if (action) {
           await handleAction(from, session, action)

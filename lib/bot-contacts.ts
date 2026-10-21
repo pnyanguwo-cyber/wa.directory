@@ -1,0 +1,99 @@
+import { getSupabase } from '@/lib/supabase-server'
+
+// One row per WhatsApp number that talks to the bot (customer base).
+// Best-effort on every call: contact tracking must never break a bot reply.
+export async function upsertBotContact(phone: string, name: string, step: string) {
+  if (!phone) return
+  try {
+    await getSupabase()
+      .from('bot_contacts')
+      .upsert(
+        {
+          phone,
+          name: (name || '').slice(0, 120),
+          last_seen: new Date().toISOString(),
+          last_step: step || '',
+          message_count: 1,
+          // A fresh message re-arms the idle nudge for this session.
+          nudge_sent_at: null,
+        },
+        { onConflict: 'phone', ignoreDuplicates: false }
+      )
+  } catch {
+    // Ignore — the bot conversation continues either way.
+  }
+}
+
+export const IDLE_NUDGE_MINUTES = 30
+export const NUDGE_WINDOW_HOURS = 24
+
+// `stop` opts a number out of proactive messages (rating prompts still go out
+// because they reference a chat the user initiated).
+export async function markBotContactOptOut(phone: string) {
+  try {
+    await getSupabase()
+      .from('bot_contacts')
+      .upsert({ phone, opted_out: true }, { onConflict: 'phone' })
+  } catch {
+    // Ignore — user flow continues either way.
+  }
+}
+
+// Piggyback sweep: every inbound message checks a few contacts that went
+// idle 30+ minutes ago and nudges them once (app link + channel link).
+// Vercel Hobby crons only fire daily, so a timer job is not an option.
+export async function sweepIdleNudges(
+  sendMessage: (phone: string, body: string) => Promise<unknown>
+): Promise<void> {
+  try {
+    const since = new Date(Date.now() - NUDGE_WINDOW_HOURS * 3600000).toISOString()
+    const { data: skipped } = await getSupabase()
+      .from('bot_contacts')
+      .select('phone')
+      .not('nudge_sent_at', 'is', null)
+      .gt('last_seen', since)
+
+    const skip = new Set((skipped || []).map(c => c.phone))
+
+    // Every inbound message resets nudge_sent_at to null, so "never nudged in
+    // this session" = "nudge_sent_at is null"; last_seen > 24h is always
+    // outside Meta's session window and filtered out.
+    const quiet = new Date(Date.now() - IDLE_NUDGE_MINUTES * 60000).toISOString()
+    const { data: due } = await getSupabase()
+      .from('bot_contacts')
+      .select('phone, last_step')
+      .is('nudge_sent_at', null)
+      .eq('opted_out', false)
+      .lt('last_seen', quiet)
+      .gt('last_seen', since)
+      .order('last_seen', { ascending: false })
+      .limit(8)
+
+    for (const c of (due || []).slice(0, 5)) {
+      if (skip.has(c.phone)) continue
+      if (c.last_step === 'rating') continue
+      await getSupabase()
+        .from('bot_contacts')
+        .update({ nudge_sent_at: new Date().toISOString() })
+        .eq('phone', c.phone)
+      await sendMessage(c.phone, idleNudgeBody())
+    }
+  } catch {
+    // Never disturb the interacting customer.
+  }
+}
+
+const CHANNEL_LINK = process.env.CHANNEL_LINK || ''
+const APP_LINK = process.env.SITE_URL || 'https://wadirectory.co.zw'
+
+export function idleNudgeBody(): string {
+  return [
+    '👋 Still there? Find more businesses on the web app, all of Zimbabwe:',
+    APP_LINK,
+    '',
+    'Try things like *mile stones*, *vet chitungwiza*, *pool builder*, or a business name (*bakehouse*).',
+    '',
+    'For news, new listings and offers follow our channel:',
+    CHANNEL_LINK,
+  ].filter(Boolean).join('\n')
+}
