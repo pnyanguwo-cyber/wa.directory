@@ -30,7 +30,7 @@ async function postToWhatsApp(phoneNumberId: string, accessToken: string, payloa
   }
 }
 
-export async function sendWhatsAppMessage(to: string, message: string) {
+export async function sendWhatsAppMessage(to: string, message: string, replyTo?: string) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
 
@@ -44,6 +44,94 @@ export async function sendWhatsAppMessage(to: string, message: string) {
     to,
     type: 'text',
     text: { body: message },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
+  })
+}
+
+// Mark an inbound message as read (blue ticks), optionally lighting the
+// composing indicator for ~30s or until the next outgoing message. Pure
+// best-effort: failures are swallowed — never let cosmetics break a reply.
+export async function markRead(messageId: string, typing = false) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!messageId || !phoneNumberId || !accessToken) return
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][read${typing ? '+typing' : ''}] id=${messageId}`)
+    return
+  }
+
+  try {
+    const res = await fetch(`${WHATSAPP_API}/${phoneNumberId}/messages`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
+        ...(typing ? { typing_indicator: { type: 'text' } } : {}),
+      }),
+    })
+    if (!res.ok) return
+  } catch {
+    // Cosmetic only.
+  }
+}
+
+// Native "share your location" prompt: one interactive message with the
+// phone's location button. Falls back to a plain-text ask when the
+// business account doesn't support the template type.
+export async function sendLocationRequest(to: string, body: string) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return
+  }
+
+  const cleanBody = clip(body, 1024)
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][location_request] to=${to}\n${cleanBody}`)
+    return
+  }
+
+  const ok = await postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'location_request_message',
+      body: { text: cleanBody, type: 'text' },
+      action: { name: 'send_location' },
+    },
+  })
+
+  if (!ok) {
+    await postToWhatsApp(phoneNumberId, accessToken, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: `${cleanBody}\n\n(Please send your location, or type your town — e.g. *harare*.)` },
+    })
+  }
+}
+
+// React to one of the user's own messages (best-effort cosmetics).
+export async function sendReaction(to: string, messageId: string, emoji: string) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!messageId || !phoneNumberId || !accessToken) return
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][reaction] to=${to} ${emoji} on ${messageId}`)
+    return
+  }
+
+  await postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'reaction',
+    reaction: { message_id: messageId, emoji },
   })
 }
 
@@ -74,7 +162,8 @@ async function postInteractive(
   kind: 'list' | 'button',
   interactive: Record<string, unknown>,
   bodyForLog: string,
-  summaryForLog: string
+  summaryForLog: string,
+  replyTo?: string
 ): Promise<boolean> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
@@ -96,6 +185,7 @@ async function postInteractive(
     to,
     type: 'interactive',
     interactive: { type: kind, ...interactive },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
   })
 }
 
@@ -150,7 +240,8 @@ export async function sendInteractiveList(
   to: string,
   body: string,
   rows: InteractiveRow[],
-  buttonLabel = 'Choose a business'
+  buttonLabel = 'Choose a business',
+  replyTo?: string
 ) {
   const safeRows = rows.slice(0, 10).map(r => ({
     id: clip(r.id, 200),
@@ -169,7 +260,8 @@ export async function sendInteractiveList(
       },
     },
     clip(body, 1024),
-    `${safeRows.length} rows: ${safeRows.map(r => `${r.id}: ${r.title}${r.description ? ` (${r.description})` : ''}`).join(' | ')}`
+    `${safeRows.length} rows: ${safeRows.map(r => `${r.id}: ${r.title}${r.description ? ` (${r.description})` : ''}`).join(' | ')}`,
+    replyTo
   )
 }
 
@@ -177,7 +269,8 @@ export async function sendInteractiveList(
 export async function sendInteractiveButtons(
   to: string,
   body: string,
-  buttons: InteractiveButton[]
+  buttons: InteractiveButton[],
+  replyTo?: string
 ) {
   const safeButtons = buttons.slice(0, 3).map(b => ({
     type: 'reply' as const,
@@ -197,7 +290,8 @@ export async function sendInteractiveButtons(
       action: { buttons: safeButtons },
     },
     clip(body, 1024),
-    safeButtons.map(b => b.reply.id).join(',')
+    safeButtons.map(b => b.reply.id).join(','),
+    replyTo
   )
 }
 

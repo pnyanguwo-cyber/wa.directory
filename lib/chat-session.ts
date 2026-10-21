@@ -27,6 +27,10 @@ export interface ChatSessionData {
   pending_search_term?: string
   // Town captured first, waiting for the search term ("What do you need in X?").
   pending_city?: string
+  // Shared location ("Near me" flow): the user's point, used as the origin
+  // for km-ranked nearby searches.
+  origin_lat?: number
+  origin_lng?: number
   // Render-ready numbered results currently on screen (taps + typed picks
   // route through the same order).
   results?: ResultCard[]

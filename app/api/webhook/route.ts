@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl } from '@/lib/whatsapp'
+import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl, markRead, sendLocationRequest } from '@/lib/whatsapp'
 import { orderSearchResults } from '@/lib/ranking'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
@@ -31,6 +31,7 @@ import {
   CHAT_OPEN_MARKER,
   renderResultsListBody,
   renderNearbyListBody,
+  renderNearMeListBody,
   resultRows,
   RESULTS_PER_PAGE,
   renderMainMenuBody,
@@ -122,6 +123,9 @@ interface ParsedQuery {
   term: string
   city: string | null
   nationwide: boolean
+  // Optional "Near me" origin — when set, candidate ordering switches to
+  // distance (km) from this point instead of the city ranking.
+  origin?: { lat: number; lng: number } | null
 }
 
 const NATIONWIDE_RE =
@@ -343,7 +347,7 @@ async function promptRatingIfDue(from: string): Promise<ChatSession | null> {
   }
 }
 
-async function sendAskTown(from: string, term: string, again = false) {
+async function sendAskTown(from: string, term: string, again = false, withLocation = false) {
   let msg = ''
   if (!again && term) {
     msg = `*${term}* 👍 Which town are you in?\n\n`
@@ -359,6 +363,15 @@ async function sendAskTown(from: string, term: string, again = false) {
     ])
   } else {
     await sendWhatsAppMessage(from, msg)
+  }
+  // Fast path: sharing the live location ranks matches by real km.
+  if (withLocation) {
+    await sendLocationRequest(
+      from,
+      term
+        ? `Better: share your location once and I'll rank *${term}* by how close it is to you. 📍`
+        : 'Better: share your location once and I will rank matches by how close they are to you. 📍'
+    )
   }
 }
 
@@ -456,16 +469,17 @@ async function startFreshSearchPrompt(from: string) {
 
 const MENU_ROWS = [
   { id: 'menu_search', title: '☰ Search' },
+  { id: 'menu_near', title: '📍 Near me' },
   { id: 'menu_register', title: '✎ Register' },
-  { id: 'menu_help', title: '✆ Help' },
   { id: 'menu_pay', title: '$ Pay' },
+  { id: 'menu_help', title: '✆ Help' },
 ]
 
-async function sendMainMenu(from: string, greeting?: string) {
+async function sendMainMenu(from: string, greeting?: string, newContact?: boolean) {
   await clearSession(from)
   await sendInteractiveList(
     from,
-    renderMainMenuBody(greeting),
+    renderMainMenuBody(greeting, newContact),
     MENU_ROWS,
     'Main menu'
   )
@@ -548,7 +562,12 @@ async function handleListFormText(from: string, session: ChatSession, text: stri
 // while the user is mid-registration. Every failure answers with a text
 // fallback so nothing silently dies.
 
-async function handleBotMedia(from: string, session: ChatSession | null, message: Record<string, unknown>) {
+async function handleBotMedia(
+  from: string,
+  session: ChatSession | null,
+  message: Record<string, unknown>,
+  mediaMsgId: string
+) {
   const kind: MediaKind = message.type === 'audio' ? 'audio' : 'image'
   const blob = message[kind] as { id?: string; caption?: string } | undefined
   const mediaId = blob?.id || ''
@@ -557,11 +576,14 @@ async function handleBotMedia(from: string, session: ChatSession | null, message
   if (!mediaRateOk(from)) {
     await sendWhatsAppMessage(
       from,
-      'You can send at most 3 voice or photo tries per hour to keep things quick. Send it as text and I keep working.'
+      'You can send at most 3 voice or photo tries per hour to keep things quick. Send it as text and I keep working.',
+      mediaMsgId
     )
     return
   }
 
+  // Slow segment ahead (download + AI): light the composing indicator.
+  void markRead(mediaMsgId, true).catch(() => {})
   const media = await fetchWhatsAppMedia(mediaId)
   const sense = media ? await perceiveMedia(kind, media.buffer, media.mime, caption) : null
 
@@ -569,7 +591,8 @@ async function handleBotMedia(from: string, session: ChatSession | null, message
     if (session?.step === 'list_form' && kind === 'image') {
       await sendWhatsAppMessage(
         from,
-        "I couldn't read that photo. Keep typing — *name …*, *category …*, *description …* — or tap ↗ Publish when ready."
+        "I couldn't read that photo. Keep typing — *name …*, *category …*, *description …* — or tap ↗ Publish when ready.",
+        mediaMsgId
       )
       return
     }
@@ -577,7 +600,8 @@ async function handleBotMedia(from: string, session: ChatSession | null, message
       from,
       kind === 'audio'
         ? "I couldn't hear that clearly. Send it as text and I'll search instantly."
-        : "I couldn't recognise that photo. Describe it in text and I'll search instantly."
+        : "I couldn't recognise that photo. Describe it in text and I'll search instantly.",
+      mediaMsgId
     )
     return
   }
@@ -593,8 +617,41 @@ async function handleBotMedia(from: string, session: ChatSession | null, message
     kind === 'audio'
       ? `You said: *${query}* — searching…`
       : `That photo looks like: *${query}* — searching…`
-  await sendWhatsAppMessage(from, echo)
-  await dispatchSearch(from, query)
+  await sendWhatsAppMessage(from, echo, mediaMsgId)
+  await dispatchSearch(from, query, { replyTo: mediaMsgId })
+}
+
+// Shared location ("📍 Near me" prompt or the phone's location picker).
+// With a pending search term the nearby search runs immediately; otherwise
+// the point is stashed on the session and the bot asks what they need.
+async function handleBotLocation(
+  from: string,
+  session: ChatSession | null,
+  origin: { lat: number; lng: number },
+  mediaMsgId: string
+) {
+  if (session?.step === 'search_loc' && session.data.pending_search_term) {
+    const term = session.data.pending_search_term
+    await clearSession(from)
+    await sendWhatsAppMessage(from, `📍 Got it — searching *${term}* near you…`, mediaMsgId)
+    await runSearchAndReply(
+      from,
+      { term, city: null, nationwide: false, origin },
+      { replyTo: mediaMsgId }
+    )
+    return
+  }
+
+  await saveSession(from, 'search_term', {
+    pending_city: '',
+    origin_lat: origin.lat,
+    origin_lng: origin.lng,
+  })
+  await sendWhatsAppMessage(
+    from,
+    '📍 Got it. What are you looking for nearby? Send e.g. *plumber* or *bread*.',
+    mediaMsgId
+  )
 }
 
 // Media while filling the listing form: voice notes flow through the same
@@ -1062,6 +1119,13 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'menu_search':
       await startFreshSearchPrompt(from)
       return
+    case 'menu_near':
+      await clearSession(from)
+      await sendLocationRequest(
+        from,
+        'Share your location and I will rank matches by how close they are to you. 📍\n\nYou can also just type a town (e.g. *harare*) and then what you need.'
+      )
+      return
     case 'menu_register':
       await clearSession(from)
       await startRegister(from)
@@ -1153,16 +1217,23 @@ async function sendResultsListPage(
   page: number,
   termDisplay: string,
   cityLabel: string | null,
-  nearby: boolean
+  nearby: boolean,
+  replyTo?: string
 ) {
   if (cards.length === 0) return
-  const body = nearby
-    ? renderNearbyListBody(termDisplay, cityLabel || 'Zimbabwe', cards.length, page)
-    : renderResultsListBody(termDisplay, cityLabel, cards.length, page)
-  await sendInteractiveList(from, body, resultRows(cards, page), 'Choose a business')
+  const body = nearby && cityLabel === 'Near you'
+    ? renderNearMeListBody(termDisplay, cards.length, page)
+    : nearby
+      ? renderNearbyListBody(termDisplay, cityLabel || 'Zimbabwe', cards.length, page)
+      : renderResultsListBody(termDisplay, cityLabel, cards.length, page)
+  await sendInteractiveList(from, body, resultRows(cards, page), 'Choose a business', replyTo)
 }
 
-async function runSearchAndReply(from: string, p: ParsedQuery) {
+async function runSearchAndReply(
+  from: string,
+  p: ParsedQuery,
+  opts?: { replyTo?: string; aliased?: boolean; nationwideTried?: boolean }
+) {
   const supabase = getSupabase()
   const term = p.term.toLowerCase()
   const city = p.nationwide ? null : p.city
@@ -1187,22 +1258,54 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
   let results: BotResult[] = []
   const candidates = scope.filter(b => bizMatchesQuery(b, term, category))
   if (candidates.length > 0) {
-    const seedText = p.term || category.toLowerCase()
-    // Respect the bidding feature: orderSearchResults places active rank_spots
-    // for (category, city) first — nationwide spots as fallback — and applies
-    // the webapp's default weighted shuffle when no bids are active.
-    const ordered = (await orderSearchResults(
-      candidates as unknown as Business[],
-      category,
-      city || '',
-      seedText
-    )) as unknown as BotBusinessRow[]
-    const itemMap = await fetchMatchingItems(ordered.map(b => b.id), term)
-    results = ordered.map(b => ({ biz: b, item: itemMap.get(b.id) || null }))
+    if (p.origin) {
+      // "Near me" ranking: plain distance sort from the shared point — no
+      // city rank_spots in this mode (the user's position is the context).
+      const origin = p.origin
+      const ranked = candidates
+        .map(b => ({
+          biz: b,
+          km: b.lat != null && b.lng != null
+            ? haversineKm(origin.lat, origin.lng, b.lat, b.lng)
+            : undefined,
+        }))
+        .sort((x, y) => (x.km ?? 999999) - (y.km ?? 999999))
+      const itemMap = await fetchMatchingItems(ranked.map(r => r.biz.id), term)
+      results = ranked.slice(0, MAX_RESULTS).map(r => ({
+        biz: r.biz,
+        item: itemMap.get(r.biz.id) || null,
+        km: r.km,
+      }))
+    } else {
+      const seedText = p.term || category.toLowerCase()
+      // Respect the bidding feature: orderSearchResults places active rank_spots
+      // for (category, city) first — nationwide spots as fallback — and applies
+      // the webapp's default weighted shuffle when no bids are active.
+      const ordered = (await orderSearchResults(
+        candidates as unknown as Business[],
+        category,
+        city || '',
+        seedText
+      )) as unknown as BotBusinessRow[]
+      const itemMap = await fetchMatchingItems(ordered.map(b => b.id), term)
+      results = ordered.map(b => ({ biz: b, item: itemMap.get(b.id) || null }))
+    }
   } else if (term.length >= 3) {
     const itemMap = await fetchMatchingItems(scope.map(b => b.id), term)
     const ownerIds = new Set(itemMap.keys())
-    results = scope.filter(b => ownerIds.has(b.id)).map(b => ({ biz: b, item: itemMap.get(b.id)! }))
+    let tmp = scope.filter(b => ownerIds.has(b.id)).map(b => ({ biz: b, item: itemMap.get(b.id)! }))
+    if (p.origin) {
+      const origin = p.origin
+      tmp = tmp
+        .map(r => ({
+          ...r,
+          km: r.biz.lat != null && r.biz.lng != null
+            ? haversineKm(origin.lat, origin.lng, r.biz.lat, r.biz.lng)
+            : undefined,
+        }))
+        .sort((x, y) => (x.km ?? 999999) - (y.km ?? 999999))
+    }
+    results = tmp
   }
 
   results = results.slice(0, MAX_RESULTS)
@@ -1283,6 +1386,7 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
     return
   }
 
+  const fromOrigin = !!p.origin
   const cards = results.map(toCard)
   const prev = await getSession(from)
   await saveSession(from, 'browse', {
@@ -1290,16 +1394,20 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
     results: cards,
     lastScreen: 'list',
     lastTerm: termDisplay,
-    lastCity: city,
-    nearby: false,
+    lastCity: fromOrigin ? 'Near you' : city,
+    nearby: fromOrigin,
     page: 0,
   })
-  await sendResultsListPage(from, cards, 0, termDisplay, city, false)
+  await sendResultsListPage(from, cards, 0, termDisplay, fromOrigin ? 'Near you' : city, fromOrigin, opts?.replyTo)
   recordBotEvents(results.map(r => r.biz)).catch(() => {})
 }
 
-async function dispatchSearch(from: string, text: string) {
-  const p = parseQuery(text)
+async function dispatchSearch(
+  from: string,
+  text: string,
+  opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string }
+) {
+  const p: ParsedQuery = { ...parseQuery(text), origin: opts?.origin ?? null }
 
   // Bare name search with no town: when exactly one verified business is
   // named by the query, show its contact details right away (nationwide)
@@ -1312,7 +1420,7 @@ async function dispatchSearch(from: string, text: string) {
       .eq('verified', true)
       .ilike('name', `%${p.term}%`)
     if (nameProbe && nameProbe.length === 1) {
-      await runSearchAndReply(from, { term: p.term, city: null, nationwide: true })
+      await runSearchAndReply(from, { term: p.term, city: null, nationwide: true }, { replyTo: opts?.replyTo })
       return
     }
   }
@@ -1331,20 +1439,22 @@ async function dispatchSearch(from: string, text: string) {
     } else {
       await sendWhatsAppMessage(
         from,
-        'Tell me what you need + your town, e.g. *"bread chinhoyi"* or *"plumber harare"*.'
+        'Tell me what you need + your town, e.g. *"bread chinhoyi"* or *"plumber harare"*.',
+        opts?.replyTo
       )
     }
     return
   }
 
   if (!p.nationwide && !p.city) {
-    // Product/service only — ask for the town first
+    // Product/service only — ask for the town first (plus the share-location
+    // fast path that ranks matches by real distance).
     await saveSession(from, 'search_loc', { pending_search_term: p.term })
-    await sendAskTown(from, p.term)
+    await sendAskTown(from, p.term, false, true)
     return
   }
 
-  await runSearchAndReply(from, p)
+  await runSearchAndReply(from, p, { replyTo: opts?.replyTo })
 }
 
 async function sendResultDetail(
@@ -1748,6 +1858,8 @@ export async function POST(request: Request) {
       }
 
       const from = typeof message.from === 'string' ? message.from : ''
+      // Blue tick straight away, before any processing latency builds up.
+      if (msgId) markRead(msgId).catch(() => {})
       try {
         const text = (message.text?.body || '').trim()
         const lower = text.toLowerCase()
@@ -1760,16 +1872,27 @@ export async function POST(request: Request) {
         // Voice notes and photos become intent (search or registration input).
         const mediaKind: MediaKind | null =
           message.type === 'audio' ? 'audio' : message.type === 'image' ? 'image' : null
+        // Shared location (from the 📍 Near me prompt or the phone's
+        // location picker) drives distance-ranked searches.
+        const location: { lat: number; lng: number } | null =
+          message.type === 'location' &&
+          Number.isFinite(Number(message.location?.latitude)) &&
+          Number.isFinite(Number(message.location?.longitude))
+            ? { lat: Number(message.location.latitude), lng: Number(message.location.longitude) }
+            : null
 
-        if (!text && !action && !mediaKind) continue
+        if (!text && !action && !mediaKind && !location) continue
 
         console.log(
-          `WhatsApp message from ${from}: ${text || `[${action || (mediaKind === 'audio' ? 'voice note' : 'photo')}]`}`
+          `WhatsApp message from ${from}: ${text || `[${action || (mediaKind === 'audio' ? 'voice note' : mediaKind === 'image' ? 'photo' : 'location')}]`}`
         )
 
         // Customer base: one row per number, profile name when Meta send it.
         const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
         let contactSession = await getSession(from)
+        // Probe BEFORE upsert: a first-timer carrying a profile name must
+        // still count as brand-new for the menu's starter tip.
+        const hadContactName = !!(await getBotContactName(from))
         if (lower === 'stop') {
           await markBotContactOptOut(from)
           await clearSession(from)
@@ -1778,6 +1901,9 @@ export async function POST(request: Request) {
         } else {
           await upsertBotContact(from, waName, contactSession?.step || '')
         }
+        // Brand-new contact = no saved session AND no prior contact row —
+        // used by the main menu for a one-line starter guide.
+        const isNewContact = !contactSession && !hadContactName
         let session = contactSession
 
         if (action) {
@@ -1794,14 +1920,20 @@ export async function POST(request: Request) {
           if (contactName) greetBody = renderGreetingBody(text, contactName) || greetBody
         }
         if (greetBody) {
-          await sendMainMenu(from, greetBody)
+          await sendMainMenu(from, greetBody, isNewContact)
+          continue
+        }
+
+        // Shared location drives distance-ranked near-me searches.
+        if (location) {
+          await handleBotLocation(from, session, location, msgId)
           continue
         }
 
         // Voice note / photo: search intent outside registration, form input
         // + logo while filling the listing form.
         if (mediaKind) {
-          await handleBotMedia(from, session, message)
+          await handleBotMedia(from, session, message, msgId)
           continue
         }
 
@@ -1845,8 +1977,13 @@ export async function POST(request: Request) {
             }
             continue
           }
-          // Not a town — re-ask
-          await sendAskTown(from, session.data.pending_search_term || '', true)
+          // Not a town — re-ask. If the reply itself carries a fresh term,
+          // rebind it: "cancel" steps or "plumber" retypes should never leave
+          // an older pending term latched on.
+          if (p.term && !p.city && !p.nationwide) {
+            await saveSession(from, 'search_loc', { pending_search_term: p.term })
+          }
+          await sendAskTown(from, p.term || session.data.pending_search_term || '', true, true)
           continue
         }
 
@@ -1865,10 +2002,21 @@ export async function POST(request: Request) {
           const pendingCity = session.data.pending_city || ''
           if (p.term) {
             const city = p.nationwide ? null : p.city ?? (pendingCity || null)
+            // A stashed shared-location point makes this term a near-me
+            // search when the user didn't specify their own town instead.
+            const hasOrigin =
+              session.data.origin_lat != null &&
+              session.data.origin_lng != null &&
+              !pendingCity &&
+              !p.nationwide &&
+              !p.city
             await runSearchAndReply(from, {
               term: p.term,
               city,
-              nationwide: p.nationwide || (!city && !pendingCity),
+              nationwide: (p.nationwide || (!city && !pendingCity)) && !hasOrigin,
+              origin: hasOrigin
+                ? { lat: session.data.origin_lat!, lng: session.data.origin_lng! }
+                : null,
             })
             continue
           }
@@ -2026,7 +2174,7 @@ export async function POST(request: Request) {
         }
 
         if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
-          await sendMainMenu(from)
+          await sendMainMenu(from, undefined, isNewContact)
           continue
         }
 

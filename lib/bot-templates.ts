@@ -282,14 +282,19 @@ export function resultRows(cards: ResultCard[], page = 0): InteractiveRow[] {
 
 /** Main menu (opened by menu / hi / hello). Rows are by convention in route.
  * An optional greeting replaces the robot header so the greeting + menu
- * arrive as one native list. */
-export function renderMainMenuBody(greeting?: string): string {
-  return [
+ * arrive as one native list. A brand-new contact gets a one-line starter
+ * guide under the menu rows — no extra message needed. */
+export function renderMainMenuBody(greeting?: string, newContact?: boolean): string {
+  const lines = [
     greeting || '*WA Directory* 🤖',
     'Find any product or service on WhatsApp, near you.',
     '',
     'Tap an option:',
-  ].join('\n')
+  ]
+  if (newContact) {
+    lines.push('', 'New here? Try *bread chinhoyi*, *plumber harare* — or tap ✎ Register.')
+  }
+  return lines.join('\n')
 }
 
 // ── Adaptive greeting ────────────────────────────────────────────────────
@@ -378,6 +383,29 @@ export function renderNearbyListBody(
     lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
   }
   lines.push('', `Tap a business below to view details, or try *whole country*.`)
+  return lines.join('\n')
+}
+
+/** Body for distance-ranked results from a shared location ("📍 Near me").
+ * Rows carry a "~N km" badge; copy should never say "nearest" — the whole
+ * screen IS the nearest. */
+export function renderNearMeListBody(
+  termDisplay: string,
+  count: number,
+  page = 0
+): string {
+  const lines = [
+    `*${capFirst(termDisplay)} near you* 📍`,
+    '',
+    `Closest matches to your shared location, ranked by distance — ${count} found.`,
+  ]
+  if (page === 0 && count > RESULTS_PER_PAGE) {
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} — tap *More results* for the rest.`)
+  } else if (page > 0) {
+    const shown = page * RESULTS_PER_PAGE
+    lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
+  }
+  lines.push('', 'Tap a business below, reply with a number, or send a new search.')
   return lines.join('\n')
 }
 
