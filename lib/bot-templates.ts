@@ -158,8 +158,9 @@ export function renderDetailCard(b: DetailData): string {
   if (b.items.length > 0) {
     lines.push('')
     lines.push('*Products and prices*')
-    for (const it of b.items) {
-      lines.push(`• ${it.name}${it.price != null ? `: ${monoUSD(it.price)}` : ': Price not listed'}`)
+    for (let i = 0; i < b.items.length; i++) {
+      const it = b.items[i]
+      lines.push(`${i + 1}. ${it.name}${it.price != null ? `: ${monoUSD(it.price)}` : ': Price not listed'}`)
     }
     if (b.items.every(it => it.price == null)) {
       // All items unpriced, keep the note honest without inventing prices
@@ -203,7 +204,7 @@ export function renderEmptyResults(term: string): string {
 }
 
 export function renderInvalidSelection(count: number): string {
-  return `That number is not on the list: reply *1* to *${count}* to view business details, or send a new search.`
+  return `That number is not on the current screen: tap a business, reply a visible row number (1 to ${Math.min(count, 20)}), or tap *More results* if it appears.`
 }
 
 // ── Interactive screens ───────────────────────────────────────────────────
@@ -212,18 +213,25 @@ export function renderInvalidSelection(count: number): string {
 export function renderResultsListBody(
   termDisplay: string,
   cityLabel: string | null,
-  count: number
+  count: number,
+  page = 0
 ): string {
   const header = cityLabel
     ? `*${capFirst(termDisplay)} near ${cityLabel}*`
     : `*${capFirst(termDisplay)} (countrywide)*`
-  return [
+  const lines = [
     header,
     '',
     `I found ${count} matching listing${count === 1 ? '' : 's'} in the current directory.`,
-    '',
-    'Tap a business below, reply with a number, or send a new search.',
-  ].join('\n')
+  ]
+  const shown = page * RESULTS_PER_PAGE
+  if (page === 0 && count > RESULTS_PER_PAGE) {
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} — tap *More results* for the rest.`)
+  } else if (page > 0) {
+    lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
+  }
+  lines.push('', 'Tap a business below, reply with a number, or send a new search.')
+  return lines.join('\n')
 }
 
 /** Price segment for list rows: same logic as searchCardPriceLine, but rows
@@ -238,17 +246,38 @@ function rowPriceLine(card: ResultCard): string {
   return range ? `💰 ${range}` : ''
 }
 
-/** Tappable rows for the results list (Ordering matches numbered replies). */
-export function resultRows(cards: ResultCard[]): InteractiveRow[] {
-  return cards.map((c, i) => {
-    const price = rowPriceLine(c)
-    const desc = `📍 ${displayLocation(c.city, c.area)}${c.km != null ? ` ~${Math.round(c.km)} km` : ''}${price ? ` · ${price}` : ''}`
-    return {
-      id: `sel_${i + 1}`,
-      title: `${i + 1}. ${c.name}`,
-      description: desc,
-    }
-  })
+// One WhatsApp list message holds at most 10 rows; one slot is reserved for
+// the status row, so a page shows 9 businesses.
+export const RESULTS_PER_PAGE = 9
+
+/** Tappable rows for one results page: up to 9 businesses numbered
+ * absolutely (page 2 starts at 10.), plus a trailing status row —
+ * "→ More results…" when a next page exists, "✔ End of list" otherwise. */
+export function resultRows(cards: ResultCard[], page = 0): InteractiveRow[] {
+  const start = Math.max(0, page) * RESULTS_PER_PAGE
+  const rows: InteractiveRow[] = cards
+    .slice(start, start + RESULTS_PER_PAGE)
+    .map((c, i) => {
+      const price = rowPriceLine(c)
+      const abs = start + i + 1
+      const desc = `📍 ${displayLocation(c.city, c.area)}${c.km != null ? ` ~${Math.round(c.km)} km` : ''}${price ? ` · ${price}` : ''}`
+      return { id: `sel_${abs}`, title: `${abs}. ${c.name}`, description: desc }
+    })
+  const shown = start + RESULTS_PER_PAGE
+  if (cards.length > shown) {
+    rows.push({
+      id: 'more',
+      title: '→ More results…',
+      description: `Matches ${shown + 1}–${Math.min(cards.length, shown + RESULTS_PER_PAGE)} of ${cards.length}`,
+    })
+  } else {
+    rows.push({
+      id: 'end_list',
+      title: '✔ End of list',
+      description: `All ${cards.length} match${cards.length === 1 ? '' : 'es'} shown`,
+    })
+  }
+  return rows
 }
 
 /** Main menu (opened by menu / hi / hello). Rows are by convention in route. */
@@ -265,13 +294,18 @@ export function renderMainMenuBody(): string {
 export function renderNearbyListBody(
   termDisplay: string,
   city: string,
-  count: number
+  count: number,
+  page = 0
 ): string {
-  return [
-    `No ${termDisplay} in *${city}*. Nearest:`,
-    '',
-    `Tap a business below to view details, or try *whole country*.`,
-  ].join('\n')
+  const lines = [`No ${termDisplay} in *${city}*. Nearest:`]
+  if (page === 0 && count > RESULTS_PER_PAGE) {
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} of ${count} — tap *More results* for the rest.`)
+  } else if (page > 0) {
+    const shown = page * RESULTS_PER_PAGE
+    lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
+  }
+  lines.push('', `Tap a business below to view details, or try *whole country*.`)
+  return lines.join('\n')
 }
 
 /** Safe outbound error note shown to customers (rare; nothing is exposed). */

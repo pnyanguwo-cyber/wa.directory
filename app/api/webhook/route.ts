@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl } from '@/lib/whatsapp'
+import { orderSearchResults } from '@/lib/ranking'
+import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -13,12 +15,14 @@ import {
   renderResultsListBody,
   renderNearbyListBody,
   resultRows,
+  RESULTS_PER_PAGE,
   renderMainMenuBody,
   renderDetailCard,
   renderChatPrompt,
   chatCtaUrl,
   renderEmptyResults,
   renderInvalidSelection,
+  renderErrorCard,
   FALLBACK_HELP_LINES,
   type ResultCard,
 } from '@/lib/bot-templates'
@@ -212,6 +216,15 @@ async function handleRatingReply(from: string, session: ChatSession | null, text
   if (/^(skip|no|pass|nope)/.test(lower)) {
     await saveSession(from, 'done', {})
     await sendWhatsAppMessage(from, `No problem! Thanks for trying *${business.name}*. Reply *help* anytime.`)
+    return true
+  }
+
+  // Search-first everywhere: a mid-rating reply that reads as a search exits
+  // the rating step and runs the search instead of nagging.
+  const parsed = parseQuery(text)
+  if (parsed.term || parsed.city || parsed.nationwide) {
+    await clearSession(from)
+    await dispatchSearch(from, text)
     return true
   }
 
@@ -466,11 +479,17 @@ async function goBack(from: string, session: ChatSession | null) {
     const cards = data.results || []
     if (data.lastScreen === 'detail' && cards.length > 0) {
       await saveSession(from, 'browse', { ...data, lastScreen: 'list' })
-      await sendInteractiveList(
-        from,
-        renderResultsListBody(data.lastTerm || 'search', data.lastCity ?? null, cards.length),
-        resultRows(cards),
-        'Choose a business'
+      await sendResultsListPage(
+        from, cards, data.page || 0, data.lastTerm || 'search', data.lastCity ?? null, !!data.nearby
+      )
+      return
+    }
+    // On page 2+, Back walks one page back before leaving the list.
+    const page = data.page || 0
+    if (page > 0 && cards.length > 0) {
+      await saveSession(from, 'browse', { ...data, page: page - 1 })
+      await sendResultsListPage(
+        from, cards, page - 1, data.lastTerm || 'search', data.lastCity ?? null, !!data.nearby
       )
       return
     }
@@ -490,7 +509,7 @@ async function goBack(from: string, session: ChatSession | null) {
 
 /** Single router for every interactive id the bot can send. */
 async function handleAction(from: string, session: ChatSession | null, action: string) {
-  const sel = action.match(/^sel_([1-9])$/)
+  const sel = action.match(/^sel_([1-9][0-9]?)$/)
   if (sel) {
     if (session?.step === 'browse') {
       const cards = session.data.results || []
@@ -512,6 +531,40 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'back':
       await goBack(from, session)
       return
+    case 'more':
+    case 'next': {
+      if (session?.step === 'browse') {
+        const cards = session.data.results || []
+        const page = session.data.page || 0
+        if (cards.length > (page + 1) * RESULTS_PER_PAGE) {
+          await saveSession(from, 'browse', { ...session.data, lastScreen: 'list', page: page + 1 })
+          await sendResultsListPage(
+            from, cards, page + 1, session.data.lastTerm || 'search',
+            session.data.lastCity ?? null, !!session.data.nearby
+          )
+        } else {
+          await sendWhatsAppMessage(
+            from,
+            `That's all ${cards.length} match${cards.length === 1 ? '' : 'es'} — reply a number or tap a business.`
+          )
+        }
+        return
+      }
+      await startFreshSearchPrompt(from)
+      return
+    }
+    case 'end_list': {
+      if (session?.step === 'browse') {
+        const cards = session.data.results || []
+        await sendWhatsAppMessage(
+          from,
+          `That's all ${cards.length} match${cards.length === 1 ? '' : 'es'} for *${session.data.lastTerm || 'your search'}* — reply a number or send a new search.`
+        )
+        return
+      }
+      await startFreshSearchPrompt(from)
+      return
+    }
     case 'new_search':
     case 'menu_search':
       await startFreshSearchPrompt(from)
@@ -551,12 +604,35 @@ async function handleAction(from: string, session: ChatSession | null, action: s
   }
 }
 
+// Bot retrieval cap: performance guard requested by the owner — page through
+// the stored candidates instead of re-querying for every scroll.
+const MAX_RESULTS = 20
+
+// Shared sender for any list page (page 0 = first screen). Keeps row ids,
+// numbering and copy consistent between search results, nearby results,
+// "More results" pages and ⬅ Back re-renders.
+async function sendResultsListPage(
+  from: string,
+  cards: ResultCard[],
+  page: number,
+  termDisplay: string,
+  cityLabel: string | null,
+  nearby: boolean
+) {
+  if (cards.length === 0) return
+  const body = nearby
+    ? renderNearbyListBody(termDisplay, cityLabel || 'Zimbabwe', cards.length, page)
+    : renderResultsListBody(termDisplay, cityLabel, cards.length, page)
+  await sendInteractiveList(from, body, resultRows(cards, page), 'Choose a business')
+}
+
 async function runSearchAndReply(from: string, p: ParsedQuery) {
   const supabase = getSupabase()
   const term = p.term.toLowerCase()
   const city = p.nationwide ? null : p.city
 
-  // - Tier A: in-town category/name matches, best rated first
+  // - Tier A: in-town category/name matches, ordered by the webapp's ranking
+  //   (paid rank_spots when active, rarely-seen shuffle otherwise)
   // - Tier B (when A misses): in-town named products with exact prices
   // - Tier C (when the town has nothing): nearest towns, ranked by km
   const scopeReq = supabase.from('businesses').select(BOT_BIZ_COLUMNS).eq('verified', true)
@@ -575,13 +651,47 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
   let results: BotResult[] = []
   const candidates = scope.filter(b => bizMatchesQuery(b, term, category))
   if (candidates.length > 0) {
-    candidates.sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    const itemMap = await fetchMatchingItems(candidates.map(b => b.id), term)
-    results = candidates.map(b => ({ biz: b, item: itemMap.get(b.id) || null }))
+    const seedText = p.term || category.toLowerCase()
+    // Respect the bidding feature: orderSearchResults places active rank_spots
+    // for (category, city) first — nationwide spots as fallback — and applies
+    // the webapp's default weighted shuffle when no bids are active.
+    const ordered = (await orderSearchResults(
+      candidates as unknown as Business[],
+      category,
+      city || '',
+      seedText
+    )) as unknown as BotBusinessRow[]
+    const itemMap = await fetchMatchingItems(ordered.map(b => b.id), term)
+    results = ordered.map(b => ({ biz: b, item: itemMap.get(b.id) || null }))
   } else if (term.length >= 3) {
     const itemMap = await fetchMatchingItems(scope.map(b => b.id), term)
     const ownerIds = new Set(itemMap.keys())
     results = scope.filter(b => ownerIds.has(b.id)).map(b => ({ biz: b, item: itemMap.get(b.id)! }))
+  }
+
+  results = results.slice(0, MAX_RESULTS)
+  const termDisplay = p.term || category.toLowerCase()
+
+  // Name direct hit: a query that names exactly one business shows contact
+  // details right away without the intermediate list.
+  if (
+    results.length === 1 &&
+    term.length >= 3 &&
+    (results[0].biz.name || '').toLowerCase().includes(term)
+  ) {
+    const cards = results.map(toCard)
+    const prev = await getSession(from)
+    const data = {
+      ...pendingFields(prev),
+      results: cards,
+      lastScreen: 'list' as const,
+      lastTerm: termDisplay,
+      lastCity: city,
+      page: 0,
+    }
+    await saveSession(from, 'browse', data)
+    await sendResultDetail(from, { phone: from, step: 'browse', data }, 1)
+    return
   }
 
   if (results.length === 0 && city) {
@@ -613,23 +723,20 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
             : undefined,
         }))
         .sort((x, y) => (x.km ?? 999999) - (y.km ?? 999999))
-        .slice(0, 3)
-      const termDisplay = p.term || category.toLowerCase()
+        .slice(0, MAX_RESULTS)
+      const nearbyDisplay = p.term || category.toLowerCase()
       const cards = results.map(toCard)
       const prev = await getSession(from)
       await saveSession(from, 'browse', {
         ...pendingFields(prev),
         results: cards,
         lastScreen: 'list',
-        lastTerm: termDisplay,
+        lastTerm: nearbyDisplay,
         lastCity: city,
+        nearby: true,
+        page: 0,
       })
-      await sendInteractiveList(
-        from,
-        renderNearbyListBody(termDisplay, city, cards.length),
-        resultRows(cards),
-        'Choose a business'
-      )
+      await sendResultsListPage(from, cards, 0, nearbyDisplay, city, true)
       recordBotEvents(results.map(r => r.biz)).catch(() => {})
       return
     }
@@ -640,28 +747,39 @@ async function runSearchAndReply(from: string, p: ParsedQuery) {
     return
   }
 
-  const top = results.slice(0, 5)
-  const termDisplay = p.term || category.toLowerCase()
+  const cards = results.map(toCard)
   const prev = await getSession(from)
-  const cards = top.map(toCard)
   await saveSession(from, 'browse', {
     ...pendingFields(prev),
     results: cards,
     lastScreen: 'list',
     lastTerm: termDisplay,
     lastCity: city,
+    nearby: false,
+    page: 0,
   })
-  await sendInteractiveList(
-    from,
-    renderResultsListBody(termDisplay, city, cards.length),
-    resultRows(cards),
-    'Choose a business'
-  )
-  recordBotEvents(top.map(r => r.biz)).catch(() => {})
+  await sendResultsListPage(from, cards, 0, termDisplay, city, false)
+  recordBotEvents(results.map(r => r.biz)).catch(() => {})
 }
 
 async function dispatchSearch(from: string, text: string) {
   const p = parseQuery(text)
+
+  // Bare name search with no town: when exactly one verified business is
+  // named by the query, show its contact details right away (nationwide)
+  // instead of the intermediate "Which town?" step. Multiple matches keep
+  // the existing town-first flow.
+  if (p.term && !p.city && !p.nationwide) {
+    const { data: nameProbe } = await getSupabase()
+      .from('businesses')
+      .select('id')
+      .eq('verified', true)
+      .ilike('name', `%${p.term}%`)
+    if (nameProbe && nameProbe.length === 1) {
+      await runSearchAndReply(from, { term: p.term, city: null, nationwide: true })
+      return
+    }
+  }
 
   if (!p.term && !p.nationwide && p.city) {
     // Town only — ask what they need in that town
@@ -1062,176 +1180,227 @@ export async function POST(request: Request) {
     }
 
     for (const message of value.messages) {
-      const from = message.from
-      const text = (message.text?.body || '').trim()
-      // Native taps arrive as interactive replies carrying a deterministic id
-      // (set by our own list/button payloads). They route beside plain text.
-      const action =
-        message.interactive?.button_reply?.id ||
-        message.interactive?.list_reply?.id ||
-        ''
-
-      if (!text && !action) continue
-
-      console.log(`WhatsApp message from ${from}: ${text || `[${action}]`}`)
-
-      let session = await getSession(from)
-      const lower = text.toLowerCase()
-
-      if (action) {
-        await handleAction(from, session, action)
-        continue
-      }
-
-      if (session?.step === 'rating') {
-        if (lower === 'cancel' || lower === 'help' || lower === 'back') {
-          await clearSession(from)
-          await sendWhatsAppMessage(from, HELP_TEXT)
-          continue
-        }
-        await handleRatingReply(from, session, text)
-        continue
-      }
-
-      // ── Bot search conversation steps ─────────────────────────────────
-      if (session?.step === 'search_loc') {
-        // Waiting for the user's town (term already captured)
-        if (lower === 'cancel' || lower === 'help') {
-          await clearSession(from)
-          await sendWhatsAppMessage(from, HELP_TEXT)
-          continue
-        }
-        if (lower === 'back' || lower === '0') {
-          await startFreshSearchPrompt(from)
-          continue
-        }
-        const p = parseQuery(text)
-        if (p.nationwide || p.city) {
-          const pendingTerm = session.data.pending_search_term || ''
-          if (p.term) {
-            // The reply was a full query — honor the latest intent
-            await runSearchAndReply(from, { term: p.term, city: p.city ?? null, nationwide: p.nationwide })
-          } else if (pendingTerm) {
-            await runSearchAndReply(from, {
-              term: pendingTerm,
-              city: p.city ?? null,
-              nationwide: p.nationwide,
-            })
-          } else {
-            await saveSession(from, 'search_term', { pending_city: p.city || '' })
-            await sendAskTerm(from, p.city)
-          }
-          continue
-        }
-        // Not a town — re-ask
-        await sendAskTown(from, session.data.pending_search_term || '', true)
-        continue
-      }
-
-      if (session?.step === 'search_term') {
-        // Waiting for the search term (town already captured)
-        if (lower === 'cancel' || lower === 'help') {
-          await clearSession(from)
-          await sendWhatsAppMessage(from, HELP_TEXT)
-          continue
-        }
-        if (lower === 'back' || lower === '0') {
-          await startFreshSearchPrompt(from)
-          continue
-        }
-        const p = parseQuery(text)
-        const pendingCity = session.data.pending_city || ''
-        if (p.term) {
-          const city = p.nationwide ? null : p.city ?? (pendingCity || null)
-          await runSearchAndReply(from, {
-            term: p.term,
-            city,
-            nationwide: p.nationwide || (!city && !pendingCity),
-          })
-          continue
-        }
-        if (p.nationwide) {
-          await saveSession(from, 'search_term', { pending_city: '' })
-          await sendAskTerm(from, null)
-          continue
-        }
-        if (p.city) {
-          // They typed another town — update and keep asking for the term
-          await saveSession(from, 'search_term', { pending_city: p.city })
-          await sendAskTerm(from, p.city)
-          continue
-        }
-        await sendAskTerm(from, pendingCity || null)
-        continue
-      }
-
-      if (session?.step === 'browse') {
-        // Numbered results are on screen; "1"-"5" opens the contact card
-        if (lower === 'cancel' || lower === 'help') {
-          await clearSession(from)
-          await sendWhatsAppMessage(from, HELP_TEXT)
-          continue
-        }
-        if (lower === 'back' || lower === '0') {
-          await goBack(from, session)
-          continue
-        }
-        const results = session.data.results || []
-        const m = text.trim().match(/^([1-9])(?![0-9])/)
-        if (m && results.length > 0) {
-          const pick = Number(m[1])
-          if (pick <= results.length) {
-            await sendResultDetail(from, session, pick)
+      // Meta redelivers webhooks it has not acknowledged in time; record each
+      // message id and skip duplicates. Fail-open on DB trouble: a rare
+      // duplicate beats a lost customer reply.
+      const msgId = typeof message.id === 'string' ? message.id : ''
+      if (msgId) {
+        const { error: receiptErr } = await getSupabase()
+          .from('webhook_receipts')
+          .insert({ message_id: msgId })
+        if (receiptErr) {
+          if (receiptErr.code === '23505') {
             continue
           }
-          await sendWhatsAppMessage(from, renderInvalidSelection(results.length))
+          console.warn('[webhook] receipt insert failed (fail-open):', receiptErr.message)
+        }
+      }
+
+      const from = typeof message.from === 'string' ? message.from : ''
+      try {
+        const text = (message.text?.body || '').trim()
+        // Native taps arrive as interactive replies carrying a deterministic id
+        // (set by our own list/button payloads). They route beside plain text.
+        const action =
+          message.interactive?.button_reply?.id ||
+          message.interactive?.list_reply?.id ||
+          ''
+
+        if (!text && !action) continue
+
+        console.log(`WhatsApp message from ${from}: ${text || `[${action}]`}`)
+
+        let session = await getSession(from)
+        const lower = text.toLowerCase()
+
+        if (action) {
+          await handleAction(from, session, action)
           continue
         }
-        // Anything else is a fresh search — drop the list and re-dispatch
-        await clearSession(from)
-        session = null
+
+        if (session?.step === 'rating') {
+          if (lower === 'cancel' || lower === 'help' || lower === 'back') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          await handleRatingReply(from, session, text)
+          continue
+        }
+
+        // ── Bot search conversation steps ───────────────────────────────
+        if (session?.step === 'search_loc') {
+          // Waiting for the user's town (term already captured)
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          if (lower === 'back' || lower === '0') {
+            await startFreshSearchPrompt(from)
+            continue
+          }
+          const p = parseQuery(text)
+          if (p.nationwide || p.city) {
+            const pendingTerm = session.data.pending_search_term || ''
+            if (p.term) {
+              // The reply was a full query — honor the latest intent
+              await runSearchAndReply(from, { term: p.term, city: p.city ?? null, nationwide: p.nationwide })
+            } else if (pendingTerm) {
+              await runSearchAndReply(from, {
+                term: pendingTerm,
+                city: p.city ?? null,
+                nationwide: p.nationwide,
+              })
+            } else {
+              await saveSession(from, 'search_term', { pending_city: p.city || '' })
+              await sendAskTerm(from, p.city)
+            }
+            continue
+          }
+          // Not a town — re-ask
+          await sendAskTown(from, session.data.pending_search_term || '', true)
+          continue
+        }
+
+        if (session?.step === 'search_term') {
+          // Waiting for the search term (town already captured)
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          if (lower === 'back' || lower === '0') {
+            await startFreshSearchPrompt(from)
+            continue
+          }
+          const p = parseQuery(text)
+          const pendingCity = session.data.pending_city || ''
+          if (p.term) {
+            const city = p.nationwide ? null : p.city ?? (pendingCity || null)
+            await runSearchAndReply(from, {
+              term: p.term,
+              city,
+              nationwide: p.nationwide || (!city && !pendingCity),
+            })
+            continue
+          }
+          if (p.nationwide) {
+            await saveSession(from, 'search_term', { pending_city: '' })
+            await sendAskTerm(from, null)
+            continue
+          }
+          if (p.city) {
+            // They typed another town — update and keep asking for the term
+            await saveSession(from, 'search_term', { pending_city: p.city })
+            await sendAskTerm(from, p.city)
+            continue
+          }
+          await sendAskTerm(from, pendingCity || null)
+          continue
+        }
+
+        if (session?.step === 'browse') {
+          // Numbered results are on screen; taps and typed numbers open cards,
+          // more/next pages through the stored candidates.
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          if (lower === 'back' || lower === '0') {
+            await goBack(from, session)
+            continue
+          }
+          const results = session.data.results || []
+          const page = session.data.page || 0
+          if (lower === 'more' || lower === 'next') {
+            if (results.length > (page + 1) * RESULTS_PER_PAGE) {
+              await saveSession(from, 'browse', { ...session.data, lastScreen: 'list', page: page + 1 })
+              await sendResultsListPage(
+                from, results, page + 1, session.data.lastTerm || 'search',
+                session.data.lastCity ?? null, !!session.data.nearby
+              )
+            } else {
+              await sendWhatsAppMessage(
+                from,
+                `That's all ${results.length} match${results.length === 1 ? '' : 'es'} — reply a number or tap a business.`
+              )
+            }
+            continue
+          }
+          const m = text.trim().match(/^([1-9][0-9]?)(?![0-9])/)
+          if (m && results.length > 0) {
+            const n = Number(m[1])
+            // Typed 1-9 = position on the current page; 10-20 = absolute rank.
+            const pick = n <= RESULTS_PER_PAGE ? page * RESULTS_PER_PAGE + n : n
+            if (pick >= 1 && pick <= results.length) {
+              await sendResultDetail(from, session, pick)
+              continue
+            }
+            await sendWhatsAppMessage(from, renderInvalidSelection(results.length))
+            continue
+          }
+          // Anything else is a fresh search — drop the list and re-dispatch
+          await clearSession(from)
+          session = null
+          await dispatchSearch(from, text)
+          continue
+        }
+
+        if (session?.step && lower !== 'cancel' && lower !== 'help') {
+          await continueRegistration(from, session, text)
+          continue
+        }
+
+        if (session?.step && (lower === 'cancel' || lower === 'help')) {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+
+        if (/^(register|list me|list|sign me up|add my business)/.test(lower)) {
+          await startRegister(from)
+          continue
+        }
+
+        if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
+          await sendMainMenu(from)
+          continue
+        }
+
+        if (lower === 'help') {
+          await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+
+        // Search-first: any text that parses as a search runs the search, even
+        // when a rating prompt is due; only clearly non-search text may prompt
+        // a pending rating (which otherwise never blocks).
+        const parsedTail = parseQuery(text)
+        if (parsedTail.term || parsedTail.city || parsedTail.nationwide) {
+          appendTranscript(from, text)
+          await dispatchSearch(from, text)
+          continue
+        }
+        appendTranscript(from, text)
+        const ratingSession = await promptRatingIfDue(from)
+        if (ratingSession?.step === 'rating') {
+          continue
+        }
+
         await dispatchSearch(from, text)
-        continue
+      } catch (err) {
+        console.error('[webhook] message error:', err)
+        try {
+          if (from) await sendWhatsAppMessage(from, renderErrorCard())
+        } catch {}
       }
-
-      if (session?.step && lower !== 'cancel' && lower !== 'help') {
-        await continueRegistration(from, session, text)
-        continue
-      }
-
-      if (session?.step && (lower === 'cancel' || lower === 'help')) {
-        await clearSession(from)
-        await sendWhatsAppMessage(from, HELP_TEXT)
-        continue
-      }
-
-      if (/^(register|list me|list|sign me up|add my business)/.test(lower)) {
-        await startRegister(from)
-        continue
-      }
-
-      if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
-        await sendMainMenu(from)
-        continue
-      }
-
-      if (lower === 'help') {
-        await sendWhatsAppMessage(from, HELP_TEXT)
-        continue
-      }
-
-      appendTranscript(from, text)
-      const ratingSession = await promptRatingIfDue(from)
-      if (ratingSession?.step === 'rating') {
-        continue
-      }
-
-      await dispatchSearch(from, text)
     }
 
     return NextResponse.json({ status: 'ok' }, { status: 200 })
   } catch (err) {
     console.error('Webhook error:', err)
-    return NextResponse.json({ status: 'error' }, { status: 500 })
+    return NextResponse.json({ status: 'ok' }, { status: 200 })
   }
 }

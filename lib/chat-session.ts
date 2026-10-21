@@ -26,6 +26,10 @@ export interface ChatSessionData {
   // Search label of the current results, for Back re-rendering.
   lastTerm?: string
   lastCity?: string | null
+  // True when the on-screen list is the nearest-towns tier.
+  nearby?: boolean
+  // 0-based page of the results list (9 businesses per page).
+  page?: number
 }
 
 export interface ChatSession {
