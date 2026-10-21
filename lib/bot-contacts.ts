@@ -1,24 +1,16 @@
 import { getSupabase } from '@/lib/supabase-server'
 
 // One row per WhatsApp number that talks to the bot (customer base).
+// Atomic increment happens in the DB (migration 025 upsert_bot_contact).
 // Best-effort on every call: contact tracking must never break a bot reply.
 export async function upsertBotContact(phone: string, name: string, step: string) {
   if (!phone) return
   try {
-    await getSupabase()
-      .from('bot_contacts')
-      .upsert(
-        {
-          phone,
-          name: (name || '').slice(0, 120),
-          last_seen: new Date().toISOString(),
-          last_step: step || '',
-          message_count: 1,
-          // A fresh message re-arms the idle nudge for this session.
-          nudge_sent_at: null,
-        },
-        { onConflict: 'phone', ignoreDuplicates: false }
-      )
+    await getSupabase().rpc('upsert_bot_contact', {
+      p_phone: phone,
+      p_name: (name || '').slice(0, 120),
+      p_last_step: step || '',
+    })
   } catch {
     // Ignore — the bot conversation continues either way.
   }

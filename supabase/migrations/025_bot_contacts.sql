@@ -22,3 +22,17 @@ REVOKE ALL ON bot_contacts FROM anon, authenticated;
 
 CREATE INDEX IF NOT EXISTS idx_bot_contacts_last_seen ON bot_contacts (last_seen);
 CREATE INDEX IF NOT EXISTS idx_bot_contacts_business ON bot_contacts (business_id);
+
+-- Atomic upsert: one row per phone, message_count increments, a fresh
+-- message re-arms the idle nudge (nudge_sent_at = NULL). opted_out survives.
+CREATE OR REPLACE FUNCTION upsert_bot_contact(p_phone TEXT, p_name TEXT, p_last_step TEXT)
+RETURNS VOID LANGUAGE sql SECURITY DEFINER AS $$
+  INSERT INTO bot_contacts (phone, name, last_seen, last_step, message_count, nudge_sent_at)
+  VALUES (p_phone, p_name, NOW(), p_last_step, 1, NULL)
+  ON CONFLICT (phone) DO UPDATE
+    SET name = excluded.name,
+        last_seen = excluded.last_seen,
+        last_step = excluded.last_step,
+        message_count = bot_contacts.message_count + 1,
+        nudge_sent_at = NULL;
+$$;

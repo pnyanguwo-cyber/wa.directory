@@ -10,6 +10,11 @@ export interface ChatSessionData {
   description?: string
   city?: string
   area?: string
+  // Optional listing details carried through registration (mostly empty;
+  // the webapp form supports far more fields than the chat flow asks for).
+  website?: string
+  address?: string
+  phone_type?: 'whatsapp' | 'voice'
   rating_pending?: string
   // ── Bot search flow ────────────────────────────────────────────────
   // Term typed by the user while waiting for a town ("Which town?").

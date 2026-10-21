@@ -6,6 +6,7 @@ import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
 import { upsertBotContact, markBotContactOptOut, sweepIdleNudges } from '@/lib/bot-contacts'
+import { createListing } from '@/lib/listing-create'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
@@ -897,62 +898,62 @@ async function sendResultDetail(
 async function publishBusiness(from: string, session: ChatSession) {
   const data = session.data
   const name = data.name?.trim() || ''
-  const username = data.whatsapp_username?.trim() || ''
-  const category = data.category || 'Other'
   const description = data.description?.trim() || ''
   const city = data.city || ''
   const area = data.area || ''
   const countryCode = data.country_code || COUNTRY_CODE
   const phone = (data.phone || '').replace(/[^0-9]/g, '')
-  const fullPhone = (countryCode + phone).replace(/[^0-9]/g, '')
-  const token = crypto.randomUUID()
-  const slug = `${generateSlug(name)}-${Math.random().toString(36).slice(2, 8)}`
-  const location = city ? [area, city, 'Zimbabwe'].filter(Boolean).join(', ') : 'Zimbabwe'
 
-  const { data: inserted, error } = await getSupabase().from('businesses').insert({
+  // One code path for listings, webapp and WhatsApp: the shared engine owns
+  // validation, business-id/username/slug generation, payment_status rules
+  // (pending unless Yellow Pages), auto-website copy and admin alerts.
+  const result = await createListing({
     name,
-    slug,
-    whatsapp_username: username,
-    bio: `Professional ${description} services.`,
-    category: [category],
-    location,
-    country_code: countryCode,
-    city: city || '',
-    area: city ? area : '',
+    countryCode,
+    phone,
+    categories: [data.category || 'Other'],
+    city: city || undefined,
     areas: city ? [area].filter(Boolean) : [],
-    phone: fullPhone,
-    whatsapp_link: `https://wa.me/${fullPhone}?text=${encodeURIComponent('Hi, I found you on WA Directory')}`,
-    catalog_link: null,
-    logo_url: null,
-    price_range: null,
-    edit_token: token,
-    verified: false,
-    rating: 0,
-    review_count: 0,
-  }).select('id')
+    description,
+    whatsappUsername: data.whatsapp_username || '',
+    requestedUsername: data.whatsapp_username || '',
+    website: typeof data.website === 'string' ? data.website : undefined,
+    address: typeof data.address === 'string' ? data.address : undefined,
+    phoneType: data.phone_type === 'voice' ? 'voice' : 'whatsapp',
+    generateSite: true,
+    notify: false,
+  })
 
-  if (error) {
-    console.error('[webhook] register insert failed:', error.message)
+  if ('error' in result) {
+    console.error('[webhook] register insert failed:', result.error)
     await sendWhatsAppMessage(from, 'Sorry, something went wrong saving your listing. Please try again later.')
     return
   }
 
+  const businessId = result.id
+  const token = result.editToken
+  const slug = result.slug
+
   // Auto-request unapproved category / area so admins can review them
-  const businessId = inserted?.[0]?.id
   if (businessId) {
-    const [approvedCats, approvedAreas] = await Promise.all([
-      getApprovedCategories(),
-      getApprovedAreas(),
-    ])
-    const approvedCatNames = new Set(approvedCats.map(c => c.name))
-    if (!approvedCatNames.has(category)) {
-      try {
-        await getSupabase().from('feature_requests').insert({
-          type: 'category', name: category, city: '', business_id: businessId, status: 'pending',
-        })
-      } catch {}
+    const { data: bizRow } = await getSupabase()
+      .from('businesses')
+      .select('category, city, location, phone')
+      .eq('id', businessId)
+      .maybeSingle()
+    const approvedCats = await getApprovedCategories()
+    const cats = Array.isArray(bizRow?.category) ? (bizRow!.category as string[]) : []
+    for (const category of cats) {
+      if (!approvedCats.some(c => c.name === category)) {
+        try {
+          await getSupabase().from('feature_requests').insert({
+            type: 'category', name: category, city: '', business_id: businessId, status: 'pending',
+          })
+        } catch {}
+      }
     }
-    if (area && city) {
+    const approvedAreas = await getApprovedAreas()
+    if (city && area) {
       const approvedAreaNames = new Set(approvedAreas.filter(a => a.city === city).map(a => a.name))
       if (!approvedAreaNames.has(area)) {
         try {
@@ -972,6 +973,10 @@ async function publishBusiness(from: string, session: ChatSession) {
       `Your business "${name}" is now pending review.`,
       'Once an admin approves it you will get a confirmation here.',
       '',
+      result.pendingPayment
+        ? '💵 To go live: pay USD 1 — link: ' + SITE_URL + '/pay (manual confirmation; EcoCash on WhatsApp is coming soon)'
+        : '⭐ Public-service listing: our team verifies it fast.',
+      '',
       `✏️ Save this link to edit your listing later:`,
       `${SITE_URL}/edit?token=${token}`,
       '',
@@ -989,14 +994,15 @@ async function publishBusiness(from: string, session: ChatSession) {
     sendWhatsAppMessage(
       ADMIN_WHATSAPP,
       [
-        '🆕 NEW BUSINESS PENDING VERIFICATION',
+        result.pendingPayment ? '🆕 NEW BUSINESS PENDING VERIFICATION' : '🚨 YELLOW PAGES SUBMISSION: VERIFY FAST',
         '',
         `Name: ${name}`,
-        `Category: ${category}`,
-        `Location: ${location}`,
-        `Phone: ${fullPhone}`,
+        `Category: ${result.categories.join(', ')}`,
+        `Location: ${result.city || 'Zimbabwe (whole country)'}`,
+        `Phone: ${phone}`,
         `Approve: ${SITE_URL}/admin`,
-      ].join('\n')
+        result.isYellowPages ? 'Public-service listing: verify ASAP for the Emergency & Essential strip.' : '',
+      ].filter(Boolean).join('\n')
     ).catch(() => {})
   }
 }
