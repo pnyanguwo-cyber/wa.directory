@@ -18,6 +18,9 @@ export interface ListingFormState {
   address?: string
   description?: string
   whole_country?: boolean
+  // Public logo URL queued from a photo the user sent while filling the
+  // form (uploaded to the logos bucket by the bot, attached at publish).
+  logo?: string
 }
 
 export function findListingCity(text: string): string | null {
@@ -458,6 +461,7 @@ export function renderListingForm(state: ListingFormState, senderPhone: string):
     '',
     ...fieldLines(state, senderPhone),
     '',
+    ...(state.logo ? ['📷 Logo: photo attached — uploads at publish', ''] : []),
     'Send anything to fill or update a field — one line or more. Tap ↗ Publish when ready, or *cancel* to quit.',
   ].join('\n')
 }

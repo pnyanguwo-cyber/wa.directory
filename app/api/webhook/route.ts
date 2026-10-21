@@ -5,8 +5,10 @@ import { orderSearchResults } from '@/lib/ranking'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
-import { upsertBotContact, markBotContactOptOut, sweepIdleNudges } from '@/lib/bot-contacts'
+import { upsertBotContact, markBotContactOptOut, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
 import { createListing } from '@/lib/listing-create'
+import { uploadLogoImage } from '@/lib/image-storage'
+import { fetchWhatsAppMedia, perceiveMedia, mediaRateOk, type MediaKind } from '@/lib/bot-sense'
 import {
   parseListingMessage,
   renderListingForm,
@@ -32,6 +34,7 @@ import {
   resultRows,
   RESULTS_PER_PAGE,
   renderMainMenuBody,
+  renderGreetingBody,
   renderDetailCard,
   renderChatPrompt,
   chatCtaUrl,
@@ -451,17 +454,19 @@ async function startFreshSearchPrompt(from: string) {
   )
 }
 
-async function sendMainMenu(from: string) {
+const MENU_ROWS = [
+  { id: 'menu_search', title: '☰ Search' },
+  { id: 'menu_register', title: '✎ Register' },
+  { id: 'menu_help', title: '✆ Help' },
+  { id: 'menu_pay', title: '$ Pay' },
+]
+
+async function sendMainMenu(from: string, greeting?: string) {
   await clearSession(from)
   await sendInteractiveList(
     from,
-    renderMainMenuBody(),
-    [
-      { id: 'menu_search', title: '☰ Search' },
-      { id: 'menu_register', title: '✎ Register' },
-      { id: 'menu_help', title: '✆ Help' },
-      { id: 'menu_pay', title: '$ Pay' },
-    ],
+    renderMainMenuBody(greeting),
+    MENU_ROWS,
     'Main menu'
   )
 }
@@ -535,6 +540,114 @@ async function handleListFormText(from: string, session: ChatSession, text: stri
     : missing.length === 0
       ? 'All mandatory fields are set — tap ↗ Publish to submit.'
       : `${missing.length} mandatory field${missing.length > 1 ? 's' : ''} still missing: ${missing.join(', ')}.`
+  await sendFormUpdate(from, state, tail)
+}
+
+// ── Bot perception: voice notes and photos ────────────────────────────────
+// Media becomes intent: a search outside registration, or form fields/logo
+// while the user is mid-registration. Every failure answers with a text
+// fallback so nothing silently dies.
+
+async function handleBotMedia(from: string, session: ChatSession | null, message: Record<string, unknown>) {
+  const kind: MediaKind = message.type === 'audio' ? 'audio' : 'image'
+  const blob = message[kind] as { id?: string; caption?: string } | undefined
+  const mediaId = blob?.id || ''
+  const caption = typeof blob?.caption === 'string' ? blob.caption : ''
+
+  if (!mediaRateOk(from)) {
+    await sendWhatsAppMessage(
+      from,
+      'You can send at most 3 voice or photo tries per hour to keep things quick. Send it as text and I keep working.'
+    )
+    return
+  }
+
+  const media = await fetchWhatsAppMedia(mediaId)
+  const sense = media ? await perceiveMedia(kind, media.buffer, media.mime, caption) : null
+
+  if (!sense || !sense.term) {
+    if (session?.step === 'list_form' && kind === 'image') {
+      await sendWhatsAppMessage(
+        from,
+        "I couldn't read that photo. Keep typing — *name …*, *category …*, *description …* — or tap ↗ Publish when ready."
+      )
+      return
+    }
+    await sendWhatsAppMessage(
+      from,
+      kind === 'audio'
+        ? "I couldn't hear that clearly. Send it as text and I'll search instantly."
+        : "I couldn't recognise that photo. Describe it in text and I'll search instantly."
+    )
+    return
+  }
+
+  if (session?.step === 'list_form') {
+    await handleListFormMedia(from, session, kind, sense, media!.buffer)
+    return
+  }
+
+  // Search-first: voice notes transcribed, photos recognised, then a search.
+  const query = [sense.term, sense.city].filter(Boolean).join(' ')
+  const echo =
+    kind === 'audio'
+      ? `You said: *${query}* — searching…`
+      : `That photo looks like: *${query}* — searching…`
+  await sendWhatsAppMessage(from, echo)
+  await dispatchSearch(from, query)
+}
+
+// Media while filling the listing form: voice notes flow through the same
+// paragraph parser as text; photos contribute category + description and
+// queue themselves as the listing logo (uploads at publish).
+async function handleListFormMedia(
+  from: string,
+  session: ChatSession,
+  kind: MediaKind,
+  sense: { transcript?: string; term?: string; city?: string; category?: string; description?: string },
+  buffer: Buffer
+) {
+  const before = session.data.list || {}
+
+  if (kind === 'audio') {
+    const transcript = sense.transcript || [sense.term, sense.city].filter(Boolean).join(' ')
+    await handleListFormText(from, session, transcript)
+    return
+  }
+
+  // Photo: description + (matched) category fill the form; bytes off to storage.
+  const state: ListingFormState = { ...before }
+  const changed: string[] = []
+  if (sense.description) {
+    state.description = sense.description.slice(0, 400)
+    changed.push('description')
+  }
+  if (sense.category) {
+    const cats = state.categories?.length ? [...state.categories] : []
+    const approved = await getApprovedCategories()
+    // matchCategoryAgainst falls back to 'Other' — don't trust garbage here.
+    const matchedRaw = matchCategoryAgainst(sense.category, approved)
+    const matched = matchedRaw === 'Other' ? null : matchedRaw
+    if (matched && !cats.includes(matched) && cats.length < 4) {
+      cats.push(matched)
+      state.categories = cats
+      changed.push(`category: ${matched}`)
+    }
+  }
+  const beforeLogo = typeof before.logo === 'string' ? before.logo : ''
+  const logoUrl = await uploadLogoImage(new Uint8Array(buffer))
+  if (logoUrl) {
+    state.logo = logoUrl
+    changed.push('photo queued as logo')
+  }
+
+  await saveSession(from, 'list_form', { list: state } as ChatSessionData)
+  const missing = missingRequired(state)
+  const tail = `Photo read${changed.length ? `: ${changed.join(', ')}` : ' — nothing usable, keep typing'}.` +
+    (!logoUrl && !beforeLogo ? ' (Logo not saved — try a clearer shot.)' : '') +
+    (missing.length === 0
+      ? ' All mandatory fields set — tap ↗ Publish.'
+      : ` Still missing: ${missing.join(', ')}.`)
   await sendFormUpdate(from, state, tail)
 }
 
@@ -1333,6 +1446,7 @@ async function publishBusiness(from: string, session: ChatSession) {
     website: typeof data.website === 'string' ? data.website : undefined,
     address: typeof data.address === 'string' ? data.address : undefined,
     phoneType: data.phone_type === 'voice' ? 'voice' : 'whatsapp',
+    logoUrl: typeof data.list?.logo === 'string' ? data.list.logo : undefined,
     generateSite: true,
     notify: false,
   })
@@ -1643,10 +1757,15 @@ export async function POST(request: Request) {
           message.interactive?.button_reply?.id ||
           message.interactive?.list_reply?.id ||
           ''
+        // Voice notes and photos become intent (search or registration input).
+        const mediaKind: MediaKind | null =
+          message.type === 'audio' ? 'audio' : message.type === 'image' ? 'image' : null
 
-        if (!text && !action) continue
+        if (!text && !action && !mediaKind) continue
 
-        console.log(`WhatsApp message from ${from}: ${text || `[${action}]`}`)
+        console.log(
+          `WhatsApp message from ${from}: ${text || `[${action || (mediaKind === 'audio' ? 'voice note' : 'photo')}]`}`
+        )
 
         // Customer base: one row per number, profile name when Meta send it.
         const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
@@ -1663,6 +1782,26 @@ export async function POST(request: Request) {
 
         if (action) {
           await handleAction(from, session, action)
+          continue
+        }
+
+        // Greeting-only messages ("hi", "mangwanani", "sawubona"…) reset to
+        // the main menu from ANY state, mirroring the caller's own language
+        // and greeting them by their WhatsApp profile name when Meta sends it.
+        let greetBody = renderGreetingBody(text, waName)
+        if (greetBody && !waName) {
+          const contactName = await getBotContactName(from)
+          if (contactName) greetBody = renderGreetingBody(text, contactName) || greetBody
+        }
+        if (greetBody) {
+          await sendMainMenu(from, greetBody)
+          continue
+        }
+
+        // Voice note / photo: search intent outside registration, form input
+        // + logo while filling the listing form.
+        if (mediaKind) {
+          await handleBotMedia(from, session, message)
           continue
         }
 

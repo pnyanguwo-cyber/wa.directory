@@ -16,6 +16,22 @@ export async function upsertBotContact(phone: string, name: string, step: string
   }
 }
 
+// Last-known WhatsApp profile name (Meta only sends contacts with most
+// messages; greetings fall back to this when the payload omits it).
+export async function getBotContactName(phone: string): Promise<string> {
+  if (!phone) return ''
+  try {
+    const { data } = await getSupabase()
+      .from('bot_contacts')
+      .select('name')
+      .eq('phone', phone)
+      .maybeSingle()
+    return data?.name || ''
+  } catch {
+    return ''
+  }
+}
+
 export const IDLE_NUDGE_MINUTES = 30
 export const NUDGE_WINDOW_HOURS = 24
 

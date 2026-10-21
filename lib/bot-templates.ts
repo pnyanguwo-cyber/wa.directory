@@ -280,14 +280,87 @@ export function resultRows(cards: ResultCard[], page = 0): InteractiveRow[] {
   return rows
 }
 
-/** Main menu (opened by menu / hi / hello). Rows are by convention in route. */
-export function renderMainMenuBody(): string {
+/** Main menu (opened by menu / hi / hello). Rows are by convention in route.
+ * An optional greeting replaces the robot header so the greeting + menu
+ * arrive as one native list. */
+export function renderMainMenuBody(greeting?: string): string {
   return [
-    '*WA Directory* 🤖',
+    greeting || '*WA Directory* 🤖',
     'Find any product or service on WhatsApp, near you.',
     '',
     'Tap an option:',
   ].join('\n')
+}
+
+// ── Adaptive greeting ────────────────────────────────────────────────────
+// Greeting-only messages ("hi", "hey there", "mangwanani", "sawubona"…)
+// mirror the caller's own language, with their WhatsApp profile name when
+// Meta provides it. Anything longer than a greeting falls through to the
+// normal search flow so "hi plumber harare" is still a search.
+
+const GREETING_FILLER = new Set([
+  'there', 'shamwari', 'bre', 'bra', 'boss', 'bro', 'chief', 'everyone',
+  'guys', 'team', 'sisi', 'sah', 'sir', 'madam', 'my', 'dude', 'fam',
+])
+
+interface GreetingRule {
+  match: RegExp
+  reply: string
+}
+
+const GREETING_RULES: GreetingRule[] = [
+  // English
+  { match: /\b(?:good\s+morning|morning)\b/i, reply: 'Good morning' },
+  { match: /\b(?:good\s+afternoon|afternoon)\b/i, reply: 'Good afternoon' },
+  { match: /\b(?:good\s+evening|evening)\b/i, reply: 'Good evening' },
+  // Shona
+  { match: /\bmangwanani\b/i, reply: 'Mangwanani' },
+  { match: /\bmasikati\b/i, reply: 'Masikati' },
+  { match: /\bmadekuro\b/i, reply: 'Madekuro' },
+  { match: /\bmhoroi?\b/i, reply: 'Mhoro' },
+  { match: /\bwakawaka\b/i, reply: 'Wakawaka' },
+  { match: /\bsho\b/i, reply: 'Sho' },
+  // Ndebele
+  { match: /\bsawubona\b/i, reply: 'Sawubona' },
+  { match: /\bsalibonani\b/i, reply: 'Salibonani' },
+  { match: /\bkulenyane\b/i, reply: 'Kulenyane' },
+  // English basics last — most specific time greetings win above.
+  { match: /\b(?:hi|hiya|hey|hello)\b/i, reply: 'Hey' },
+]
+
+// Returns the mirrored greeting ("Mangwanani Tinashe!") for greeting-only
+// messages, or null when this message should be handled by the normal flow.
+export function renderGreetingBody(text: string, name?: string): string | null {
+  const t = text.trim().replace(/\s+/g, ' ')
+  if (!t || t.length > 40) return null
+  const words = t.split(' ')
+  if (words.length > 3) return null
+
+  let greeting: string | null = null
+  let greetingWords: string[] = []
+  for (const rule of GREETING_RULES) {
+    if (rule.match.test(t)) {
+      greeting = rule.reply
+      greetingWords = greeting.toLowerCase().split(/\s+/)
+      break
+    }
+  }
+  if (!greeting) return null
+
+  const leftover = words
+    .filter(w => !greetingWords.includes(w.toLowerCase()))
+    .filter(w => !GREETING_FILLER.has(w.toLowerCase()))
+  if (leftover.length > 1) return null
+  if (leftover.length === 1) {
+    const extra = leftover[0]
+    // "hi bread chinhoyi" is a search; "hey there" is a greeting. A name-like
+    // extra word is allowed ("hey Tinashe"), a town is not ("hi harare").
+    if (/\d/.test(extra) || extra.length > 30) return null
+    if (/^(harare|bulawayo|chitungwiza|mutare|gweru|kwekwe|kadoma|masvingo|chinhoyi|epworth|marondera|hwange|victoria falls|gwanda|rusape|bindura|beatrice|norton|banket|ruwa|chegutu|zvishavane|karoi|kariba|kunamhlwa|mashava|empandeni|sondela)$/i.test(extra)) return null
+  }
+
+  const who = name?.trim() ? ` ${name.trim().split(' ')[0]}` : ''
+  return `${greeting}${who}!`
 }
 
 /** Body for the nearby-towns results screen as a native list message. */
@@ -325,6 +398,7 @@ export function FALLBACK_HELP_LINES(siteUrl: string): string[] {
     '*Search:* what you need + your town',
     'e.g. "bread chinhoyi", "plumber in bulawayo"',
     'Or just send "plumber" and I will ask your town.',
+    'A voice note or a photo of what you need works too.',
     '',
     'Reply *1* to *5* after results for contact details',
     '',

@@ -24,6 +24,29 @@ export async function callGemini(prompt: string): Promise<string | null> {
   }
 }
 
+// Multimodal twin of callGemini for voice notes and photos: text and
+// inline_data parts (base64 bytes) in one generateContent call, same model
+// and key. Returns the trimmed first candidate text or null.
+export interface GeminiPart {
+  text?: string
+  inline_data?: { mime_type: string; data: string }
+}
+
+export async function callGeminiParts(parts: GeminiPart[]): Promise<string | null> {
+  try {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }] }),
+    })
+
+    const data = await res.json()
+    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+  } catch {
+    return null
+  }
+}
+
 const SEO_BLURB_FALLBACK = (category: string, location: string) =>
   `Find the best ${category} services in ${location}, Zimbabwe. WA Directory connects you with trusted local businesses via WhatsApp.`
 
