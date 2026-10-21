@@ -7,6 +7,8 @@ export interface ChatSessionData {
   phone?: string
   country_code?: string
   category?: string
+  // Multi-category support (the listing form fills up to 4).
+  categories?: string[]
   description?: string
   city?: string
   area?: string
@@ -15,6 +17,10 @@ export interface ChatSessionData {
   website?: string
   address?: string
   phone_type?: 'whatsapp' | 'voice'
+  price_range?: string
+  whole_country?: boolean
+  // Living form state for the paragraph intake flow (step 'list_form').
+  list?: import('./listing-intake').ListingFormState
   rating_pending?: string
   // ── Bot search flow ────────────────────────────────────────────────
   // Term typed by the user while waiting for a town ("Which town?").

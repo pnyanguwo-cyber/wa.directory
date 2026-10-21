@@ -7,6 +7,14 @@ import { getSession, saveSession, clearSession, type ChatSession, type ChatSessi
 import { getSupabase } from '@/lib/supabase-server'
 import { upsertBotContact, markBotContactOptOut, sweepIdleNudges } from '@/lib/bot-contacts'
 import { createListing } from '@/lib/listing-create'
+import {
+  parseListingMessage,
+  renderListingForm,
+  renderMissingRequiredList,
+  missingRequired,
+  LIST_INTRO,
+  type ListingFormState,
+} from '@/lib/listing-intake'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
@@ -452,17 +460,76 @@ async function sendMainMenu(from: string) {
   )
 }
 
-async function startRegister(from: string) {
-  await saveSession(from, 'name', {})
-  await sendWhatsAppMessage(
-    from,
-    [
-      "Great, let's list your business on WA Directory! 🎉",
-      '',
-      'First, what is your *business name*?',
-      'Send *cancel* anytime to stop.',
-    ].join('\n')
-  )
+async function startRegister(from: string, initialText: string = '') {
+  const { state } = parseListingMessage(initialText, from)
+  await saveSession(from, 'list_form', { list: state } as ChatSessionData)
+  await sendFormUpdate(from, state, LIST_INTRO())
+}
+
+// The living form: renders the current fill state; the interactive row below
+// it carries Publish / Cancel (Publish's gating lives in the tap handler).
+async function sendFormUpdate(from: string, state: ListingFormState, tailNote?: string) {
+  const body = [renderListingForm(state, from)]
+  if (tailNote) body.push('', tailNote)
+  const text = body.filter(Boolean).join('\n')
+  if (text.length <= 1020) {
+    await sendInteractiveButtons(from, text, [
+      { id: 'list_publish', title: '↗ Publish' },
+      { id: 'list_cancel', title: '✖ Cancel' },
+    ])
+  } else {
+    await sendWhatsAppMessage(from, text)
+  }
+}
+
+// Tap on ↗ Publish: the webapp's mandatory set (name + approved category +
+// valid phone) gates submission; anything missing is listed for the user.
+async function tryPublishForm(from: string, session: ChatSession) {
+  const state = session.data.list || {}
+  const missing = missingRequired(state)
+  if (missing.length > 0) {
+    await sendWhatsAppMessage(from, renderMissingRequiredList(state))
+    await sendFormUpdate(from, state)
+    return
+  }
+  // Lift the flat form state into the registration shape publishBusiness
+  // already consumes (written through the shared listing engine).
+  const merged: ChatSessionData = {
+    ...session.data,
+    name: state.name,
+    categories: state.categories,
+    category: state.categories?.[0],
+    city: state.whole_country ? '' : state.city,
+    whole_country: state.whole_country === true,
+    area: state.area,
+    phone: state.phone,
+    phone_type: state.phone_type,
+    price_range: state.price_range,
+    website: state.website,
+    address: state.address,
+    whatsapp_username: state.username,
+    description: state.description,
+  }
+  await publishBusiness(from, { phone: from, step: 'confirm', data: merged })
+  await clearSession(from)
+}
+
+async function handleListFormText(from: string, session: ChatSession, text: string) {
+  const before = session.data.list || {}
+  const beforeMissing = missingRequired(before).length
+  const { state } = parseListingMessage(text, from, before)
+  await saveSession(from, 'list_form', { list: state } as ChatSessionData)
+  const missing = missingRequired(state)
+  const filledAny =
+    missing.length < beforeMissing ||
+    ['name', 'categories', 'city', 'area', 'phone', 'price_range', 'website', 'address', 'description', 'username']
+      .some(k => JSON.stringify((state as Record<string, unknown>)[k]) !== JSON.stringify((before as Record<string, unknown>)[k]))
+  const tail = !filledAny
+    ? "I couldn't match that to a field yet — send e.g. *name …*, *city …*, *phone …*, or a description."
+    : missing.length === 0
+      ? 'All mandatory fields are set — tap ↗ Publish to submit.'
+      : `${missing.length} mandatory field${missing.length > 1 ? 's' : ''} still missing: ${missing.join(', ')}.`
+  await sendFormUpdate(from, state, tail)
 }
 
 // Where the search came from — makes ⬅ Back able to restore the last prompt.
@@ -583,6 +650,18 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'menu_register':
       await clearSession(from)
       await startRegister(from)
+      return
+    case 'list_publish': {
+      if (session?.step === 'list_form') {
+        await tryPublishForm(from, session)
+      } else {
+        await startRegister(from)
+      }
+      return
+    }
+    case 'list_cancel':
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'Registration cancelled. Send *help* anytime.')
       return
     case 'menu_help':
       await sendWhatsAppMessage(from, HELP_TEXT)
@@ -854,6 +933,8 @@ async function sendResultDetail(
 
   await saveSession(from, 'browse', { ...session.data, lastScreen: 'detail' })
 
+  // One interactive item only: the Chat on WhatsApp button (the old
+  // Back/New-search row is gone — typed replies cover those actions).
   const msg = renderDetailCard({
     name: b.name,
     slug: b.slug,
@@ -865,22 +946,15 @@ async function sendResultDetail(
     phone: b.phone,
     phoneType: b.phone_type,
   })
-  if (msg.length <= 1020) {
-    await sendInteractiveButtons(from, msg, [
-      { id: 'back', title: '⬅ Back' },
-      { id: 'new_search', title: '↺ New search' },
-    ])
-  } else {
-    await sendWhatsAppMessage(from, msg)
-  }
+  await sendWhatsAppMessage(from, msg)
 
-  // Native "Chat on WhatsApp" button (cta_url): skipped for voice-only
-  // listings where there is nothing to chat with.
+  // Native "Chat on WhatsApp" button (cta_url) — the card's only button.
+  // Voice-only listings have nothing to chat with, so they skip it.
   const digits = (b.phone || '').replace(/[^0-9]/g, '')
   if (digits && b.phone_type !== 'voice') {
     await sendCtaUrl(
       from,
-      renderChatPrompt(b.name),
+      `Start a WhatsApp chat with *${b.name}* — or type a new search anytime.`,
       '💬 Chat on WhatsApp',
       chatCtaUrl(b.id, from)
     )
@@ -901,8 +975,12 @@ async function publishBusiness(from: string, session: ChatSession) {
   const description = data.description?.trim() || ''
   const city = data.city || ''
   const area = data.area || ''
+  const wholeCountry = data.whole_country === true
   const countryCode = data.country_code || COUNTRY_CODE
-  const phone = (data.phone || '').replace(/[^0-9]/g, '')
+  // Both flows store phones here — the guided flow collects national digits,
+  // the form flow stores full '263…' numbers. Normalize to national.
+  const rawPhone = (data.phone || '').replace(/[^0-9]/g, '')
+  const phone = rawPhone.startsWith('263') ? rawPhone.slice(3) : rawPhone
 
   // One code path for listings, webapp and WhatsApp: the shared engine owns
   // validation, business-id/username/slug generation, payment_status rules
@@ -911,12 +989,14 @@ async function publishBusiness(from: string, session: ChatSession) {
     name,
     countryCode,
     phone,
-    categories: [data.category || 'Other'],
-    city: city || undefined,
+    categories: data.categories && data.categories.length ? data.categories : [data.category || 'Other'],
+    city: wholeCountry ? '*' : city || undefined,
+    pendingCity: !wholeCountry && !!city && !zimbabweCities.some(c => c.name === city),
     areas: city ? [area].filter(Boolean) : [],
     description,
     whatsappUsername: data.whatsapp_username || '',
     requestedUsername: data.whatsapp_username || '',
+    priceRange: typeof data.price_range === 'string' ? data.price_range : undefined,
     website: typeof data.website === 'string' ? data.website : undefined,
     address: typeof data.address === 'string' ? data.address : undefined,
     phoneType: data.phone_type === 'voice' ? 'voice' : 'whatsapp',
@@ -1383,6 +1463,21 @@ export async function POST(request: Request) {
           continue
         }
 
+        // ── Living list-form: parse + re-render after every reply ──────
+        if (session?.step === 'list_form') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          if (/^(publish|submit|yes|y|go live)\b/.test(lower)) {
+            await tryPublishForm(from, session)
+            continue
+          }
+          await handleListFormText(from, session, text)
+          continue
+        }
+
         if (session?.step && lower !== 'cancel' && lower !== 'help') {
           await continueRegistration(from, session, text)
           continue
@@ -1394,8 +1489,8 @@ export async function POST(request: Request) {
           continue
         }
 
-        if (/^(register|list me|list|sign me up|add my business)/.test(lower)) {
-          await startRegister(from)
+        if (/^(register|list me|list my|list on|get listed|add my business|sign me up|advertise\b|sell\b.*\b(list|advertise|get listed)\b|i want to (list|sell|advertise)|join\b)\b/.test(lower) || lower === 'list') {
+          await startRegister(from, text)
           continue
         }
 
