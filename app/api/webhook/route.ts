@@ -117,10 +117,11 @@ interface BotBusinessRow {
   phone_type: string | null
   lat: number | null
   lng: number | null
+  socials?: string[] | null
 }
 
 const BOT_BIZ_COLUMNS =
-  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng'
+  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials'
 
 interface ParsedQuery {
   term: string
@@ -519,33 +520,154 @@ async function sendRegisterChoice(from: string) {
 }
 
 // Personal contact intake: the whole draft is ONE message —
-// "Tendai Ncube 0771 234 567 Harare". Deliberately simpler than the
-// business form: those three fields are the entire product.
+// "Tendai Ncube 0771 234 567 Harare IG @tendai tiktok.com/@tendai". Deliberately
+// simpler than the business form: name, phone, optional city, up to 3 socials.
 const CONTACT_PHONE_RE = /(?:\+?263|0)\s?7[\d\s.\-]{8,11}(?!\d)/
+// Social links: instagram/facebook/tiktok/linkedin/twitter URLs and bare
+// @handles ("@tendai" / "ig @tendai" / "instagram.com/tendai").
+const SOCIAL_HINT_RE = /(?:^|\s)(?:ig|insta(?:gram)?|facebook|fb|tiktok|tt|linked(?:in)?|in|twitter|x|snap(?:chat)?|whatsapp|wa|socials?)(?:\s*[:@\/])?\s*/gi
 
-function parseContactLine(text: string): { name: string; phone: string; city: string | null } | null {
+interface ContactDraft {
+  name: string
+  phone: string
+  city: string | null
+  socials?: string[]
+}
+
+function extractSocials(text: string): { socials: string[]; stripped: string } {
+  const socials: string[] = []
+  // Pull explicit platform-prefixed tokens first: "IG @tendai", "fb tendai.ncube",
+  // "tiktok: @t.n" — separator can be @ : / or just a space.
+  let working = text
+  const prefixTokens = /(?:ig|insta(?:gram)?|instagram\.com|facebook|fb(?:\.com|\.me)?|tiktok|linkedin(?:\.com)?|twitter|x\.com|snap(?:chat)?)\s*(?:[:@/]\s*|(?=[a-zA-Z0-9._]))\s*(@?[a-zA-Z][a-zA-Z0-9._]{2,39})/gi
+  let pm: RegExpExecArray | null
+  while ((pm = prefixTokens.exec(text)) !== null && socials.length < 3) {
+    const handle = pm[1]
+    if (handle && !socials.includes(handle)) socials.push(handle)
+  }
+  working = text.replace(prefixTokens, ' ')
+  working = working.replace(SOCIAL_HINT_RE, (s) => (s.trim() ? ' ' : ' '))
+  // Bare @handles (min 3 chars, no spaces) anywhere left in the text.
+  const atHandles = working.match(/@[a-zA-Z][a-zA-Z0-9._]{2,39}/g) || []
+  for (const h of atHandles) {
+    if (socials.length >= 3) break
+    if (!socials.includes(h)) socials.push(h)
+    working = working.replace(h, ' ')
+  }
+  // Bare URLs (any domain) — someone pasting insta.me/x/... links.
+  const urls = working.match(/(?:https?:\/\/|www\.)[^\s]+/gi) || []
+  for (const u of urls) {
+    if (socials.length >= 3) break
+    if (!socials.includes(u)) socials.push(u)
+    working = working.replace(u, ' ')
+  }
+  return { socials, stripped: working.replace(/\s{2,}/g, ' ').trim() }
+}
+
+function parseContactLine(text: string): ContactDraft | null {
   const m = text.trim().match(CONTACT_PHONE_RE)
   if (!m || m.index == null) return null
   const phoneDigits = m[0].replace(/[^0-9]/g, '')
   const before = text.slice(0, m.index).trim()
   const after = text.slice(m.index + m[0].length).trim()
-  const cityRaw = findListingCity(after) || findListingCity(before)
-  let name = after
-  if (cityRaw) name = name.replace(new RegExp(cityRaw, 'i'), '').trim()
-  if (!name || name.length < 2) name = before
+
+  // Socials may appear before or after the phone; lint them out of both
+  // halves before deciding what the name should be.
+  const pre = extractSocials(before)
+  const post = extractSocials(after)
+  const socials = [...pre.socials, ...post.socials].filter(Boolean).slice(0, 3)
+  const nameSource = post.stripped.length >= 2 ? post.stripped : pre.stripped
+  const otherSide = nameSource === pre.stripped ? post.stripped : pre.stripped
+
+  const cityRaw = findListingCity(nameSource) || findListingCity(otherSide)
+  let name = nameSource
+  if (cityRaw) name = name.replace(new RegExp(cityRaw, 'i'), '').replace(/\s{2,}/g, ' ').trim()
+  if (!name || name.length < 2) name = otherSide
   name = name.replace(/^(?:the\s+)?(?:contact\s+)?(?:name\s+)?(?:is\s+:?\s*)?/i, '').replace(/[,:;]+$/, '').trim()
   if (!name || name.length < 2 || /\d/.test(name)) return null
-  return { name: name.slice(0, 80), phone: phoneDigits, city: cityRaw }
+  return {
+    name: name.slice(0, 80),
+    phone: phoneDigits,
+    city: cityRaw,
+    socials: socials.length ? socials : undefined,
+  }
 }
 
 // Publish the personal contact: shared listing engine (verified:false +
-// pending) and the payment engine with the 0.20 override. The EcoCash PIN
-// confirmation path flips verified + active with no admin step.
-async function tryPublishContact(from: string, session: ChatSession, msgId?: string) {
+// pending) and the payment engine with the personal pricing override. The
+// EcoCash PIN confirmation path flips verified + active with no admin step.
+async function tryPublishContact(
+  from: string,
+  session: ChatSession,
+  msgId?: string,
+  plan: '1m' | '12m' = '1m',
+  amount = 0.2
+) {
   const c = session.data.contact!
   const rawName = c.name
   const rawPhone = c.phone.replace(/[^0-9]/g, '')
   const phone = rawPhone.startsWith('263') ? rawPhone.slice(3) : rawPhone
+  const fullListedPhone = `+263${phone}`
+  // payer_phone exists in two stored formats (263… from the bot flow, 0…
+  // from web /api/pay) — match either.
+  const payerDigits = digitsOnly(from)
+  const payerZero = payerDigits.replace(/^263/, '0')
+
+  // Guard 1 — cap: max 3 ACTIVE personal contacts per payer phone, so a
+  // business can't dodge the USD 1 subscription by batch-buying 20c rows.
+  const { data: payerSubs } = await getSupabase()
+    .from('listing_subscriptions')
+    .select('business_id, businesses!inner(category)')
+    .or(`payer_phone.eq.${payerDigits},payer_phone.eq.${payerZero}`)
+    .eq('status', 'active')
+  const personalIds = (payerSubs || [])
+    .map((s: unknown) => s as { business_id?: string; businesses?: { category?: unknown } | null })
+    .filter((s): s is { business_id: string; businesses?: { category?: unknown } } =>
+      Array.isArray(s.businesses?.category) && (s.businesses!.category as string[]).includes('Personal Contact'))
+    .map((s) => s.business_id)
+  if (personalIds.length >= 3) {
+    await sendWhatsAppMessage(
+      from,
+      [
+        'You already have 3 active personal contacts 📱',
+        '',
+        'That is the limit per person. If you are registering a business,',
+        'tap ✎ Register and choose *Business* — USD 1 per month, no cap.',
+      ].join('\n')
+    )
+    await clearSession(from)
+    return
+  }
+
+  // Guard 2 — existing business: the listed phone belonging to a business
+  // listing means personal is the wrong (discounted) product. phones are
+  // stored both as 263… and +263… depending on the route in.
+  const listedDigits = rawPhone.replace(/^263/, '').replace(/^0/, '')
+  const { data: bizRows } = await getSupabase()
+    .from('businesses')
+    .select('id, name, category')
+    .in('phone', [`+263${listedDigits}`, `263${listedDigits}`])
+    .neq('payment_status', 'expired')
+  const bizBlock = (bizRows || ([]) as { name?: string; category?: unknown }[]).find(
+    (b) => Array.isArray(b.category) && !b.category.includes('Personal Contact')
+  )
+  if (
+    bizBlock &&
+    bizBlock.name
+  ) {
+    await sendWhatsAppMessage(
+      from,
+      [
+        `*+263${listedDigits}* is already registered as a business listing`,
+        `(*${bizBlock.name}*) — personal contacts are for people, not companies.`,
+        '',
+        'If that is you: renew it for USD 1/month (send *pay*), or register a',
+        'different number for the personal contact.',
+      ].join('\n')
+    )
+    await clearSession(from)
+    return
+  }
 
   const result = await createListing({
     name: rawName,
@@ -554,6 +676,7 @@ async function tryPublishContact(from: string, session: ChatSession, msgId?: str
     categories: ['Personal Contact'],
     city: c.city || undefined,
     phoneType: 'whatsapp',
+    socials: c.socials,
     generateSite: false,
     notify: false,
   })
@@ -569,8 +692,8 @@ async function tryPublishContact(from: string, session: ChatSession, msgId?: str
   const pay = await createListingPayment({
     businessId: result.businessId,
     payerPhone: from,
-    plan: '1m',
-    amountOverride: 0.2,
+    plan,
+    amountOverride: amount,
   })
   if (!pay.ok) {
     // The listing exists but payment couldn't start — the admin fallback in
@@ -580,7 +703,7 @@ async function tryPublishContact(from: string, session: ChatSession, msgId?: str
       [
         `✅ *${result.name}* — Personal contact was saved.`,
         '',
-        'The 20c payment could not start right now. Our team will confirm it and your contact will go live.',
+        `The USD ${amount.toFixed(2)} payment could not start right now. Our team will confirm it and your contact will go live.`,
       ].join('\n')
     )
     await clearSession(from)
@@ -591,7 +714,7 @@ async function tryPublishContact(from: string, session: ChatSession, msgId?: str
     [
       `✅ *${result.name}* — Personal contact`,
       '',
-      '💸 USD 0.20 · EcoCash',
+      `💸 USD ${amount.toFixed(2)}${plan === '12m' ? ' · 12 months' : ' · 1 month'} · EcoCash`,
       pay.autoEcoCash
         ? pay.message
         : pay.message + ' (goes live once confirmed — usually within minutes).',
@@ -1245,17 +1368,26 @@ async function handleAction(from: string, session: ChatSession | null, action: s
         [
           'Add a personal contact to the directory 📱',
           '',
-          'Send the contact\'s name + phone (+ city optional), e.g.',
-          '*Tendai Ncube 0771 234 567 Harare*',
+          "Send the contact's name + phone (+ city, socials optional), e.g.",
+          '*Tendai Ncube 0771 234 567 Harare IG @tendai*',
           '',
-          'USD 0.20 · paid via EcoCash · live once you enter the PIN.',
+          'USD 0.20/month or USD 1.00/year — paid via EcoCash.',
         ].join('\n')
       )
       return
     }
+    case 'reg_contact_pay_monthly':
     case 'reg_contact_publish': {
       if (session?.step === 'reg_contact' && session.data.contact) {
-        await tryPublishContact(from, session, msgId)
+        await tryPublishContact(from, session, msgId, '1m', 0.2)
+      } else {
+        await sendRegisterChoice(from)
+      }
+      return
+    }
+    case 'reg_contact_pay_year': {
+      if (session?.step === 'reg_contact' && session.data.contact) {
+        await tryPublishContact(from, session, msgId, '12m', 1.0)
       } else {
         await sendRegisterChoice(from)
       }
@@ -1268,8 +1400,8 @@ async function handleAction(from: string, session: ChatSession | null, action: s
         [
           'Add a personal contact to the directory 📱',
           '',
-          "Send the contact's name + phone (+ city optional), e.g.",
-          '*Tendai Ncube 0771 234 567 Harare*',
+          "Send the contact's name + phone (+ city, socials optional), e.g.",
+          '*Tendai Ncube 0771 234 567 Harare IG @tendai*',
         ].join('\n')
       )
       return
@@ -1686,6 +1818,7 @@ async function sendResultDetail(
     items: ((itemRows as { name: string; price: number | null }[]) || []).slice(),
     phone: b.phone,
     phoneType: b.phone_type,
+    socials: Array.isArray(b.socials) ? b.socials : [],
   })
   await sendWhatsAppMessage(from, msg)
 
@@ -2267,7 +2400,7 @@ export async function POST(request: Request) {
           continue
         }
 
-        // ── Personal contact intake: name + phone (+ city) in one message ──
+        // ── Personal contact intake: name + phone (+ city, socials) ─────
         if (session?.step === 'reg_contact') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
@@ -2278,27 +2411,35 @@ export async function POST(request: Request) {
           if (!c) {
             await sendWhatsAppMessage(
               from,
-              "I need the contact's name and phone. e.g. *Tendai Ncube 0771 234 567 Harare*"
+              [
+                "I need the contact's name and phone. e.g.",
+                '*Tendai Ncube 0771 234 567 Harare*',
+                '',
+                'Add socials too if you like: *IG @tendai* or *fb tendai*.',
+              ].join('\n')
             )
             continue
           }
           await saveSession(from, 'reg_contact', { contact: c })
+          const socialLines = (c.socials || []).slice(0, 3).map(s => `🔗 ${s}`)
           await sendInteractiveButtons(
             from,
             [
               `*${c.name}* ${c.city ? `📍 ${c.city}` : '📍 Zimbabwe'}`,
               `📱 +${c.phone.startsWith('263') ? c.phone : '263' + c.phone.replace(/^0/, '')}`,
+              ...socialLines,
               '',
-              'Adding as a personal contact:',
-              '• USD 0.20 per month',
-              '• Paid via EcoCash — you enter the PIN now',
+              'Personal contact pricing:',
+              '• USD 0.20 per month, or',
+              '• USD 1.00 for a full year',
+              'Paid via EcoCash — you enter the PIN now.',
               '',
               'Ready to go live?',
             ].join('\n'),
             [
-              { id: 'reg_contact_publish', title: 'Pay 20c & go live' },
+              { id: 'reg_contact_pay_monthly', title: 'Pay 20c · 1 month' },
+              { id: 'reg_contact_pay_year', title: 'Pay $1 · 12 months' },
               { id: 'reg_contact_fix', title: '✎ Fix details' },
-              { id: 'cancel', title: '✖ Cancel' },
             ]
           )
           continue

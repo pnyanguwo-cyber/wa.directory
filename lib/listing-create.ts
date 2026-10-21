@@ -38,6 +38,8 @@ export interface ListingInput {
   siteContactEmail?: string
   whatsappUsername?: string
   requestedUsername?: string
+  /** Up to 3 social links (personal contacts): handles or plain URLs. */
+  socials?: string[]
   bio?: string
   description?: string
   notify?: boolean
@@ -108,6 +110,15 @@ export async function createListing(body: Partial<ListingInput>): Promise<Listin
   if (cleanCategories.length === 0) {
     return { error: 'Selected categories are not on the approved list.' }
   }
+
+  // Social links (personal contacts): portal handles or URLs, max 3, plain
+  // strings — presentation renders them verbatim, so never allow control
+  // characters or whitespace runs.
+  const cleanSocials = (Array.isArray(body.socials) ? body.socials : [])
+    .filter((s: unknown): s is string => typeof s === 'string')
+    .map((s: string) => s.trim().replace(/\s+/g, ' ').replace(/[`*_]/g, '').slice(0, 100))
+    .filter(Boolean)
+    .slice(0, 3)
 
   let cleanAreas: string[] = []
   if (Array.isArray(body.areas)) {
@@ -191,6 +202,7 @@ export async function createListing(body: Partial<ListingInput>): Promise<Listin
         logo_url: typeof body.logoUrl === 'string' && body.logoUrl.trim() ? body.logoUrl.trim() : null,
         price_range: normalizedPrice,
         website: typeof body.website === 'string' && body.website.trim() ? body.website.trim() : null,
+        socials: cleanSocials,
         address: typeof body.address === 'string' ? body.address.trim() : '',
         lat: typeof body.lat === 'number' && Number.isFinite(body.lat) ? body.lat : null,
         lng: typeof body.lng === 'number' && Number.isFinite(body.lng) ? body.lng : null,

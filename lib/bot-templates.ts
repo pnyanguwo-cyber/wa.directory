@@ -116,6 +116,8 @@ export interface DetailData {
   phone: string | null
   /** 'whatsapp' | 'voice' | null */
   phoneType: string | null
+  /** Social links (personal contacts carry these). */
+  socials?: string[]
 }
 
 /** Readable phone display: +263 772 234 002. */
@@ -177,6 +179,12 @@ export function renderDetailCard(b: DetailData): string {
     lines.push(isVoice ? `📞 ${formatPhone(digits)} (voice line, no WhatsApp)` : `📞 ${formatPhone(digits)}`)
   } else {
     lines.push(`🔗 ${listingUrl(b)}`)
+  }
+
+  const socials = (b.socials || []).filter(Boolean).slice(0, 3)
+  if (socials.length > 0) {
+    lines.push('', '*Socials*')
+    for (const s of socials) lines.push(`🔗 ${s}`)
   }
 
   return [
