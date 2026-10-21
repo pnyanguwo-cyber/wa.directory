@@ -1,6 +1,7 @@
 import { getCached, setCached } from './ai-cache'
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`
 
 // Single Gemini entry point: posts one prompt, returns the trimmed first
 // candidate text — or null when the call fails or the response is empty.
