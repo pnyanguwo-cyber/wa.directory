@@ -15,6 +15,7 @@ import {
   renderListingForm,
   renderMissingRequiredList,
   missingRequired,
+  findListingCity,
   LIST_INTRO,
   type ListingFormState,
 } from '@/lib/listing-intake'
@@ -36,6 +37,7 @@ import {
   resultRows,
   RESULTS_PER_PAGE,
   renderMainMenuBody,
+  renderWelcomeInstructions,
   renderGreetingBody,
   renderDetailCard,
   renderChatPrompt,
@@ -468,19 +470,20 @@ async function startFreshSearchPrompt(from: string) {
   )
 }
 
+// Main menu: search is NOT a menu row — typing is searching, so the menu
+// only carries account features. Titles cap at 24 chars (WhatsApp limit);
+// the pricing hook lives in the row description.
 const MENU_ROWS = [
-  { id: 'menu_search', title: '☰ Search' },
-  { id: 'menu_near', title: '📍 Near me' },
-  { id: 'menu_register', title: '✎ Register' },
-  { id: 'menu_pay', title: '$ Pay' },
-  { id: 'menu_help', title: '✆ Help' },
+  { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal 20c' },
+  { id: 'menu_pay', title: '$ Pay (EcoCash)', description: 'Pay or top up via EcoCash' },
+  { id: 'menu_help', title: '✆ Help', description: 'Tips & support' },
 ]
 
-async function sendMainMenu(from: string, greeting?: string, newContact?: boolean) {
+async function sendMainMenu(from: string) {
   await clearSession(from)
   await sendInteractiveList(
     from,
-    renderMainMenuBody(greeting, newContact),
+    renderMainMenuBody(),
     MENU_ROWS,
     'Main menu'
   )
@@ -490,6 +493,116 @@ async function startRegister(from: string, initialText: string = '') {
   const { state } = parseListingMessage(initialText, from)
   await saveSession(from, 'list_form', { list: state } as ChatSessionData)
   await sendFormUpdate(from, state, LIST_INTRO())
+}
+
+// ✎ Register opens with the honest price list, then routes to the flow that
+// matches what the user is adding: a business subscription or paid personal
+// contacts — never both silently merged.
+async function sendRegisterChoice(from: string) {
+  await clearSession(from)
+  await sendInteractiveButtons(
+    from,
+    [
+      '✎ *Registering on WA Directory*',
+      '',
+      '• Business subscription — USD 1 per month',
+      '• Personal contact — USD 0.20 each, per month',
+      '',
+      'Which are you adding?',
+    ].join('\n'),
+    [
+      { id: 'reg_personal', title: 'Personal contact $0.20' },
+      { id: 'reg_business', title: '• Business $1/mo' },
+      { id: 'cancel', title: '✖ Cancel' },
+    ]
+  )
+}
+
+// Personal contact intake: the whole draft is ONE message —
+// "Tendai Ncube 0771 234 567 Harare". Deliberately simpler than the
+// business form: those three fields are the entire product.
+const CONTACT_PHONE_RE = /(?:\+?263|0)\s?7[\d\s.\-]{8,11}(?!\d)/
+
+function parseContactLine(text: string): { name: string; phone: string; city: string | null } | null {
+  const m = text.trim().match(CONTACT_PHONE_RE)
+  if (!m || m.index == null) return null
+  const phoneDigits = m[0].replace(/[^0-9]/g, '')
+  const before = text.slice(0, m.index).trim()
+  const after = text.slice(m.index + m[0].length).trim()
+  const cityRaw = findListingCity(after) || findListingCity(before)
+  let name = after
+  if (cityRaw) name = name.replace(new RegExp(cityRaw, 'i'), '').trim()
+  if (!name || name.length < 2) name = before
+  name = name.replace(/^(?:the\s+)?(?:contact\s+)?(?:name\s+)?(?:is\s+:?\s*)?/i, '').replace(/[,:;]+$/, '').trim()
+  if (!name || name.length < 2 || /\d/.test(name)) return null
+  return { name: name.slice(0, 80), phone: phoneDigits, city: cityRaw }
+}
+
+// Publish the personal contact: shared listing engine (verified:false +
+// pending) and the payment engine with the 0.20 override. The EcoCash PIN
+// confirmation path flips verified + active with no admin step.
+async function tryPublishContact(from: string, session: ChatSession, msgId?: string) {
+  const c = session.data.contact!
+  const rawName = c.name
+  const rawPhone = c.phone.replace(/[^0-9]/g, '')
+  const phone = rawPhone.startsWith('263') ? rawPhone.slice(3) : rawPhone
+
+  const result = await createListing({
+    name: rawName,
+    countryCode: COUNTRY_CODE,
+    phone,
+    categories: ['Personal Contact'],
+    city: c.city || undefined,
+    phoneType: 'whatsapp',
+    generateSite: false,
+    notify: false,
+  })
+  if ('error' in result) {
+    console.error('[webhook] personal contact insert failed:', result.error)
+    await sendWhatsAppMessage(from, 'Sorry, something went wrong saving that contact. Please send the name + phone again.')
+    await saveSession(from, 'reg_contact', { contact: c })
+    return
+  }
+
+  if (msgId) await sendReaction(from, msgId, '✅').catch(() => {})
+
+  const pay = await createListingPayment({
+    businessId: result.businessId,
+    payerPhone: from,
+    plan: '1m',
+    amountOverride: 0.2,
+  })
+  if (!pay.ok) {
+    // The listing exists but payment couldn't start — the admin fallback in
+    // the subscription engine still alerts, so tell the user it's queued.
+    await sendWhatsAppMessage(
+      from,
+      [
+        `✅ *${result.name}* — Personal contact was saved.`,
+        '',
+        'The 20c payment could not start right now. Our team will confirm it and your contact will go live.',
+      ].join('\n')
+    )
+    await clearSession(from)
+    return
+  }
+  await sendWhatsAppMessage(
+    from,
+    [
+      `✅ *${result.name}* — Personal contact`,
+      '',
+      '💸 USD 0.20 · EcoCash',
+      pay.autoEcoCash
+        ? pay.message
+        : pay.message + ' (goes live once confirmed — usually within minutes).',
+      '',
+      'Save your edit link:',
+      `${SITE_URL}/edit?token=${result.editToken}`,
+      '',
+      'Reply *help* anytime.',
+    ].join('\n')
+  )
+  await clearSession(from)
 }
 
 // The living form: renders the current fill state; the interactive row below
@@ -1117,20 +1230,50 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       return
     }
     case 'new_search':
-    case 'menu_search':
       await startFreshSearchPrompt(from)
       return
-    case 'menu_near':
-      await clearSession(from)
-      await sendLocationRequest(
-        from,
-        'Share your location and I will rank matches by how close they are to you. 📍\n\nYou can also just type a town (e.g. *harare*) and then what you need.'
-      )
-      return
     case 'menu_register':
-      await clearSession(from)
+      await sendRegisterChoice(from)
+      return
+    case 'reg_business':
       await startRegister(from)
       return
+    case 'reg_personal': {
+      await saveSession(from, 'reg_contact', {})
+      await sendWhatsAppMessage(
+        from,
+        [
+          'Add a personal contact to the directory 📱',
+          '',
+          'Send the contact\'s name + phone (+ city optional), e.g.',
+          '*Tendai Ncube 0771 234 567 Harare*',
+          '',
+          'USD 0.20 · paid via EcoCash · live once you enter the PIN.',
+        ].join('\n')
+      )
+      return
+    }
+    case 'reg_contact_publish': {
+      if (session?.step === 'reg_contact' && session.data.contact) {
+        await tryPublishContact(from, session, msgId)
+      } else {
+        await sendRegisterChoice(from)
+      }
+      return
+    }
+    case 'reg_contact_fix': {
+      await saveSession(from, 'reg_contact', {})
+      await sendWhatsAppMessage(
+        from,
+        [
+          'Add a personal contact to the directory 📱',
+          '',
+          "Send the contact's name + phone (+ city optional), e.g.",
+          '*Tendai Ncube 0771 234 567 Harare*',
+        ].join('\n')
+      )
+      return
+    }
     case 'list_publish': {
       if (session?.step === 'list_form') {
         await tryPublishForm(from, session, msgId)
@@ -1936,9 +2079,6 @@ export async function POST(request: Request) {
         // Customer base: one row per number, profile name when Meta send it.
         const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
         let contactSession = await getSession(from)
-        // Probe BEFORE upsert: a first-timer carrying a profile name must
-        // still count as brand-new for the menu's starter tip.
-        const hadContactName = !!(await getBotContactName(from))
         if (lower === 'stop') {
           await markBotContactOptOut(from)
           await clearSession(from)
@@ -1947,9 +2087,6 @@ export async function POST(request: Request) {
         } else {
           await upsertBotContact(from, waName, contactSession?.step || '')
         }
-        // Brand-new contact = no saved session AND no prior contact row —
-        // used by the main menu for a one-line starter guide.
-        const isNewContact = !contactSession && !hadContactName
         let session = contactSession
 
         if (action) {
@@ -1958,15 +2095,16 @@ export async function POST(request: Request) {
         }
 
         // Greeting-only messages ("hi", "mangwanani", "sawubona"…) reset to
-        // the main menu from ANY state, mirroring the caller's own language
-        // and greeting them by their WhatsApp profile name when Meta sends it.
+        // plain instructions from ANY state — the two ways to find things
+        // typed out, greeting word mirrored, profile name when Meta sends it.
         let greetBody = renderGreetingBody(text, waName)
         if (greetBody && !waName) {
           const contactName = await getBotContactName(from)
           if (contactName) greetBody = renderGreetingBody(text, contactName) || greetBody
         }
         if (greetBody) {
-          await sendMainMenu(from, greetBody, isNewContact)
+          await clearSession(from)
+          await sendWhatsAppMessage(from, renderWelcomeInstructions(greetBody))
           continue
         }
 
@@ -2129,6 +2267,43 @@ export async function POST(request: Request) {
           continue
         }
 
+        // ── Personal contact intake: name + phone (+ city) in one message ──
+        if (session?.step === 'reg_contact') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          const c = parseContactLine(text)
+          if (!c) {
+            await sendWhatsAppMessage(
+              from,
+              "I need the contact's name and phone. e.g. *Tendai Ncube 0771 234 567 Harare*"
+            )
+            continue
+          }
+          await saveSession(from, 'reg_contact', { contact: c })
+          await sendInteractiveButtons(
+            from,
+            [
+              `*${c.name}* ${c.city ? `📍 ${c.city}` : '📍 Zimbabwe'}`,
+              `📱 +${c.phone.startsWith('263') ? c.phone : '263' + c.phone.replace(/^0/, '')}`,
+              '',
+              'Adding as a personal contact:',
+              '• USD 0.20 per month',
+              '• Paid via EcoCash — you enter the PIN now',
+              '',
+              'Ready to go live?',
+            ].join('\n'),
+            [
+              { id: 'reg_contact_publish', title: 'Pay 20c & go live' },
+              { id: 'reg_contact_fix', title: '✎ Fix details' },
+              { id: 'cancel', title: '✖ Cancel' },
+            ]
+          )
+          continue
+        }
+
         // ── Living list-form: parse + re-render after every reply ──────
         if (session?.step === 'list_form') {
           if (lower === 'cancel' || lower === 'help') {
@@ -2220,7 +2395,7 @@ export async function POST(request: Request) {
         }
 
         if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
-          await sendMainMenu(from, undefined, isNewContact)
+          await sendMainMenu(from)
           continue
         }
 

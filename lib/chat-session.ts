@@ -21,6 +21,8 @@ export interface ChatSessionData {
   whole_country?: boolean
   // Living form state for the paragraph intake flow (step 'list_form').
   list?: import('./listing-intake').ListingFormState
+  // Personal contact draft (step 'reg_contact'): name + phone + optional city.
+  contact?: { name: string; phone: string; city: string | null }
   rating_pending?: string
   // ── Bot search flow ────────────────────────────────────────────────
   // Term typed by the user while waiting for a town ("Which town?").

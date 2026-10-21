@@ -280,21 +280,33 @@ export function resultRows(cards: ResultCard[], page = 0): InteractiveRow[] {
   return rows
 }
 
-/** Main menu (opened by menu / hi / hello). Rows are by convention in route.
- * An optional greeting replaces the robot header so the greeting + menu
- * arrive as one native list. A brand-new contact gets a one-line starter
- * guide under the menu rows — no extra message needed. */
-export function renderMainMenuBody(greeting?: string, newContact?: boolean): string {
+/** Main menu (opened by menu). Rows are by convention in route.
+ * The body doubles as the search how-to: the directory has no separate
+ * "search" entry point — typing IS searching. */
+export function renderMainMenuBody(): string {
   const lines = [
-    greeting || '*WA Directory* 🤖',
-    'Find any product or service on WhatsApp, near you.',
+    '*WA Directory* 🤖',
+    'Find what you need: type product/service + your location.',
+    'For a specific company, add its name to the search.',
     '',
-    'Tap an option:',
+    'Registering a business or personal contact? Tap ✎ Register below.',
   ]
-  if (newContact) {
-    lines.push('', 'New here? Try *bread chinhoyi*, *plumber harare* — or tap ✎ Register.')
-  }
   return lines.join('\n')
+}
+
+/** Greeting-only messages ("hi", "showed up" first contact): mirror the
+ * caller's greeting word, then teach the two ways to find things. The menu
+ * lives behind *menu*; this text is the brand-new contact's whole world. */
+export function renderWelcomeInstructions(greeting?: string): string {
+  return [
+    greeting || 'Hey! 👋',
+    '',
+    'Type what you\'re looking for — the product or service + your location.',
+    'e.g. *bread chinhoyi*, *plumber harare*',
+    '',
+    'Looking for a specific company? Just add its name to your search',
+    'and I\'ll bring it up directly. e.g. *Mbuya\'s Kitchen harare*',
+  ].join('\n')
 }
 
 // ── Adaptive greeting ────────────────────────────────────────────────────
@@ -427,6 +439,7 @@ export function FALLBACK_HELP_LINES(siteUrl: string): string[] {
     'e.g. "bread chinhoyi", "plumber in bulawayo"',
     'Or just send "plumber" and I will ask your town.',
     'A voice note or a photo of what you need works too.',
+    'Looking for a specific company? Add its name to the search.',
     '',
     'Reply *1* to *5* after results for contact details',
     '',

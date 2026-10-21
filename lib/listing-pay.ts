@@ -25,6 +25,9 @@ export interface CreateListingPaymentInput {
   payerPhone: string
   plan: PlanType
   hasProAssistance?: boolean
+  /** Overrides PLAN_CONFIG pricing (sub row, Paynow request, labels) —
+   * used by the $0.20 personal-contact listing flow, which rides plan '1m'. */
+  amountOverride?: number
   /** Optional request for the payment-event audit log (IP/UA). */
   request?: Request | NextRequest
 }
@@ -90,7 +93,8 @@ export async function createListingPayment(
   // configured — push a real EcoCash payment request to the payer's phone.
   // Paynow's result webhook (/api/paynow/result) auto-confirms LISTING-<id>
   // payments and activates the subscription without any admin action.
-  const amount = paymentAmountFor(input.plan, input.hasProAssistance)
+  const amount = input.amountOverride ?? paymentAmountFor(input.plan, input.hasProAssistance)
+  const planLabel = input.amountOverride != null ? 'Personal contact' : PLAN_CONFIG[input.plan].label
 
   let subscriptionId: string
   if (existing) {
@@ -132,7 +136,7 @@ export async function createListingPayment(
       reference: `LISTING-${subscriptionId}`,
       amount,
       phone: payerClean,
-      additionalInfo: `WA Directory listing: ${business.name} (${PLAN_CONFIG[input.plan].label})`,
+      additionalInfo: `WA Directory listing: ${business.name} (${planLabel})`,
       resultUrl: `${process.env.SITE_URL}/api/paynow/result`,
     })
     if (init.ok && init.pollUrl) {
@@ -163,7 +167,7 @@ export async function createListingPayment(
     sendAdminPaymentNotification({
       businessName: business.name,
       username: (business as { username?: string | null }).username || null,
-      planLabel: PLAN_CONFIG[input.plan].label,
+      planLabel,
       amount,
       hasProAssistance: !!input.hasProAssistance,
       payerEcoCash: payerClean,
