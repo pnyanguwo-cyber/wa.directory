@@ -1,6 +1,17 @@
 import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
-import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, sendCtaUrl, markRead, sendLocationRequest, sendReaction } from '@/lib/whatsapp'
+import {
+  sendWhatsAppMessage as sendWhatsAppText,
+  sendInteractiveList as sendInteractiveListRaw,
+  sendInteractiveButtons as sendInteractiveButtonsRaw,
+  sendCtaUrl as sendCtaUrlRaw,
+  sendLocationRequest as sendLocationRequestRaw,
+  sendReaction as sendReactionRaw,
+  sendContactCard,
+  markRead,
+} from '@/lib/whatsapp'
+import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
+import { logBotMessage, logBotSearch } from '@/lib/bot-log'
 import { orderSearchResults } from '@/lib/ranking'
 import { expandSearchQuery } from '@/lib/gemini'
 import type { Business } from '@/types'
@@ -46,8 +57,36 @@ import {
   renderInvalidSelection,
   renderErrorCard,
   FALLBACK_HELP_LINES,
+  renderNeedIntro,
+  renderNeedConfirm,
+  renderNeedPosted,
+  renderQuoteCard,
+  renderNeedSilence,
+  renderNeedClosedByBuyer,
+  renderNeedFilled,
+  renderDealAsk,
+  renderCeremony,
   type ResultCard,
 } from '@/lib/bot-templates'
+import {
+  addNeedQuote,
+  adminWeeklyStats,
+  bumpDigestCursor,
+  canonicalRq,
+  closeNeedByRqId,
+  channelPostFor,
+  compileDigest,
+  createNeed,
+  fmtHarare,
+  getDigestCursor,
+  getNeedById,
+  getNeedByRqId,
+  getQuoteById,
+  listNeedQuotes,
+  listOpenNeeds,
+  parseDigestWindow,
+  reopenNeed,
+} from '@/lib/needs'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
@@ -72,6 +111,55 @@ const STOPWORDS = new Set([
 ])
 
 const HELP_TEXT = FALLBACK_HELP_LINES(SITE_URL).join('\n')
+
+// ── Transcript-logging send wrappers (S16) ────────────────────────────────
+// Every bot send goes through one replay: the raw Cloud API call plus a
+// fire-and-forget transcript row in bot_messages. Call sites keep the old
+// names, so logging covers every flow without touching them.
+function logOut(to: string, kind: string, body: string) {
+  logBotMessage(to, 'out', kind, body).catch(() => {})
+}
+
+async function sendWhatsAppMessage(to: string, message: string, replyTo?: string) {
+  logOut(to, 'text', message)
+  return sendWhatsAppText(to, message, replyTo)
+}
+
+async function sendInteractiveList(
+  to: string,
+  body: string,
+  rows: InteractiveRow[],
+  buttonLabel = 'Choose a business',
+  replyTo?: string
+) {
+  logOut(to, 'list', `${body}\n↳ rows: ${rows.map(r => r.title).join(' | ')}`)
+  return sendInteractiveListRaw(to, body, rows, buttonLabel, replyTo)
+}
+
+async function sendInteractiveButtons(
+  to: string,
+  body: string,
+  buttons: InteractiveButton[],
+  replyTo?: string
+) {
+  logOut(to, 'buttons', `${body}\n[${buttons.map(b => b.title).join(' | ')}]`)
+  return sendInteractiveButtonsRaw(to, body, buttons, replyTo)
+}
+
+async function sendCtaUrl(to: string, body: string, displayText: string, url: string) {
+  logOut(to, 'cta', `${body}\n→ ${url}`)
+  return sendCtaUrlRaw(to, body, displayText, url)
+}
+
+async function sendLocationRequest(to: string, body: string) {
+  logOut(to, 'location_req', body)
+  return sendLocationRequestRaw(to, body)
+}
+
+async function sendReaction(to: string, messageId: string, emoji: string) {
+  logOut(to, 'reaction', `[${emoji}] on ${messageId}`)
+  return sendReactionRaw(to, messageId, emoji)
+}
 
 function generateSlug(name: string): string {
   return (
@@ -475,6 +563,7 @@ async function startFreshSearchPrompt(from: string) {
 // only carries account features. Titles cap at 24 chars (WhatsApp limit);
 // the pricing hook lives in the row description.
 const MENU_ROWS = [
+  { id: 'menu_needs', title: '🛒 Post a need', description: 'Suppliers quote you here' },
   { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal 20c' },
   { id: 'menu_pay', title: '$ Pay (EcoCash)', description: 'Pay or top up via EcoCash' },
   { id: 'menu_help', title: '✆ Help', description: 'Tips & support' },
@@ -845,6 +934,12 @@ async function handleBotMedia(
 
   if (session?.step === 'list_form') {
     await handleListFormMedia(from, session, kind, sense, media!.buffer)
+    return
+  }
+
+  // Voice note while drafting a need: the transcript fills the draft.
+  if (session?.step === 'need_form' && kind === 'audio') {
+    await handleNeedFormText(from, session, sense.transcript || sense.term || '')
     return
   }
 
@@ -1295,7 +1390,344 @@ async function goBack(from: string, session: ChatSession | null) {
 }
 
 /** Single router for every interactive id the bot can send. */
+// ── S16: needs & quotes ────────────────────────────────────────────────
+// Buyers post a need, quotes carry "RQ-xxxx …", buyer relays stay capped at
+// 5 with an explicit stop. No numbers are shared until the buyer deals.
+
+function parseNeedLine(text: string): { item: string; qty: string; budget: string; city: string } {
+  const work = text.replace(/[*_`]/g, ' ').replace(/\s+/g, ' ').trim()
+  let rest = work
+  const city = findCity(rest)
+  if (city) rest = rest.replace(new RegExp(city.replace(/[-/\\^$*+.?()|[\]{}]/g, '\\$&'), 'ig'), ' ')
+  let budget = ''
+  const bm = rest.match(/(?:\$|usd)\s*([\d,]+(?:\.\d{1,2})?(?:\s*[-–-]\s*[\d,]+(?:\.\d{1,2})?)?)/i)
+  if (bm) {
+    budget = `$${bm[1].replace(/\s+/g, '')}`
+    rest = rest.replace(bm[0], ' ')
+  }
+  let qty = ''
+  const qm = rest.match(/^\s*([\d,]+(?:\.\d+)?\s*(?:x\s*)?[a-zA-Z]{0,6})\s+(.{2,})$/)
+  if (qm) {
+    qty = qm[1].trim()
+    rest = qm[2]
+  }
+  return { item: rest.trim(), qty, budget, city: city || '' }
+}
+
+async function showNeedConfirm(from: string, d: ChatSessionData['need']) {
+  const draft = d || { item: '', qty: '', budget: '', city: '' }
+  await saveSession(from, 'need_form', { need: draft })
+  await sendInteractiveButtons(
+    from,
+    renderNeedConfirm(draft),
+    [
+      { id: 'need_post', title: '✅ Post it' },
+      { id: 'need_edit', title: '✎ Edit details' },
+      { id: 'need_cancel', title: '✖ Cancel' },
+    ]
+  )
+}
+
+async function startNeedIntake(from: string, prefill?: { item: string; city: string }) {
+  if (prefill && prefill.item) {
+    await showNeedConfirm(from, { item: prefill.item, qty: '', budget: '', city: prefill.city || '' })
+    return
+  }
+  await saveSession(from, 'need_form', {})
+  await sendWhatsAppMessage(from, renderNeedIntro())
+}
+
+async function handleNeedFormText(from: string, session: ChatSession, text: string) {
+  const parsed = parseNeedLine(text)
+  if (!parsed.item && !parsed.qty) {
+    await sendWhatsAppMessage(
+      from,
+      "Send what you need as one line, e.g. *50 bags cement harare*. I need at least an item."
+    )
+    return
+  }
+  const prev = session.data.need || { item: '', qty: '', budget: '', city: '' }
+  const draft = {
+    item: parsed.item || prev.item,
+    qty: parsed.qty || prev.qty,
+    budget: parsed.budget || prev.budget,
+    city: parsed.city || prev.city,
+  }
+  await showNeedConfirm(from, draft)
+}
+
+async function postBuyerNeed(from: string, session: ChatSession | null) {
+  const d = session?.data.need
+  if (!d || !d.item) {
+    await startNeedIntake(from)
+    return
+  }
+  const need = await createNeed({ buyer_phone: from, item: d.item, qty: d.qty, budget: d.budget, city: d.city })
+  if (!need) {
+    await sendWhatsAppMessage(from, renderErrorCard())
+    return
+  }
+  await sendWhatsAppMessage(from, renderNeedPosted(need.rq_id, d))
+  // Instant admin copy: need summary + a channel-ready post to copy-paste.
+  const admin = (ADMIN_WHATSAPP || '').replace(/\D/g, '')
+  if (admin && admin !== digitsOnly(from)) {
+    const adminBody = [
+      `🛒 NEW NEED ${need.rq_id}`,
+      [d.qty, d.item].filter(Boolean).join(' '),
+      `${d.budget || 'no budget'} · ${(d.city || 'countrywide').toUpperCase()}`,
+      `Buyer: +${from}`,
+      '',
+      '— channel post (copy below) —',
+      channelPostFor(need),
+    ].join('\n')
+    await sendWhatsAppText(admin, adminBody)
+    logOut(admin, 'text', adminBody)
+  }
+  await clearSession(from)
+}
+
+/** Buyer taps ✅ on a quote card: close the need with that winner and
+ * hand both sides a bare WhatsApp number each — one tap to save. */
+async function pickQuoteForBuyer(buyerPhone: string, quoteId: number) {
+  const quote = await getQuoteById(quoteId)
+  if (!quote) return
+  const need = await getNeedById(quote.need_id)
+  if (!need) return
+  if (digitsOnly(need.buyer_phone) !== digitsOnly(buyerPhone)) return
+  if (need.status !== 'open') {
+    await sendWhatsAppMessage(buyerPhone, renderNeedFilled(need.rq_id, '', 'another supplier'))
+    return
+  }
+  await closeNeedByRqId(need.rq_id, 'buyer', quote.id)
+  const quotes = await listNeedQuotes(need.id)
+  const other = quotes.filter(q => q.id !== quote.id && q.price).slice(0, 4)
+  await sendWhatsAppMessage(
+    buyerPhone,
+    [
+      `🎉 Deal noted on *${need.rq_id}* — thread quiet now.`,
+      quote.supplier_name ? `Winner: *${quote.supplier_name}* — their contact card is on its way, one tap to save.` : '',
+      other.length > 0 ? `Other quotes for reference: ${other.map(q => q.price).join(', ')}.` : '',
+      '',
+      'Send a new search or 🛒 *menu* → Post a need anytime.',
+    ].filter(Boolean).join('\n')
+  )
+  await sendContactCard(buyerPhone, quote.supplier_name || 'Supplier', quote.supplier_phone)
+  await sendWhatsAppMessage(
+    quote.supplier_phone,
+    [
+      `🎉 You won *${need.rq_id}* (${[need.qty, need.item].filter(Boolean).join(' ')}${need.city ? `, ${need.city}` : ''})!`,
+      'The buyer\'s contact card is on its way — one tap to save, then chat directly.',
+    ].join('\n')
+  )
+  await sendContactCard(quote.supplier_phone, 'Buyer', need.buyer_phone)
+}
+
+/** Any "RQ-…" text: quote capture, buyer stop/reopen, closed-need notices.
+ * Returns true when the message was handled as a need interaction. */
+// String-built regexes: the bundler strips backslashes inside string
+// literals, so every escape here is assembled from a runtime backslash —
+// never a literal one in source.
+const RQS = String.fromCharCode(92)
+const RQ_DETECT = new RegExp('(?:^|[^a-z0-9])rq[-' + RQS + 's]?(' + RQS + 'd{3,8})(?:[^a-z0-9]|$)', 'i')
+const RQ_STOP = new RegExp('(?:' + RQS + 'b)(stop|quiet)(?:' + RQS + 'b)', 'i')
+const RQ_OPEN = new RegExp('(?:' + RQS + 'b)(open|reopen|more quotes)(?:' + RQS + 'b)', 'i')
+const STOP_ALL = new RegExp('^stop quotes?$', 'i')
+const RQ_PRICE = new RegExp('(?:' + RQS + '$|usd)' + RQS + 's*([0-9,]+(?:' + RQS + '.' + RQS + 'd{1,2})?)', 'i')
+
+async function handleRqText(from: string, waName: string, text: string): Promise<boolean> {
+  const clean = text.replace(/[*_`]/g, '').replace(/\s+/g, " ").trim()
+  // Buyer's wholesale quiet: stops the most recent open need.
+  if (!RQ_DETECT.test(clean) && STOP_ALL.test(clean)) {
+    const open = (await listOpenNeeds(20)).find(n => digitsOnly(n.buyer_phone) === digitsOnly(from))
+    if (open) {
+      await closeNeedByRqId(open.rq_id, 'buyer')
+      await sendWhatsAppMessage(from, renderNeedClosedByBuyer(open.rq_id))
+      return true
+    }
+  }
+
+  if (!RQ_DETECT.test(clean)) return false
+  const rqId = canonicalRq(clean)
+  if (!rqId) return false
+
+  const need = await getNeedByRqId(rqId)
+  if (!need) {
+    await sendWhatsAppMessage(from, `${rqId} is not a need on our board. Check the id - it looks like *RQ-1234*.`)
+    return true
+  }
+  const isBuyer = digitsOnly(need.buyer_phone) === digitsOnly(from)
+
+  if (RQ_STOP.test(clean)) {
+    if (isBuyer) {
+      await closeNeedByRqId(rqId, 'buyer')
+      await sendWhatsAppMessage(from, renderNeedClosedByBuyer(rqId))
+    } else {
+      await sendWhatsAppMessage(from, 'Only the person who posted this need can quiet it.')
+    }
+    return true
+  }
+  if (isBuyer && RQ_OPEN.test(clean) && !/[$0-9]{2}/.test(clean.replace(/rq[-\s]?[0-9]+/i, " "))) {
+    const reopened = need.status !== "open"
+    if (reopened) await reopenNeed(need.id)
+    await sendWhatsAppMessage(
+      from,
+      reopened
+        ? `🔄 ${rqId} is live again - matching suppliers will pick it up on their next quote.`
+        : `${rqId} is already live and waiting for quotes.`
+    )
+    return true
+  }
+
+  if (need.status !== 'open') {
+    let winner = 'another supplier'
+    if (need.winner_quote_id) {
+      const q = await getQuoteById(need.winner_quote_id)
+      if (q?.supplier_name) winner = q.supplier_name
+    }
+    await sendWhatsAppMessage(from, renderNeedFilled(rqId, need.updated_at ? `on ${fmtHarare(need.updated_at, true)}` : "", winner))
+    return true
+  }
+
+  // Price: prefer anything after $/USD; else the first number on the line.
+  let price = ''
+  let bodyText = clean.replace(/rq[-\s]?[0-9]+/i, " ")
+  const pm = bodyText.match(RQ_PRICE)
+  if (pm) {
+    price = `$${pm[1].replace(/,/g, "")}`
+    bodyText = bodyText.replace(pm[0], " ")
+  } else {
+    const nm = bodyText.match(/[0-9][0-9,]*(?:.\d{1,2})?/)
+    if (nm) {
+      price = `$${nm[0].replace(/,/g, "")}`
+      bodyText = bodyText.replace(nm[0], " ")
+    }
+  }
+  bodyText = bodyText.replace(/\s+/g, " ").trim().slice(0, 200)
+
+  const result = await addNeedQuote(need.id, from, waName, price, bodyText)
+  if (result.atCap) {
+    await sendWhatsAppMessage(from, `${rqId} is closed to new quotes (5 already relayed). The buyer may reopen it with *${rqId} open* - meanwhile reply *menu* for other work.`)
+    return true
+  }
+  if (!result.ok || !result.quote) {
+    await sendWhatsAppMessage(from, 'Your quote could not be saved just now - send it again in a moment.')
+    return true
+  }
+
+  // Relay straight into the buyer's chat (never the buyer's number out).
+  const quotes = await listNeedQuotes(need.id)
+  await sendInteractiveButtons(
+    need.buyer_phone,
+    renderQuoteCard(rqId, waName || "A supplier", price, bodyText, quotes.length, Math.max(quotes.length, (need.quotes_forwarded || 0) + 1)),
+    [
+      { id: `q_pick_${result.quote.id}`, title: "✅ Deal with this" },
+      { id: `q_stop_${rqId}`, title: "✋ Stop quotes" },
+    ]
+  )
+  await sendWhatsAppMessage(
+    from,
+    [
+      `✔ Quote sent to the buyer of ${rqId}.`,
+      "If they pick you, you get their contact card here - deal directly after that.",
+    ].join("\n")
+  )
+  return true
+}
+async function handleAdminCommand(from: string, text: string): Promise<boolean> {
+  const clean = text.trim()
+  const lower = clean.toLowerCase()
+
+  if (lower === 'digest' || lower.startsWith('digest ')) {
+    const args = clean.slice(6).trim().split(/\s+/).filter(Boolean)
+    const cursor = await getDigestCursor()
+    const win = parseDigestWindow(args, cursor)
+    if (win.error) {
+      await sendWhatsAppMessage(
+        from,
+        [
+          "Didn't catch that time. Formats: *digest*, *digest 10:30*, *digest 10:30 13:00*.",
+          '*digest* reports everything since your last check-in and moves the window.',
+        ].join('\n')
+      )
+      return true
+    }
+    const digest = await compileDigest(win.fromIso, win.toIso)
+    await sendWhatsAppMessage(from, digest)
+    if (args.length === 0) {
+      await bumpDigestCursor(win.toIso)
+      await sendWhatsAppMessage(from, `— cursor moved to ${fmtHarare(win.toIso)} (Harare). Next plain *digest* starts from here.`)
+    }
+    return true
+  }
+
+  if (lower === 'needs') {
+    const needs = await listOpenNeeds(20)
+    if (needs.length === 0) {
+      await sendWhatsAppMessage(from, 'No open needs on the board right now.')
+      return true
+    }
+    const lines = ['🛒 *Open needs*', '']
+    for (const n of needs) {
+      lines.push(`${n.rq_id} · ${[n.qty, n.item].filter(Boolean).join(' ')} · ${(n.city || 'countrywide').toUpperCase()} · ${n.quotes_forwarded || 0} quote${n.quotes_forwarded === 1 ? '' : 's'}`)
+    }
+    lines.push('', 'Reply *close RQ-xxxx* to quiet one, or *digest* for the full report.')
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
+  if (lower.startsWith('close ')) {
+    const rqId = canonicalRq(clean.slice(6))
+    if (!rqId) {
+      await sendWhatsAppMessage(from, 'Which need? e.g. *close RQ-7181*.')
+      return true
+    }
+    const ok = await closeNeedByRqId(rqId, 'admin')
+    await sendWhatsAppMessage(from, ok ? `✅ ${rqId} closed — no more quotes relay.` : `${rqId} was not open (might already be closed).`)
+    return true
+  }
+
+  if (lower === 'stats') {
+    await sendWhatsAppMessage(from, await adminWeeklyStats())
+    return true
+  }
+
+  return false
+}
+
 async function handleAction(from: string, session: ChatSession | null, action: string, msgId?: string) {
+  // Need-quote actions carry data ids (pick / stop / deal-ask answers).
+  const pick = action.match(/^q_pick_(\d+)$/)
+  if (pick) {
+    await pickQuoteForBuyer(from, Number(pick[1]))
+    return
+  }
+  const stop = action.match(/^q_stop_(RQ-\d+)$/)
+  if (stop) {
+    await closeNeedByRqId(stop[1], 'buyer')
+    await sendWhatsAppMessage(from, renderNeedClosedByBuyer(stop[1]))
+    return
+  }
+  const deal = action.match(/^nd_(yes|no)_(RQ-\d+)$/)
+  if (deal) {
+    const need = await getNeedByRqId(deal[2])
+    if (need) {
+      if (deal[1] === 'yes') {
+        await closeNeedByRqId(deal[2], 'buyer')
+        await sendWhatsAppMessage(
+          from,
+          `🎉 Sorted — congrats on the deal. That's exactly what this space is for. Send a new search anytime.`
+        )
+      } else {
+        await reopenNeed(need.id)
+        await sendWhatsAppMessage(
+          from,
+          `🔄 ${deal[2]} reopened — suppliers see it again and can quote. Tap ✋ on any quote card if it gets noisy.`
+        )
+      }
+    }
+    return
+  }
+
   const sel = action.match(/^sel_([1-9][0-9]?)$/)
   if (sel) {
     if (session?.step === 'browse') {
@@ -1355,6 +1787,37 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'new_search':
       await startFreshSearchPrompt(from)
       return
+    case 'menu_needs':
+      await startNeedIntake(from)
+      return
+    case 'need_post':
+      await postBuyerNeed(from, session)
+      return
+    case 'need_edit':
+      await saveSession(from, 'need_form', {})
+      await sendWhatsAppMessage(
+        from,
+        [
+          'Send the corrected line — what + how many (+ town, budget).',
+          'e.g. *50 bags cement harare $40-60*',
+        ].join('\n')
+      )
+      return
+    case 'need_cancel':
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'Need dropped. Send *help* anytime.')
+      return
+    case 'need_more': {
+      const lastCity = session?.data.lastCity || ''
+      const city = lastCity && lastCity !== 'Near you' ? lastCity : ''
+      const term = session?.data.lastTerm || ''
+      if (term) {
+        await showNeedConfirm(from, { item: term, qty: '', budget: '', city })
+      } else {
+        await startNeedIntake(from)
+      }
+      return
+    }
     case 'menu_register':
       await sendRegisterChoice(from)
       return
@@ -1699,7 +2162,12 @@ async function runSearchAndReply(
         return
       }
     }
-    await sendWhatsAppMessage(from, renderEmptyResults(missTerm), opts?.replyTo)
+    await sendInteractiveButtons(
+      from,
+      `${renderEmptyResults(missTerm)}\n\n🛒 Or let suppliers find it: I post this exact need and they quote you right here.`,
+      [{ id: 'need_more', title: '🛒 Post as a need' }],
+      opts?.replyTo
+    )
     return
   }
 
@@ -1723,8 +2191,10 @@ async function dispatchSearch(
   from: string,
   text: string,
   opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string }
-) {
-  const p: ParsedQuery = { ...parseQuery(text), origin: opts?.origin ?? null }
+) {    const p: ParsedQuery = { ...parseQuery(text), origin: opts?.origin ?? null }
+    // Demand radar: every user query lands in bot_searches, even the ones
+    // that never find supply — that's the admin digest's radar section.
+    logBotSearch(from, p.term || (p.city ? '(town only)' : '(blank)'), p.city).catch(() => {})
 
   // Bare name search with no town: when exactly one verified business is
   // named by the query, show its contact details right away (nationwide)
@@ -2209,6 +2679,14 @@ export async function POST(request: Request) {
           `WhatsApp message from ${from}: ${text || `[${action || (mediaKind === 'audio' ? 'voice note' : mediaKind === 'image' ? 'photo' : 'location')}]`}`
         )
 
+        // Word-for-word inbound record (fail-open) for the admin transcript view.
+        logBotMessage(
+          from,
+          'in',
+          text ? 'text' : mediaKind === 'audio' ? 'voice' : mediaKind === 'image' ? 'image' : location ? 'location' : action ? 'tap' : 'other',
+          text || action || `[${mediaKind === 'audio' ? 'voice note' : mediaKind === 'image' ? 'photo' : 'location'}]`
+        ).catch(() => {})
+
         // Customer base: one row per number, profile name when Meta send it.
         const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
         let contactSession = await getSession(from)
@@ -2221,6 +2699,15 @@ export async function POST(request: Request) {
           await upsertBotContact(from, waName, contactSession?.step || '')
         }
         let session = contactSession
+
+        // ── Admin command suite (owner number only) ─────────────────────
+        const adminDigits = digitsOnly(ADMIN_WHATSAPP || '')
+        if (adminDigits && digitsOnly(from) === adminDigits) {
+          if (await handleAdminCommand(from, text)) {
+            continue
+          }
+          // Admin falls through: their phone works as a normal user too.
+        }
 
         if (action) {
           await handleAction(from, session, action, msgId)
@@ -2251,6 +2738,24 @@ export async function POST(request: Request) {
         // + logo while filling the listing form.
         if (mediaKind) {
           await handleBotMedia(from, session, message, msgId)
+          continue
+        }
+
+        // 🛒 Need intake (S16): buyers type one line, confirm card follows.
+        if (session?.step === 'need_form') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          await handleNeedFormText(from, session, text)
+          continue
+        }
+
+        // Any "RQ-…" message: supplier quoting, buyer stop/reopen, filled
+        // notices. Checked before other flows so wa.me deep links always win.
+        const rqHandled = await handleRqText(from, waName, text)
+        if (rqHandled) {
           continue
         }
 

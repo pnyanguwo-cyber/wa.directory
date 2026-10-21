@@ -116,6 +116,38 @@ export async function sendLocationRequest(to: string, body: string) {
   }
 }
 
+// vCard contact-card handoff (WhatsApp native "contacts" message). Used at
+// need close so buyer and winning supplier can save each other with one tap.
+export async function sendContactCard(to: string, name: string, phone: string) {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!phoneNumberId || !accessToken || !to) return
+
+  const cleanPhone = `+${(phone || '').replace(/\D/g, '')}`
+  if (!cleanPhone || cleanPhone === '+') return
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][contact] to=${to} ${name} ${cleanPhone}`)
+    return
+  }
+
+  try {
+    await postToWhatsApp(phoneNumberId, accessToken, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'contacts',
+      contacts: [
+        {
+          name: { formatted_name: name || 'Contact', first_name: (name || 'Contact').split(' ')[0] },
+          phones: [{ phone: cleanPhone, type: 'CELL' }],
+        },
+      ],
+    })
+  } catch {
+    // best-effort handoff
+  }
+}
+
 // React to one of the user's own messages (best-effort cosmetics).
 export async function sendReaction(to: string, messageId: string, emoji: string) {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID

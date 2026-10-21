@@ -202,6 +202,90 @@ function listingUrl(b: { slug: string | null }): string {
 }
 
 /** Empty results / no supply message. */
+// ── Need / matchmaking flow (S16) ─────────────────────────────────────────
+
+export interface NeedDraft {
+  item: string
+  qty: string
+  budget: string
+  city: string
+}
+
+export function renderNeedIntro(): string {
+  return [
+    '🛒 *Post a need — we find suppliers for you.*',
+    '',
+    'Send it in one line: what + how many (+ town).',
+    '*50 bags cement harare* · *3kg wedding cake $60* · *fix my geyser mbare*',
+    '',
+    'Matching suppliers quote straight into this chat. You choose; your number stays private.',
+  ].join('\n')
+}
+
+export function renderNeedConfirm(d: NeedDraft): string {
+  return [
+    '*Match this?* 🛒',
+    `📦 ${[d.qty, d.item].filter(Boolean).join(' ')}`,
+    `💰 ${d.budget || 'no budget given — quotes can set the price'}`,
+    `📍 ${(d.city || 'countrywide').toUpperCase()}`,
+    '',
+    'Up to 5 supplier quotes arrive here. Reply *stop* to quiet it anytime.',
+  ].join('\n')
+}
+
+export function renderNeedPosted(rqId: string, d: NeedDraft): string {
+  return [
+    `✅ Posted as *${rqId}* → suppliers in ${(d.city || 'Zimbabwe').toUpperCase()}.`,
+    '',
+    `Quotes land in this chat (max 5). Reply the quote\'s number to deal, or *stop* to quiet the thread.`,
+  ].join('\n')
+}
+
+export function renderQuoteCard(
+  rqId: string,
+  supplierName: string,
+  price: string,
+  body: string,
+  index: number,
+  total: number
+): string {
+  const head = `💬 *Quote ${index}/${total}* · ${rqId}`
+  const lines = [head, `${supplierName}: ${price ? `*${price}*` : '(price in text below)'}`]
+  if (body) lines.push(`✍️ ${body}`)
+  return lines.join('\n')
+}
+
+export function renderNeedSilence(rqId: string): string {
+  return [`${rqId}: quotes full (5). This thread stays quiet.`, 'Reply *' + rqId + ' …* again only if the buyer reopens.'].join(' ')
+}
+
+export function renderNeedClosedByBuyer(rqId: string): string {
+  return `✋ ${rqId} quieted — no more quotes relayed. Reply *${rqId} open* if you want more quotes.`
+}
+
+export function renderNeedFilled(rqId: string, when: string, winner: string): string {
+  return `❌ ${rqId} was filled ${when} (won by *${winner}*). Reply 🛒 *menu* to post a new need.`
+}
+
+export function renderDealAsk(rqId: string): string {
+  return [
+    `🤝 Did the deal happen for *${rqId}*?`,
+    'Tell me so I stop pinging suppliers either way:',
+  ].join('\n')
+}
+
+export function renderCeremony(rqId: string, item: string, quoteLines: string[]): string {
+  const lines = [
+    `⏳ This thread goes quiet soon — *${rqId}* (${item}).`,
+    '',
+  ]
+  if (quoteLines.length > 0) {
+    lines.push('Quotes received:', ...quoteLines.map((q, i) => `${i + 1}. ${q}`), '')
+  }
+  lines.push('Sorted? Great — nothing to do.', 'Still on? Answer the 🤝 question:', '')
+  return lines.join('\n')
+}
+
 export function renderEmptyResults(term: string): string {
   return [
     `No results for *${term}*.`,

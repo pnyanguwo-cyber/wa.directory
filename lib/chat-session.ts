@@ -55,6 +55,9 @@ export interface ChatSessionData {
   pay_business?: { id: string; name: string }
   // Plan chosen at the pay_plan step.
   pay_plan?: '1m' | '6m' | '12m'
+  // ── Need intake (S16 matchmaking) ──────────────────────────────────
+  // Living need draft: what, how many, budget hint, town.
+  need?: { item: string; qty: string; budget: string; city: string }
 }
 
 export interface ChatSession {
