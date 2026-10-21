@@ -41,6 +41,13 @@ export interface ChatSessionData {
   nearby?: boolean
   // 0-based page of the results list (9 businesses per page).
   page?: number
+  // ── Bot pay flow ─────────────────────────────────────────────────────
+  // Candidate businesses from a pay search (rows pay1..payN map by index).
+  pay_candidates?: { id: string; name: string }[]
+  // The business currently being paid (public WA-XXXXXX id + display name).
+  pay_business?: { id: string; name: string }
+  // Plan chosen at the pay_plan step.
+  pay_plan?: '1m' | '6m' | '12m'
 }
 
 export interface ChatSession {

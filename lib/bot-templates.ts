@@ -329,6 +329,7 @@ export function FALLBACK_HELP_LINES(siteUrl: string): string[] {
     'Reply *1* to *5* after results for contact details',
     '',
     '*List your business:* send *register*',
+    '*Pay subscription:* send *pay*',
     '*Cancel:* send *cancel*',
     '*Help:* send *help*',
     '',

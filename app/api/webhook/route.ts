@@ -18,6 +18,11 @@ import {
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
+import { searchPayBusinesses, type PayBusiness } from '@/lib/pay-lookup'
+import { createListingPayment, paymentAmountFor } from '@/lib/listing-pay'
+import { normalizeEcoCashPhone } from '@/lib/paynow'
+import { PLAN_CONFIG } from '@/types'
+import type { PlanType } from '@/types'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import {
@@ -452,9 +457,10 @@ async function sendMainMenu(from: string) {
     from,
     renderMainMenuBody(),
     [
-      { id: 'menu_search', title: '🔍 Search' },
-      { id: 'menu_register', title: '🏪 Register' },
-      { id: 'menu_help', title: 'ℹ️ Help' },
+      { id: 'menu_search', title: '☰ Search' },
+      { id: 'menu_register', title: '✎ Register' },
+      { id: 'menu_help', title: '✆ Help' },
+      { id: 'menu_pay', title: '$ Pay' },
     ],
     'Main menu'
   )
@@ -530,6 +536,302 @@ async function handleListFormText(from: string, session: ChatSession, text: stri
       ? 'All mandatory fields are set — tap ↗ Publish to submit.'
       : `${missing.length} mandatory field${missing.length > 1 ? 's' : ''} still missing: ${missing.join(', ')}.`
   await sendFormUpdate(from, state, tail)
+}
+
+// ── Bot pay flow (shared with /api/pay via lib/pay-lookup + lib/listing-pay) ──
+
+function payStatusLabel(status: string): string {
+  if (status === 'active') return 'live'
+  if (status === 'pending') return 'awaiting payment'
+  return 'not yet paid'
+}
+
+function canonicalPlan(text: string): PlanType | null {
+  const t = text.toLowerCase().trim()
+  if (/^(1|1m|1 ?month)$/.test(t)) return '1m'
+  if (/^(6|6m|6 ?months)$/.test(t)) return '6m'
+  if (/^(12|12m|1 ?year|12 ?months)$/.test(t)) return '12m'
+  return null
+}
+
+// Open the pay conversation: ask whether the payer wants to pay for an
+// existing business or register a new one. If this WhatsApp number has
+// exactly one unpaid listing, confirm it directly (three-tap quick path).
+async function startPayChoice(from: string) {
+  await clearSession(from)
+  const own = await ownPayableListings(from)
+  if (own.length === 1) {
+    const o = own[0]
+    await saveSession(from, 'pay_pick', { pay_candidates: [{ id: o.id, name: o.name }] } as ChatSessionData)
+    await sendInteractiveButtons(
+      from,
+      `You have an unpaid listing: *${o.name}* \`${o.id}\`. Pay it now?`,
+      [
+        { id: 'payown1', title: '$ Pay it' },
+        { id: 'pay_search', title: 'Another business' },
+        { id: 'pay_new', title: 'New listing' },
+      ]
+    )
+    return
+  }
+  if (own.length > 1) {
+    const candidates = own.map(b => ({ id: b.id, name: b.name }))
+    await saveSession(from, 'pay_pick', { pay_candidates: candidates } as ChatSessionData)
+    await sendInteractiveList(
+      from,
+      `You have ${candidates.length} unpaid listings. Tap which one to pay:`,
+      candidates.map((b, i) => ({ id: `payown${i + 1}`, title: b.name, description: b.id })),
+      'Your listings'
+    )
+    return
+  }
+  await sendInteractiveButtons(
+    from,
+    'What do you want to pay for — a business already in the directory, or a new listing you still need to register?',
+    [
+      { id: 'pay_existing', title: 'Existing business' },
+      { id: 'pay_new', title: 'Register new' },
+    ]
+  )
+}
+
+// Unpaid, non-Yellow-Pages listings whose phone matches the sender.
+async function ownPayableListings(from: string): Promise<{ id: string; name: string; business_id: string }[]> {
+  try {
+    const supabase = getSupabase()
+    const [{ data: raw }, { data: specialCats }] = await Promise.all([
+      supabase.from('businesses').select('name, business_id, payment_status, category').eq('phone', digitsOnly(from)),
+      supabase.from('categories').select('name').eq('special', true),
+    ])
+    const specialNames = new Set((specialCats || []).map(sc => sc.name))
+    return (raw || [])
+      .filter(b => b.payment_status !== 'active' && !b.category?.some((c: string) => specialNames.has(c)))
+      .map(b => ({ id: b.business_id, name: b.name, business_id: b.business_id }))
+      .slice(0, 9)
+  } catch {
+    return []
+  }
+}
+
+// Fresh DB read before every payment step: guards missing / already-live /
+// Yellow-Pages-free businesses (conditions can change mid-conversation).
+async function assertPayableBusiness(
+  businessId: string
+): Promise<{ ok: true; name: string; waId: string } | { ok: false; reply: string }> {
+  const supabase = getSupabase()
+  const [{ data: biz }, { data: specialCats }] = await Promise.all([
+    supabase
+      .from('businesses')
+      .select('name, business_id, payment_status, category')
+      .eq('business_id', businessId)
+      .maybeSingle(),
+    supabase.from('categories').select('name').eq('special', true),
+  ])
+  if (!biz) return { ok: false, reply: "That business isn't in the directory anymore." }
+  if (biz.payment_status === 'active') {
+    return { ok: false, reply: `*${biz.name}* is already live — no payment needed.` }
+  }
+  if (
+    Array.isArray(biz.category) &&
+    biz.category.some((c: string) => (specialCats || []).some(sc => sc.name === c))
+  ) {
+    return { ok: false, reply: `*${biz.name}* is a Yellow Pages listing — free forever, nothing to pay.` }
+  }
+  return { ok: true, name: biz.name, waId: businessId }
+}
+
+async function beginPayPlan(from: string, cand: { id: string; name: string }) {
+  const guard = await assertPayableBusiness(cand.id)
+  if (!guard.ok) {
+    await clearSession(from)
+    await sendWhatsAppMessage(from, guard.reply)
+    return
+  }
+  await saveSession(from, 'pay_plan', { pay_business: { id: guard.waId, name: guard.name } } as ChatSessionData)
+  await sendInteractiveButtons(
+    from,
+    `*${guard.name}* (${guard.waId}) — which plan covers the listing?`,
+    [
+      { id: 'pay_1m', title: `1 Month · $${PLAN_CONFIG['1m'].price.toFixed(0)}` },
+      { id: 'pay_6m', title: `6 Months · $${PLAN_CONFIG['6m'].price.toFixed(0)}` },
+      { id: 'pay_12m', title: `12 Months · $${PLAN_CONFIG['12m'].price.toFixed(0)}` },
+    ]
+  )
+}
+
+async function askEcoCashNumber(
+  from: string,
+  biz: { id: string; name: string } | undefined,
+  plan: PlanType,
+  base: ChatSessionData = {}
+) {
+  if (!biz) {
+    await startPayChoice(from)
+    return
+  }
+  await saveSession(from, 'pay_ecocash', { ...base, pay_business: biz, pay_plan: plan } as ChatSessionData)
+  const amount = paymentAmountFor(plan)
+  await sendWhatsAppMessage(from, [
+    `${PLAN_CONFIG[plan].label} · $${amount.toFixed(2)} for *${biz.name}* (${biz.id})`,
+    '',
+    "Which EcoCash number should get the PIN prompt? e.g. *0771 234 567* — or reply *me* (this chat's number).",
+  ].join('\n'))
+}
+
+async function handleEcoCashText(from: string, session: ChatSession, text: string) {
+  const biz = session.data.pay_business
+  const plan = session.data.pay_plan || '1m'
+  if (!biz) {
+    await startPayChoice(from)
+    return
+  }
+  const eco = normalizeEcoCashPhone(text.trim())
+  if (!/^0(71|73|77|78)\d{7}$/.test(eco)) {
+    await sendWhatsAppMessage(
+      from,
+      `"${text.trim().slice(0, 30)}" doesn't look like an EcoCash number (077… / 078…).\n\nSend the number again, reply *me*, or *cancel*.`
+    )
+    return
+  }
+
+  const result = await createListingPayment({ businessId: biz.id, payerPhone: eco, plan })
+  const amount = paymentAmountFor(plan)
+  if (!result.ok) {
+    if (result.error === 'Invalid payer phone number') {
+      await sendWhatsAppMessage(from, "That number didn't look right — try again (077… / 078…) or reply *me*.")
+      return
+    }
+    // Business-state errors terminate the flow cleanly.
+    await clearSession(from)
+    await sendWhatsAppMessage(from, result.error)
+    return
+  }
+  await clearSession(from)
+  if (result.autoEcoCash) {
+    await sendWhatsAppMessage(
+      from,
+      [
+        '💸 *EcoCash prompt sent!*',
+        '',
+        `Check your phone for the $${amount.toFixed(2)} PIN request (${PLAN_CONFIG[plan].label} plan for *${biz.name}*).`,
+        'Enter your PIN and the listing goes live automatically —',
+        "I'll message you here the moment it does.",
+      ].join('\n')
+    )
+  } else {
+    await sendWhatsAppMessage(
+      from,
+      [
+        '📝 *Payment request logged* — nothing charged yet.',
+        '',
+        `${PLAN_CONFIG[plan].label} plan · $${amount.toFixed(2)} for *${biz.name}*.`,
+        'Our team verifies the EcoCash transaction and the listing goes live right after.',
+        `Prefer paying right now? ${SITE_URL}/pay`,
+      ].join('\n')
+    )
+  }
+}
+
+async function startPaySearch(from: string) {
+  await clearSession(from)
+  await saveSession(from, 'pay_search', {} as ChatSessionData)
+  await sendWhatsAppMessage(
+    from,
+    [
+      'Which business should the payment go to?',
+      'Send a name, phone, *WA-* ID or @username — or *cancel*.',
+    ].join('\n')
+  )
+}
+
+async function handlePaySearchText(from: string, session: ChatSession, text: string) {
+  const lower = text.toLowerCase().trim()
+  if (/^(?:register|list me|list my|list on|get listed|add my business|sign me up)\b/.test(lower) || lower === 'list') {
+    await startRegister(from)
+    return
+  }
+  if (lower === 'menu' || lower === 'hi' || lower === 'hello') {
+    await sendMainMenu(from)
+    return
+  }
+
+  let results: PayBusiness[] = []
+  try {
+    results = await searchPayBusinesses(getSupabase(), text)
+  } catch {
+    results = []
+  }
+
+  if (results.length === 1) {
+    const b = results[0]
+    const guard = await assertPayableBusiness(b.business_id)
+    if (!guard.ok) {
+      await clearSession(from)
+      await sendWhatsAppMessage(from, guard.reply)
+      return
+    }
+    await beginPayPlan(from, { id: b.business_id, name: b.name })
+    return
+  }
+
+  if (results.length === 0) {
+    await sendWhatsAppMessage(
+      from,
+      `No business matches "*${text.trim().slice(0, 40)}*".\n\nSend a name, phone, *WA-* ID or @username — or *cancel*.`
+    )
+    return
+  }
+
+  const shown = results.slice(0, 9)
+  await saveSession(
+    from,
+    'pay_pick',
+    { pay_candidates: shown.map(b => ({ id: b.business_id, name: b.name })) } as ChatSessionData
+  )
+  await sendInteractiveList(
+    from,
+    `${results.length} businesses match. Tap the one to pay (live and Yellow Pages ones are refused automatically):`,
+    shown.map((b, i) => ({
+      id: `pay${i + 1}`,
+      title: b.name,
+      description: `${b.business_id} · ${payStatusLabel(b.payment_status)}`,
+    })),
+    'Matching businesses'
+  )
+}
+
+// A tap or typed digit picked one candidate from the on-screen pay list.
+async function selectPayCandidate(from: string, session: ChatSession | null, n: number) {
+  const cand = (session?.data.pay_candidates || [])[n - 1]
+  if (!cand) {
+    await sendWhatsAppMessage(from, 'That option expired — send *pay* to restart, or a new search.')
+    return
+  }
+  await beginPayPlan(from, cand)
+}
+
+// pay_existing: list the sender's own unpaid listings (their default target).
+async function sendOwnPayList(from: string) {
+  const own = await ownPayableListings(from)
+  if (own.length === 1) {
+    await beginPayPlan(from, { id: own[0].id, name: own[0].name })
+    return
+  }
+  if (own.length === 0) {
+    await sendWhatsAppMessage(
+      from,
+      'No unpaid listings linked to your number yet.\n\n• Pay for another business: send *pay* and search.\n• New listing: send *register*.'
+    )
+    return
+  }
+  const candidates = own.map(b => ({ id: b.id, name: b.name }))
+  await saveSession(from, 'pay_pick', { pay_candidates: candidates } as ChatSessionData)
+  await sendInteractiveList(
+    from,
+    `You have ${candidates.length} unpaid listings. Tap which one to pay:`,
+    candidates.map((b, i) => ({ id: `payown${i + 1}`, title: b.name, description: b.id })),
+    'Your listings'
+  )
 }
 
 // Where the search came from — makes ⬅ Back able to restore the last prompt.
@@ -666,6 +968,27 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'menu_help':
       await sendWhatsAppMessage(from, HELP_TEXT)
       return
+    case 'menu_pay':
+    case 'pay':
+      await startPayChoice(from)
+      return
+    case 'pay_existing':
+      await sendOwnPayList(from)
+      return
+    case 'pay_search':
+      await startPaySearch(from)
+      return
+    case 'pay_new':
+      await clearSession(from)
+      await startRegister(from)
+      return
+    case 'pay_1m':
+    case 'pay_6m':
+    case 'pay_12m': {
+      const plan: PlanType = action === 'pay_1m' ? '1m' : action === 'pay_6m' ? '6m' : '12m'
+      await askEcoCashNumber(from, session?.data.pay_business, plan, session?.data || {})
+      return
+    }
     case 'cancel':
       await clearSession(from)
       await sendWhatsAppMessage(from, HELP_TEXT)
@@ -687,11 +1010,21 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       await startFreshSearchPrompt(from)
       return
     default:
-      await sendWhatsAppMessage(
-        from,
-        "That option isn't available. Reply *menu* for the main menu, or send a search."
-      )
+      break
   }
+
+  // Pay-flow row taps: payown<N> (own listings) and pay<N> (search results)
+  // share the same candidate-picker.
+  const payRow = action.match(/^(?:payown|pay)([1-9])$/)
+  if (payRow) {
+    await selectPayCandidate(from, session, Number(payRow[1]))
+    return
+  }
+
+  await sendWhatsAppMessage(
+    from,
+    "That option isn't available. Reply *menu* for the main menu, or send a search."
+  )
 }
 
 // Bot retrieval cap: performance guard requested by the owner — page through
@@ -1478,6 +1811,57 @@ export async function POST(request: Request) {
           continue
         }
 
+        // ── Pay flow: typed answers mirror the tap handlers ─────────────
+        if (session?.step === 'pay_search') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          await handlePaySearchText(from, session, text)
+          continue
+        }
+        if (session?.step === 'pay_pick') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          const mPick = lower.match(/^([1-9])$/)
+          if (mPick) {
+            await selectPayCandidate(from, session, Number(mPick[1]))
+          } else {
+            // Not a pick — treat as a brand-new search query
+            await clearSession(from)
+            session = null
+            await dispatchSearch(from, text)
+          }
+          continue
+        }
+        if (session?.step === 'pay_plan') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          const plan = canonicalPlan(text)
+          if (plan) {
+            await askEcoCashNumber(from, session.data.pay_business, plan, session.data)
+          } else {
+            await sendWhatsAppMessage(from, 'Tap a plan above, or reply *1*, *6* or *12*.')
+          }
+          continue
+        }
+        if (session?.step === 'pay_ecocash') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, HELP_TEXT)
+            continue
+          }
+          await handleEcoCashText(from, session, text)
+          continue
+        }
+
         if (session?.step && lower !== 'cancel' && lower !== 'help') {
           await continueRegistration(from, session, text)
           continue
@@ -1486,6 +1870,14 @@ export async function POST(request: Request) {
         if (session?.step && (lower === 'cancel' || lower === 'help')) {
           await clearSession(from)
           await sendWhatsAppMessage(from, HELP_TEXT)
+          continue
+        }
+
+        // Pay intent before everything else free-text: "I want to pay", renew,
+        // subscription… all open the same two-way question.
+        if (/\b(?:pay|payment|paynow|pay now|subscription|subscribe|renew|ecocash|top ?up)\b/.test(lower)) {
+          appendTranscript(from, text)
+          await startPayChoice(from)
           continue
         }
 
