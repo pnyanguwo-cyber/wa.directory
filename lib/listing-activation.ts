@@ -7,6 +7,8 @@
 
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
+import { getBotSetting } from '@/lib/bot-settings'
+import { renderChannelPitch } from '@/lib/bot-templates'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -82,6 +84,14 @@ export async function activateListingSubscription(
           `Renew anytime: ${siteUrl}/pay`,
         ].join('\n')
       ).catch(() => {})
+
+      // Channel pitch: now that the supplier is live, tell them where buyer
+      // leads surface (free-form while the session window is open).
+      const chOverride = await getBotSetting('channel_link')
+      const chLink = (chOverride || process.env.CHANNEL_LINK || '').trim()
+      if (chLink) {
+        sendWhatsAppMessage(business.phone, renderChannelPitch(chLink)).catch(() => {})
+      }
     }
 
     // When someone pays for a business other than their own, the payer should

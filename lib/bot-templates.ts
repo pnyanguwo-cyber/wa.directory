@@ -401,6 +401,90 @@ export function renderWelcomeInstructions(greeting?: string): string {
   ].join('\n')
 }
 
+/** Full first-contact welcome (owner-approved copy). The interactive menu
+ * list is attached right after this text; channel line only when set. */
+export function renderFirstWelcome(channelLink: string): string {
+  const lines = [
+    '🎉 *Welcome to WA Directory!*',
+    'Your shortcut to buying and selling without data.',
+    '',
+    'Looking for something or someone? Tell me what you need and your town, and I\'ll help you find a match.',
+    '',
+    '*What can you find?*',
+    '🛍️ Products and services',
+    '🏢 Business contacts',
+    '👤 Personal contacts listed on WA Directory',
+    '',
+    '*How to search*',
+    'Simply send what you\'re looking for and your town.',
+    '',
+    'bread in Chinhoyi',
+    'plumber in Bulawayo',
+    'John in Harare',
+    '',
+    'You can also send just *plumber* to see matches nationwide. Photos and voice notes work too.',
+    '',
+    '*You name your price*',
+    'Have a budget in mind? Include your offer in the search.',
+    '',
+    'bread Chinhoyi USD 1',
+    '',
+    'Suppliers can accept your price or make a counteroffer, so you can negotiate a deal.',
+    '',
+    '*Need something else?* 👇🏽',
+    'To register your business or personal contact, manage your subscription or get help, open the list below and choose an option.',
+    '',
+    '*Terms and Conditions*',
+    'By searching on WA Directory, you agree to our Terms and Conditions. Please read them here:',
+    '🌐 https://wadirectory.vercel.app',
+    '',
+    '*Let\'s find what you need!*',
+  ]
+  if (channelLink) {
+    lines.push('', '🔁 Suppliers: join our WhatsApp channel for live buyer leads & updates:', channelLink)
+  }
+  return lines.join('\n')
+}
+
+/** Returning customers get a short, named welcome (owner-approved copy). */
+export function renderWelcomeBack(name?: string): string {
+  const lines: string[] = []
+  const first = (name || '').trim().split(' ')[0]
+  if (first) lines.push(`Hi ${first}!`)
+  lines.push('Hey, welcome back!', '')
+  lines.push(
+    '*What are you looking for today?*',
+    '🛍️ Products and services (e.g. *bread in Chinhoyi*)',
+    '🏢 Business contacts (e.g. *ABC Hardware in Harare*)',
+    '👤 Personal contacts listed on WA Directory (e.g. *John Mawere in Harare*)',
+    '',
+    'You can also send a photo or a voice note in English.',
+    '',
+    'Have a price in mind? Include your offer in the search. Suppliers can accept it or make a counteroffer.',
+    '',
+    '*Need something else?* 👇🏽',
+    'To register your business or personal contact, manage your subscription or get help, open the list below and choose an option.'
+  )
+  return lines.join('\n')
+}
+
+/** One-time pitch for just-registered businesses: the WhatsApp channel is
+ * where live buyer needs surface. Free-form, sent while the 24h window is open. */
+export function renderChannelPitch(channelLink: string): string {
+  return [
+    '📣 *Get free buyer leads on WhatsApp*',
+    '',
+    'Join our WhatsApp channel — we post live buyer needs like "50 bags cement Harare".',
+    '',
+    'When you see one, quote with a single reply:',
+    'RQ-7181 $45 delivered',
+    '',
+    'If the buyer picks you, their contact card lands here. Your number stays private until then.',
+    '',
+    `🔗 ${channelLink}`,
+  ].join('\n')
+}
+
 // ── Adaptive greeting ────────────────────────────────────────────────────
 // Greeting-only messages ("hi", "hey there", "mangwanani", "sawubona"…)
 // mirror the caller's own language, with their WhatsApp profile name when
@@ -434,7 +518,7 @@ const GREETING_RULES: GreetingRule[] = [
   { match: /\bsalibonani\b/i, reply: 'Salibonani' },
   { match: /\bkulenyane\b/i, reply: 'Kulenyane' },
   // English basics last — most specific time greetings win above.
-  { match: /\b(?:hi|hiya|hey|hello)\b/i, reply: 'Hey' },
+  { match: /\b(?:hi|hiya|hey|hello|hie|hy)\b/i, reply: 'Hey' },
 ]
 
 // Returns the mirrored greeting ("Mangwanani Tinashe!") for greeting-only

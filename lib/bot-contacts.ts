@@ -32,6 +32,22 @@ export async function getBotContactName(phone: string): Promise<string> {
   }
 }
 
+// True when this number has messaged the bot before (must be checked BEFORE
+// upsertBotContact runs, or every contact looks brand-new).
+export async function hasSeenContact(phone: string): Promise<boolean> {
+  if (!phone) return false
+  try {
+    const { data } = await getSupabase()
+      .from('bot_contacts')
+      .select('phone')
+      .eq('phone', phone)
+      .maybeSingle()
+    return !!data
+  } catch {
+    return false
+  }
+}
+
 export const IDLE_NUDGE_MINUTES = 30
 export const NUDGE_WINDOW_HOURS = 24
 

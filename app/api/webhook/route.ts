@@ -9,6 +9,7 @@ import {
   sendReaction as sendReactionRaw,
   sendContactCard,
   markRead,
+  sendWhatsAppTemplate,
 } from '@/lib/whatsapp'
 import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
 import { logBotMessage, logBotSearch } from '@/lib/bot-log'
@@ -17,7 +18,7 @@ import { expandSearchQuery } from '@/lib/gemini'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
-import { upsertBotContact, markBotContactOptOut, setBotContactOptIn, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
+import { upsertBotContact, markBotContactOptOut, setBotContactOptIn, hasSeenContact, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
 import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
 import { createListing } from '@/lib/listing-create'
 import { uploadLogoImage } from '@/lib/image-storage'
@@ -49,7 +50,9 @@ import {
   resultRows,
   RESULTS_PER_PAGE,
   renderMainMenuBody,
-  renderWelcomeInstructions,
+  renderFirstWelcome,
+  renderWelcomeBack,
+  renderChannelPitch,
   renderGreetingBody,
   renderDetailCard,
   renderChatPrompt,
@@ -117,9 +120,13 @@ const HELP_TEXT = FALLBACK_HELP_LINES(SITE_URL).join('\n')
 
 // ── Admin settings (S16.1) ────────────────────────────────────────────────
 // Channel link: bot_settings override, env (CHANNEL_LINK) fallback.
-async function channelLine(): Promise<string> {
+async function channelLinkRaw(): Promise<string> {
   const override = await getBotSetting('channel_link')
-  const link = (override || process.env.CHANNEL_LINK || '').trim()
+  return (override || process.env.CHANNEL_LINK || '').trim()
+}
+
+async function channelLine(): Promise<string> {
+  const link = await channelLinkRaw()
   return link ? `📲 Live buys & deals: ${link}` : ''
 }
 
@@ -1977,7 +1984,7 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     const bizId = ids[idx]
     const { data: biz } = await getSupabase()
       .from('businesses')
-      .select('id, name, phone, verified')
+      .select('id, name, phone, slug, verified, payment_status')
       .eq('id', bizId)
       .maybeSingle()
     if (!biz) {
@@ -1985,15 +1992,31 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
       return true
     }
     const verify = verifyCmd[1].toLowerCase() === 'verify'
-    await getSupabase().from('businesses').update({ verified: verify }).eq('id', bizId)
+    // Mirror the dashboard approve (app/api/admin/verify): approving a listing
+    // that is not already paid-activates it in the same breath so it shows in
+    // search; un-verifying never re-activates.
+    const activateGoLive = verify && biz.payment_status !== 'active'
+    await getSupabase()
+      .from('businesses')
+      .update(
+        activateGoLive
+          ? { verified: true, payment_status: 'active' }
+          : { verified: verify }
+      )
+      .eq('id', bizId)
     await sendWhatsAppMessage(from, `${verify ? '✅' : '↩️'} *${biz.name}* is now ${verify ? 'verified' : 'unverified'}.`)
     if (verify && biz.phone) {
-      const bph = digitsOnly(biz.phone)
-      if (bph && bph !== digitsOnly(from)) {
-        await sendWhatsAppMessage(bph, [
-          `✅ *${biz.name}* is now Verified on WA Directory.`,
-          'Customers see the badge on your listing. Reply *help* for other options.',
-        ].join('\n'))
+      const bph = '+' + digitsOnly(biz.phone)
+      if (digitsOnly(biz.phone) !== digitsOnly(from)) {
+        sendWhatsAppTemplate(
+          bph,
+          process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
+          [biz.name, `${SITE_URL}/business/${biz.slug || bizId}`]
+        ).catch(() => {})
+        const chLink = await channelLinkRaw()
+        if (chLink) {
+          await sendWhatsAppMessage(bph, renderChannelPitch(chLink)).catch(() => {})
+        }
       }
     }
     return true
@@ -2796,6 +2819,13 @@ async function publishBusiness(from: string, session: ChatSession, msgId?: strin
     ].join('\n')
   )
 
+  // One-time channel pitch while the registration window is open: this is
+  // where live buyer needs surface, and quoting is one reply.
+  const chLink = await channelLinkRaw()
+  if (chLink) {
+    await sendWhatsAppMessage(from, renderChannelPitch(chLink)).catch(() => {})
+  }
+
   if (ADMIN_WHATSAPP) {
     sendWhatsAppMessage(
       ADMIN_WHATSAPP,
@@ -3067,6 +3097,9 @@ export async function POST(request: Request) {
         // Customer base: one row per number, profile name when Meta send it.
         const waName = value.contacts?.find((c: { wa_id?: string }) => c.wa_id === from)?.profile?.name || ''
         let contactSession = await getSession(from)
+        // Known contact must be captured BEFORE the upsert below, or every
+        // message looks like a first hello.
+        const wasKnown = await hasSeenContact(from)
         if (lower === 'stop') {
           await markBotContactOptOut(from)
           await clearSession(from)
@@ -3090,9 +3123,10 @@ export async function POST(request: Request) {
           continue
         }
 
-        // Greeting-only messages ("hi", "mangwanani", "sawubona"…) reset to
-        // plain instructions from ANY state — the two ways to find things
-        // typed out, greeting word mirrored, profile name when Meta sends it.
+        // Greeting-only messages ("hi", "hie", "mangwanani"…): brand-new
+        // contacts get the full welcome; returning ones get a short named
+        // hello. Both end with the interactive menu list. Real searches never
+        // reach this branch, so request handling stays instant.
         let greetBody = renderGreetingBody(text, waName)
         if (greetBody && !waName) {
           const contactName = await getBotContactName(from)
@@ -3100,8 +3134,16 @@ export async function POST(request: Request) {
         }
         if (greetBody) {
           await clearSession(from)
-          const ch = await channelLine()
-          await sendWhatsAppMessage(from, [renderWelcomeInstructions(greetBody), ch].filter(Boolean).join('\n\n'))
+          let greetName = waName
+          if (!greetName) {
+            const contactName = await getBotContactName(from)
+            if (contactName) greetName = contactName
+          }
+          const body = wasKnown
+            ? renderWelcomeBack(greetName)
+            : renderFirstWelcome(await channelLinkRaw())
+          await sendWhatsAppMessage(from, body)
+          await sendInteractiveList(from, 'Need something else? Choose 👇', MENU_ROWS, 'Main menu')
           continue
         }
 

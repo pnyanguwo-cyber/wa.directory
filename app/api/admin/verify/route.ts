@@ -4,6 +4,8 @@ import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
+import { getBotSetting } from '@/lib/bot-settings'
+import { renderChannelPitch } from '@/lib/bot-templates'
 
 export async function POST(request: Request) {
   try {
@@ -42,6 +44,15 @@ export async function POST(request: Request) {
         process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
         [business.name, link]
       ).catch(err => console.error('[verify] notification failed:', err))
+
+      // Channel pitch best-effort right after the live template (free-form
+      // only lands while the 24h window is open; fails silently otherwise).
+      getBotSetting('channel_link')
+        .then(stored => {
+          const chLink = (stored || process.env.CHANNEL_LINK || '').trim()
+          if (chLink) return sendWhatsAppMessage(to, renderChannelPitch(chLink))
+        })
+        .catch(() => {})
     }
 
     // Rejected / unverified: tell the owner why (optional admin note) and
