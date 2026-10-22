@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, callHref } from '@/components/contact'
+import { CartProvider, AddToCartChip } from '@/components/order/cart'
 import ShareButton from '@/components/share-button'
 import StatsPing from '@/components/stats-ping'
 import TrackLink from '@/components/track-link'
@@ -242,6 +243,10 @@ async function BusinessContent({ slug }: { slug: string }) {
   const yellow = isYellowPages(business.category)
   // Voice listings (landlines & hotlines) have no WhatsApp chat — a Call button replaces it.
   const voice = business.phone_type === 'voice'
+  // S18 order handoff digits: prefer the WhatsApp channel's own wa.me number
+  // (voice listings may still carry one), else the regular phone digits.
+  const waLinkDigits = /wa\.me\/(\d+)/.exec(business.whatsapp_link || '')?.[1] || null
+  const orderDigits = !voice && phoneClean ? phoneClean : waLinkDigits || ''
   const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
   // Voice-only listings get a one-tap dial QR instead of a chat QR.
   const qrUrl = voice
@@ -261,6 +266,14 @@ async function BusinessContent({ slug }: { slug: string }) {
 
   return (
     <>
+      <CartProvider
+        business={{
+          slug: shareSlug,
+          name: business.name,
+          city: business.city,
+          whatsappDigits: orderDigits,
+        }}
+      >
       <StatsPing businessId={business.id} type="profile_view" category={business.category[0] || ''} city={business.city || ''} />
       <script
         type="application/ld+json"
@@ -729,9 +742,12 @@ async function BusinessContent({ slug }: { slug: string }) {
                           )}
                           <p className="font-semibold text-text-primary text-sm break-words">{item.name}</p>
                         </div>
-                        <span className="shrink-0 inline-flex items-center rounded-full bg-whatsapp-50 border border-whatsapp-200 px-2.5 py-1 text-xs font-bold text-whatsapp-800">
-                          {formatPrice(item.price)}
-                        </span>
+                        <div className="shrink-0 flex flex-col items-end gap-2">
+                          <span className="inline-flex items-center rounded-full bg-whatsapp-50 border border-whatsapp-200 px-2.5 py-1 text-xs font-bold text-whatsapp-800">
+                            {formatPrice(item.price)}
+                          </span>
+                          <AddToCartChip item={{ id: item.id, name: item.name, price: item.price }} />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -817,6 +833,7 @@ async function BusinessContent({ slug }: { slug: string }) {
           </div>
         </div>
       </div>
+      </CartProvider>
     </>
   )
 }

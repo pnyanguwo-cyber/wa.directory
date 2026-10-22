@@ -1,5 +1,6 @@
 import { SITE_URL } from './site-url'
 import type { InteractiveRow } from './whatsapp'
+import type { CartState, CartLine } from './chat-session'
 
 // The literal phrase that ties a customer chat to our attribution message:
 // written by /go/[id] when a customer opens a business chat, and matched by
@@ -199,6 +200,55 @@ export function renderDetailCard(b: DetailData): string {
 
 function listingUrl(b: { slug: string | null }): string {
   return `${SITE_URL}/business/${b.slug || 'listing'}`
+}
+
+// ── S18 customer cart ─────────────────────────────────────────────────────
+
+/** Prompt above the picker list while building an order. */
+export function renderCartPickerPrompt(name: string, picked: number): string {
+  return [
+    `🧺 *Building your order — ${name}*`,
+    '',
+    'Tap the products you want — pick as many as you like.',
+    picked > 0 ? `In your order: ${picked} line${picked === 1 ? '' : 's'}.` : '',
+    '',
+    'When done, send *cart* to view or check out.',
+  ].filter(Boolean).join('\n')
+}
+
+/** One-line confirmation after a tap-add. */
+export function renderCartAdded(added: number, name: string): string {
+  const line = added > 1 ? `${added} × ${name}` : name
+  return `✅ ${line} added to your order.`
+}
+
+/** Cart view. Line numbers double as removal commands: typed `2` removes line 2. */
+export function renderCartSummary(cart: CartState): string {
+  const picked = cart.lines.filter(l => l.qty > 0)
+  const lines = renderCartLines(picked)
+  const total = picked.length ? picked.reduce((s, l) => s + (l.price || 0) * l.qty, 0) : null
+  return [
+    `🧺 *Your order — ${cart.businessName}*`,
+    ...(cart.city ? [`📍 ${cart.city}`] : []),
+    '',
+    ...lines,
+    ...(total != null ? ['', `*Total: ${monoUSD(total).replace(/`/g, '')}*`] : []),
+    '',
+    'Reply a # to remove that item · *more* to add ·',
+    '*checkout* to send it · *clear* to empty.',
+  ].join('\n')
+}
+
+/** Shared line renderer (summary + web preview parity). */
+export function renderCartLines(lines: CartLine[]): string[] {
+  return lines.map(
+    (l, i) => `${i + 1}. ${l.name} ×${l.qty}${l.price != null ? ` — ${monoUSD(l.price)}` : ''}`
+  )
+}
+
+/** Prompt on the URL button that hands the compiled order to the supplier. */
+export function renderOrderHandoff(name: string): string {
+  return `Send it to *${name}* — WhatsApp opens with your order ready to press send.`
 }
 
 /** Empty results / no supply message. */

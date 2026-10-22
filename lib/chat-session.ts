@@ -63,6 +63,27 @@ export interface ChatSessionData {
   pendingBiz?: string[]
   // Broadcast preview body waiting for the ✅ confirm tap.
   castText?: string
+  // ── Customer cart (S18) ───────────────────────────────────────────
+  // One cart per conversation, scoped to a single supplier. Cleared when the
+  // customer starts a new search or opens a different business card.
+  cart?: CartState
+}
+
+export interface CartLine {
+  id: string
+  name: string
+  price: number | null
+  qty: number
+}
+
+export interface CartState {
+  businessId: string
+  businessName: string
+  supplierDigits: string
+  city?: string
+  phoneType?: 'whatsapp' | 'voice'
+  lines: CartLine[]
+  note?: string
 }
 
 export interface ChatSession {

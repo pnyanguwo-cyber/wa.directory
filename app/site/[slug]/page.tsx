@@ -21,6 +21,7 @@ import HoursStatus from '@/components/site/hours-status'
 import CategoryIcon from '@/components/site/category-icon'
 import TypingTagline from '@/components/site/typing-tagline'
 import { getCategoryImage } from '@/data/category-images'
+import { CartProvider, AddToCartChip } from '@/components/order/cart'
 
 export const revalidate = 3600
 export const dynamicParams = true
@@ -176,6 +177,12 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
       ? `https://wa.me/${phoneClean}?text=${encodeURIComponent(`Hi ${business.name}, I found you through WA Directory.`)}`
       : '')
 
+  // S18 order handoff digits: prefer the owner's own WhatsApp channel number
+  // (covers voice_phone listings that keep a WhatsApp line), else phone digits
+  // when this isn't a voice-only listing. Empty digits => voice-only shop.
+  const waLinkDigits = /wa\.me\/(\d+)/.exec(business.whatsapp_link || '')?.[1] || null
+  const orderDigits = business.phone_type !== 'voice' && phoneClean ? phoneClean : waLinkDigits || ''
+
   const email = business.site_contact_email || ''
   const initials = getInitials(business.name)
   const profileHref = `/business/${business.slug || business.id}`
@@ -278,6 +285,14 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   ]
 
   return (
+  <CartProvider
+    business={{
+      slug: business.slug || business.id,
+      name: business.name,
+      city: business.city,
+      whatsappDigits: orderDigits,
+    }}
+  >
     <div
       className="site-wrap min-h-screen bg-surface text-text-primary isolate selection:bg-whatsapp-100 selection:text-whatsapp-900"
       style={{ fontFamily: fontPair.body, ['--site-head' as string]: fontPair.head }}
@@ -745,22 +760,9 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                         </p>
                       </div>
 
-                      {whatsappHref && (
-                        <div className="mt-4 pt-3 border-t border-black/[0.05]">
-                          <a
-                            href={`${whatsappHref}&text=${encodeURIComponent(
-                              `Hi ${business.name}, I am interested in ${item.name} listed at ${formatPrice(item.price)}.`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-xs font-bold transition-colors group-hover:underline underline-offset-2"
-                            style={{ color: accent }}
-                          >
-                            <span>Chat to order</span>
-                            <span aria-hidden="true">→</span>
-                          </a>
-                        </div>
-                      )}
+                      <div className="mt-4 pt-3 border-t border-black/[0.05]">
+                        <AddToCartChip item={{ id: item.id, name: item.name, price: item.price }} />
+                      </div>
                     </div>
                   </div>
                 </Reveal>
@@ -1090,5 +1092,6 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
         </div>
       </footer>
     </div>
+  </CartProvider>
   )
 }
