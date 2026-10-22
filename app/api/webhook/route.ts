@@ -88,6 +88,7 @@ import {
   getQuoteById,
   listNeedQuotes,
   listOpenNeeds,
+  listNeedsOnDay,
   parseDigestWindow,
   prioritySwitchState,
   reopenNeed,
@@ -175,6 +176,30 @@ async function listUnverifiedBusinesses(limit = 10): Promise<PendingBusiness[]> 
       .order('created_at', { ascending: false })
       .limit(limit)
     return (data as PendingBusiness[]) || []
+  } catch {
+    return []
+  }
+}
+
+// Newest businesses regardless of state — the "listings" admin view.
+type BusinessSummary = {
+  id: number
+  name: string
+  username: string | null
+  city: string | null
+  verified: boolean
+  payment_status: string | null
+  created_at: string
+}
+
+async function listRecentBusinesses(limit = 10): Promise<BusinessSummary[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select('id, name, username, city, verified, payment_status, created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return (data as BusinessSummary[]) || []
   } catch {
     return []
   }
@@ -1765,7 +1790,46 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
-  if (lower === 'needs') {
+  if (lower === 'needs' || lower.startsWith('needs ')) {
+    const arg = lower === 'needs' ? '' : clean.slice(6).trim().toLowerCase()
+    if (arg && arg !== 'today' && arg !== 'yesterday' && !/^\d{1,2}[-\/]\d{1,2}[-\/]\d{4}$/.test(arg)) {
+      await sendWhatsAppMessage(from, 'Try: *needs* (open board) · *needs today* · *needs yesterday* · *needs 22-10-2026*.')
+      return true
+    }
+    if (arg) {
+      // Day view: everything created on that day, open and closed.
+      let dayIso = new Date().toISOString().slice(0, 10)
+      if (arg === 'yesterday') {
+        dayIso = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      } else if (arg !== 'today') {
+        const m = arg.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/) || [null, '', '', '']
+        const dd = Number(m[1]); const mm = Number(m[2]); const yy = Number(m[3])
+        const probe = new Date(Date.UTC(yy, mm - 1, dd))
+        if (mm < 1 || mm > 12 || probe.getUTCMonth() !== mm - 1 || probe.getUTCDate() !== dd) {
+          await sendWhatsAppMessage(from, 'That date looks off. Use *needs 22-10-2026*.')
+          return true
+        }
+        dayIso = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      }
+      const needs = await listNeedsOnDay(dayIso, 15)
+      if (needs.length === 0) {
+        await sendWhatsAppMessage(from, `No needs on ${dayIso.split('-').reverse().join('-')}.`)
+        return true
+      }
+      const lines = [`📋 *Needs — ${dayIso.split('-').reverse().join('-')}*`, '']
+      for (const n of needs) {
+        lines.push(
+          `${n.rq_id} · ${[n.qty, n.item].filter(Boolean).join(' ')} · ${(n.city || 'countrywide').toUpperCase()}` +
+          (n.budget ? ` · ${n.budget}` : '') + ` · ${n.status} · ${n.quotes_forwarded || 0}q`
+        )
+      }
+      const openCount = needs.filter(n => n.status === 'open').length
+      lines.push('', `${needs.length} need${needs.length === 1 ? '' : 's'} · ${openCount} open`,
+        'Reply *quotes RQ-xxxx* or *close RQ-xxxx*.')
+      await sendWhatsAppMessage(from, lines.join('\n'))
+      return true
+    }
+    // Bare needs: the open board (unchanged muscle memory).
     const needs = await listOpenNeeds(20)
     if (needs.length === 0) {
       await sendWhatsAppMessage(from, 'No open needs on the board right now.')
@@ -1775,7 +1839,8 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     for (const n of needs) {
       lines.push(`${n.rq_id} · ${[n.qty, n.item].filter(Boolean).join(' ')} · ${(n.city || 'countrywide').toUpperCase()} · ${n.quotes_forwarded || 0} quote${n.quotes_forwarded === 1 ? '' : 's'}`)
     }
-    lines.push('', 'Reply *close RQ-xxxx* to quiet one, or *digest* for the full report.')
+    lines.push('', 'Reply *close RQ-xxxx* to quiet one, or *digest* for the full report.',
+      'Needs from a day? *needs 22-10-2026* (or today / yesterday).')
     await sendWhatsAppMessage(from, lines.join('\n'))
     return true
   }
@@ -1796,6 +1861,31 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
+  if (lower === 'listings') {
+    const recent = await listRecentBusinesses(10)
+    if (recent.length === 0) {
+      await sendWhatsAppMessage(from, 'No businesses yet.')
+      return true
+    }
+    const lines = ['🏪 *Newest listings* (10 max)', '']
+    for (let i = 0; i < recent.length; i++) {
+      const b = recent[i]
+      const state = [
+        b.verified ? '✅ verified' : '○ unverified',
+        b.payment_status === 'active' ? 'paid' : (b.payment_status || 'pending'),
+      ].join(' · ')
+      lines.push(
+        `${i + 1}. *${b.name}*` +
+        (b.username ? ` · @${b.username}` : '') +
+        (b.city ? ` · ${b.city}` : '') +
+        ` · ${state} · ${b.created_at.slice(0, 10)}`
+      )
+    }
+    lines.push('', 'Unverified ones: reply *pending* to verify.')
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
   if (lower === 'admins') {
     const list = await adminNumbers()
     const root = digitsOnly(ADMIN_WHATSAPP || '')
@@ -1803,6 +1893,7 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     for (const n of list) lines.push(`${fmtAdminNumber(n)}${n === root ? ' · owner' : ''}`)
     lines.push('', 'Owner can add/remove: *admin add 263…* / *admin del 263…*')
     lines.push('Broadcast: *cast your message* (24h-active contacts only)')
+    lines.push('Needs by day: *needs 22-10-2026* (or today / yesterday) · Listings: *listings*')
     await sendWhatsAppMessage(from, lines.join('\n'))
     return true
   }

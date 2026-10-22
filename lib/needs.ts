@@ -138,6 +138,25 @@ export async function listOpenNeeds(limit = 50): Promise<NeedRow[]> {
   }
 }
 
+// All needs (open and closed) created on one UTC calendar day — the admin
+// "needs 22-10-2026" view. Empty day returns [].
+export async function listNeedsOnDay(dayIso: string, limit = 20): Promise<NeedRow[]> {
+  try {
+    const start = `${dayIso.slice(0, 10)}T00:00:00Z`
+    const end = new Date(new Date(start).getTime() + 86400000).toISOString()
+    const { data } = await getSupabase()
+      .from('work_needs')
+      .select(NEED_COLUMNS)
+      .gte('created_at', start)
+      .lt('created_at', end)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return (data as NeedRow[]) || []
+  } catch {
+    return []
+  }
+}
+
 export async function closeNeedByRqId(
   rqId: string,
   closedBy: 'buyer' | 'admin' | 'auto',
