@@ -47,6 +47,17 @@ export async function markBotContactOptOut(phone: string) {
   }
 }
 
+// Admin `optin` command: undo an accidental `stop`.
+export async function setBotContactOptIn(phone: string) {
+  try {
+    await getSupabase()
+      .from('bot_contacts')
+      .upsert({ phone, opted_out: false }, { onConflict: 'phone' })
+  } catch {
+    // Ignore — the next inbound re-creates the row anyway.
+  }
+}
+
 // Piggyback sweep: every inbound message checks a few contacts that went
 // idle 30+ minutes ago and nudges them once (app link + channel link).
 // Vercel Hobby crons only fire daily, so a timer job is not an option.

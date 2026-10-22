@@ -17,7 +17,8 @@ import { expandSearchQuery } from '@/lib/gemini'
 import type { Business } from '@/types'
 import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData } from '@/lib/chat-session'
 import { getSupabase } from '@/lib/supabase-server'
-import { upsertBotContact, markBotContactOptOut, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
+import { upsertBotContact, markBotContactOptOut, setBotContactOptIn, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
+import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
 import { createListing } from '@/lib/listing-create'
 import { uploadLogoImage } from '@/lib/image-storage'
 import { fetchWhatsAppMedia, perceiveMedia, mediaRateOk, type MediaKind } from '@/lib/bot-sense'
@@ -85,7 +86,9 @@ import {
   listNeedQuotes,
   listOpenNeeds,
   parseDigestWindow,
+  prioritySwitchState,
   reopenNeed,
+  setPrioritySwitch,
 } from '@/lib/needs'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
@@ -111,6 +114,64 @@ const STOPWORDS = new Set([
 ])
 
 const HELP_TEXT = FALLBACK_HELP_LINES(SITE_URL).join('\n')
+
+// ── Admin settings (S16.1) ────────────────────────────────────────────────
+// Channel link: bot_settings override, env (CHANNEL_LINK) fallback.
+async function channelLine(): Promise<string> {
+  const override = await getBotSetting('channel_link')
+  const link = (override || process.env.CHANNEL_LINK || '').trim()
+  return link ? `📲 Live buys & deals: ${link}` : ''
+}
+
+async function helpText(): Promise<string> {
+  const ch = await channelLine()
+  return ch ? `${HELP_TEXT}\n\n${ch}` : HELP_TEXT
+}
+
+// Extra admin numbers live in bot_settings.admin_allowlist (JSON array).
+// The env ADMIN_WHATSAPP number is always the undeletable owner.
+async function adminNumbers(): Promise<string[]> {
+  const root = digitsOnly(ADMIN_WHATSAPP || '')
+  const raw = await getBotSetting('admin_allowlist')
+  let extras: string[] = []
+  try {
+    const parsed = JSON.parse(raw || '[]')
+    if (Array.isArray(parsed)) extras = parsed.map(x => digitsOnly(String(x))).filter(Boolean)
+  } catch {
+    extras = []
+  }
+  return [...new Set([root, ...extras].filter(Boolean))]
+}
+
+async function isBotAdmin(from: string): Promise<boolean> {
+  return (await adminNumbers()).includes(digitsOnly(from))
+}
+
+function fmtAdminNumber(n: string): string {
+  return `+${n}`
+}
+
+interface PendingBusiness {
+  id: string
+  name: string
+  phone: string | null
+  city: string | null
+  created_at: string
+}
+
+async function listUnverifiedBusinesses(limit = 10): Promise<PendingBusiness[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select('id, name, phone, city, created_at')
+      .eq('verified', false)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return (data as PendingBusiness[]) || []
+  } catch {
+    return []
+  }
+}
 
 // ── Transcript-logging send wrappers (S16) ────────────────────────────────
 // Every bot send goes through one replay: the raw Cloud API call plus a
@@ -571,9 +632,10 @@ const MENU_ROWS = [
 
 async function sendMainMenu(from: string) {
   await clearSession(from)
+  const ch = await channelLine()
   await sendInteractiveList(
     from,
-    renderMainMenuBody(),
+    [renderMainMenuBody(), ch].filter(Boolean).join('\n\n'),
     MENU_ROWS,
     'Main menu'
   )
@@ -1468,18 +1530,24 @@ async function postBuyerNeed(from: string, session: ChatSession | null) {
     return
   }
   await sendWhatsAppMessage(from, renderNeedPosted(need.rq_id, d))
-  // Instant admin copy: need summary + a channel-ready post to copy-paste.
-  const admin = (ADMIN_WHATSAPP || '').replace(/\D/g, '')
-  if (admin && admin !== digitsOnly(from)) {
-    const adminBody = [
-      `🛒 NEW NEED ${need.rq_id}`,
-      [d.qty, d.item].filter(Boolean).join(' '),
-      `${d.budget || 'no budget'} · ${(d.city || 'countrywide').toUpperCase()}`,
-      `Buyer: +${from}`,
-      '',
-      '— channel post (copy below) —',
-      channelPostFor(need),
-    ].join('\n')
+  // Instant copy to every admin: need summary + a channel-ready post to
+  // copy-paste, plus the one-word commands for this need.
+  const admins = await adminNumbers()
+  const ch = await channelLine()
+  const adminBody = [
+    `🛒 NEW NEED ${need.rq_id}`,
+    [d.qty, d.item].filter(Boolean).join(' '),
+    `${d.budget || 'no budget'} · ${(d.city || 'countrywide').toUpperCase()}`,
+    `Buyer: +${from}`,
+    '',
+    '— channel post (copy below) —',
+    channelPostFor(need),
+    ...(ch ? ['', ch] : []),
+    '',
+    `Quick replies: quotes ${need.rq_id} · close ${need.rq_id} · post ${need.rq_id}`,
+  ].join('\n')
+  for (const admin of admins) {
+    if (!admin || admin === digitsOnly(from)) continue
     await sendWhatsAppText(admin, adminBody)
     logOut(admin, 'text', adminBody)
   }
@@ -1691,6 +1759,215 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
+  if (lower === 'admins') {
+    const list = await adminNumbers()
+    const root = digitsOnly(ADMIN_WHATSAPP || '')
+    const lines = ['👥 *Bot admins*', '']
+    for (const n of list) lines.push(`${fmtAdminNumber(n)}${n === root ? ' · owner' : ''}`)
+    lines.push('', 'Owner can add/remove: *admin add 263…* / *admin del 263…*')
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
+  const adminAdd = clean.match(/^admin\s+(add|del)\s+(\+?[\d\s-]{6,20})$/i)
+  if (adminAdd) {
+    const root = digitsOnly(ADMIN_WHATSAPP || '')
+    if (digitsOnly(from) !== root) {
+      await sendWhatsAppMessage(from, 'Only the owner number can change admins.')
+      return true
+    }
+    const num = digitsOnly(adminAdd[2])
+    if (num.length < 9 || num === root) {
+      await sendWhatsAppMessage(from, 'Send a full number like *admin add 263771234567*.')
+      return true
+    }
+    const raw = await getBotSetting('admin_allowlist')
+    let extras: string[] = []
+    try {
+      const parsed = JSON.parse(raw || '[]')
+      if (Array.isArray(parsed)) extras = parsed.map(x => digitsOnly(String(x))).filter(Boolean)
+    } catch {
+      extras = []
+    }
+    if (adminAdd[1].toLowerCase() === 'add') {
+      if (extras.includes(num)) {
+        await sendWhatsAppMessage(from, `${fmtAdminNumber(num)} is already an admin.`)
+        return true
+      }
+      extras.push(num)
+      await setBotSetting('admin_allowlist', JSON.stringify(extras))
+      await sendWhatsAppMessage(from, `✅ Added ${fmtAdminNumber(num)}. They can now run *digest*, *needs*, *stats* and get need copies.`)
+    } else {
+      if (!extras.includes(num)) {
+        await sendWhatsAppMessage(from, `${fmtAdminNumber(num)} is not on the admin list.`)
+        return true
+      }
+      extras = extras.filter(n => n !== num)
+      await setBotSetting('admin_allowlist', JSON.stringify(extras))
+      await sendWhatsAppMessage(from, `✅ Removed ${fmtAdminNumber(num)}.`)
+    }
+    return true
+  }
+
+  const quotesCmd = clean.match(/^quotes\s+(.+)$/i)
+  if (quotesCmd) {
+    const rqId = canonicalRq(quotesCmd[1])
+    const need = rqId ? await getNeedByRqId(rqId) : null
+    if (!need) {
+      await sendWhatsAppMessage(from, 'Which need? e.g. *quotes RQ-7181*.')
+      return true
+    }
+    const qs = await listNeedQuotes(need.id, 10)
+    const lines = [
+      `💬 *${need.rq_id}* · ${[need.qty, need.item].filter(Boolean).join(' ')} · ${(need.city || 'countrywide').toUpperCase()}`,
+      `Status: ${need.status} · ${qs.length} quote${qs.length === 1 ? '' : 's'} stored`,
+      '',
+    ]
+    qs.forEach((q, i) => {
+      lines.push(`${i + 1}. ${q.supplier_name || 'supplier'} · ${q.price || '(no price)'}${q.body ? ` · ${q.body}` : ''}`)
+    })
+    if (!qs.length) lines.push('No quotes yet.')
+    lines.push('', `Reply *close ${need.rq_id}* to quiet it, *reopen ${need.rq_id}* to restart.`)
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
+  const reopenCmd = clean.match(/^reopen\s+(.+)$/i)
+  if (reopenCmd) {
+    const rqId = canonicalRq(reopenCmd[1])
+    const need = rqId ? await getNeedByRqId(rqId) : null
+    if (!need) {
+      await sendWhatsAppMessage(from, 'Which need? e.g. *reopen RQ-7181*.')
+      return true
+    }
+    if (need.status === 'open') {
+      await sendWhatsAppMessage(from, `${need.rq_id} is already open.`)
+      return true
+    }
+    await reopenNeed(need.id)
+    await sendWhatsAppMessage(from, `🔄 ${need.rq_id} reopened — quotes relay again.`)
+    return true
+  }
+
+  const postCmd = clean.match(/^post\s+(.+)$/i)
+  if (postCmd) {
+    const rqId = canonicalRq(postCmd[1])
+    const need = rqId ? await getNeedByRqId(rqId) : null
+    if (!need) {
+      await sendWhatsAppMessage(from, 'Which need? e.g. *post RQ-7181*.')
+      return true
+    }
+    await sendWhatsAppMessage(from, `📋 Channel post for ${need.rq_id}:\n\n${channelPostFor(need)}`)
+    return true
+  }
+
+  const peopleCmd = clean.match(/^(optin|optout)\s+(\+?[\d\s-]{6,20})$/i)
+  if (peopleCmd) {
+    const num = digitsOnly(peopleCmd[2])
+    if (num.length < 9) {
+      await sendWhatsAppMessage(from, 'Send a full number like *optout 263771234567*.')
+      return true
+    }
+    const off = peopleCmd[1].toLowerCase() === 'optout'
+    if (off) await markBotContactOptOut(num)
+    else await setBotContactOptIn(num)
+    await sendWhatsAppMessage(from, `✅ ${fmtAdminNumber(num)} ${off ? 'will not get follow-ups' : 'can get follow-ups again'}.`)
+    return true
+  }
+
+  if (lower === 'switch' || lower.startsWith('switch ')) {
+    const state = await prioritySwitchState()
+    if (lower === 'switch') {
+      await sendWhatsAppMessage(from, `🔀 Priority-supplier switch: *${state.enabled ? 'ON' : 'OFF'}* · price ${state.price}\n\nReply *switch on*, *switch off* or *switch price $5*.`)
+      return true
+    }
+    if (lower === 'switch on' || lower === 'switch off') {
+      await setPrioritySwitch(lower === 'switch on', state.price)
+      await sendWhatsAppMessage(from, `🔀 Priority-supplier switch is now *${lower === 'switch on' ? 'ON' : 'OFF'}*.`)
+      return true
+    }
+    const priceMatch = clean.match(/^switch\s+price\s+(\S{1,24})$/i)
+    if (priceMatch) {
+      await setPrioritySwitch(state.enabled, priceMatch[1])
+      await sendWhatsAppMessage(from, `💵 Priority-supplier price set to *${priceMatch[1]}*.`)
+      return true
+    }
+    await sendWhatsAppMessage(from, 'Use *switch on*, *switch off*, or *switch price $5*.')
+    return true
+  }
+
+  if (lower === 'channel' || lower.startsWith('channel ')) {
+    const stored = await getBotSetting('channel_link')
+    const cur = (stored || process.env.CHANNEL_LINK || '').trim()
+    if (lower === 'channel') {
+      await sendWhatsAppMessage(from, cur ? `📣 Channel: ${cur}` : 'No channel link set. Reply *channel set <link>*.')
+      return true
+    }
+    const setMatch = clean.match(/^channel\s+set\s+(https?:\/\/\S+)$/i)
+    if (setMatch) {
+      await setBotSetting('channel_link', setMatch[1])
+      await sendWhatsAppMessage(from, `✅ Channel link saved.\n${setMatch[1]}`)
+      return true
+    }
+    if (lower === 'channel clear') {
+      await setBotSetting('channel_link', '')
+      await sendWhatsAppMessage(from, 'Channel link cleared.')
+      return true
+    }
+    await sendWhatsAppMessage(from, 'Use *channel set https://…* or *channel clear*.')
+    return true
+  }
+
+  if (lower === 'pending') {
+    const bus = await listUnverifiedBusinesses(10)
+    if (!bus.length) {
+      await sendWhatsAppMessage(from, 'No unverified businesses right now. ✅')
+      return true
+    }
+    await saveSession(from, 'admin_pending', { pendingBiz: bus.map(b => b.id) })
+    const lines = ['🕵️ *Unverified businesses*', '']
+    bus.forEach((b, i) => {
+      lines.push(`${i + 1}. ${b.name} · ${(b.city || '—').toUpperCase()} · ${fmtHarare(b.created_at, true)}${b.phone ? ` · +${digitsOnly(b.phone)}` : ''}`)
+    })
+    lines.push('', 'Reply *verify 1* to approve (the business gets a ✅ notice), or *unverify 1*.')
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
+  const verifyCmd = clean.match(/^(verify|unverify)\s+(\d{1,2})$/i)
+  if (verifyCmd) {
+    const sess = await getSession(from)
+    const ids = sess?.data.pendingBiz || []
+    const idx = Number(verifyCmd[2]) - 1
+    if (idx < 0 || idx >= ids.length) {
+      await sendWhatsAppMessage(from, 'Run *pending* first, then reply *verify 1* with the list number.')
+      return true
+    }
+    const bizId = ids[idx]
+    const { data: biz } = await getSupabase()
+      .from('businesses')
+      .select('id, name, phone, verified')
+      .eq('id', bizId)
+      .maybeSingle()
+    if (!biz) {
+      await sendWhatsAppMessage(from, 'That business was not found — run *pending* again.')
+      return true
+    }
+    const verify = verifyCmd[1].toLowerCase() === 'verify'
+    await getSupabase().from('businesses').update({ verified: verify }).eq('id', bizId)
+    await sendWhatsAppMessage(from, `${verify ? '✅' : '↩️'} *${biz.name}* is now ${verify ? 'verified' : 'unverified'}.`)
+    if (verify && biz.phone) {
+      const bph = digitsOnly(biz.phone)
+      if (bph && bph !== digitsOnly(from)) {
+        await sendWhatsAppMessage(bph, [
+          `✅ *${biz.name}* is now Verified on WA Directory.`,
+          'Customers see the badge on your listing. Reply *help* for other options.',
+        ].join('\n'))
+      }
+    }
+    return true
+  }
+
   return false
 }
 
@@ -1882,7 +2159,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       await sendWhatsAppMessage(from, 'Registration cancelled. Send *help* anytime.')
       return
     case 'menu_help':
-      await sendWhatsAppMessage(from, HELP_TEXT)
+      await sendWhatsAppMessage(from, await helpText())
       return
     case 'menu_pay':
     case 'pay':
@@ -1907,7 +2184,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     }
     case 'cancel':
       await clearSession(from)
-      await sendWhatsAppMessage(from, HELP_TEXT)
+      await sendWhatsAppMessage(from, await helpText())
       return
     case 'whole_country':
       if (session?.step === 'search_loc' && session.data.pending_search_term) {
@@ -2571,7 +2848,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
 
     default:
       await clearSession(from)
-      await sendWhatsAppMessage(from, HELP_TEXT)
+      await sendWhatsAppMessage(from, await helpText())
   }
 }
 
@@ -2700,13 +2977,12 @@ export async function POST(request: Request) {
         }
         let session = contactSession
 
-        // ── Admin command suite (owner number only) ─────────────────────
-        const adminDigits = digitsOnly(ADMIN_WHATSAPP || '')
-        if (adminDigits && digitsOnly(from) === adminDigits) {
+        // ── Admin command suite (owner + allowlisted numbers) ───────────
+        if (await isBotAdmin(from)) {
           if (await handleAdminCommand(from, text)) {
             continue
           }
-          // Admin falls through: their phone works as a normal user too.
+          // Admins fall through: their phone works as a normal user too.
         }
 
         if (action) {
@@ -2724,7 +3000,8 @@ export async function POST(request: Request) {
         }
         if (greetBody) {
           await clearSession(from)
-          await sendWhatsAppMessage(from, renderWelcomeInstructions(greetBody))
+          const ch = await channelLine()
+          await sendWhatsAppMessage(from, [renderWelcomeInstructions(greetBody), ch].filter(Boolean).join('\n\n'))
           continue
         }
 
@@ -2745,7 +3022,7 @@ export async function POST(request: Request) {
         if (session?.step === 'need_form') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           await handleNeedFormText(from, session, text)
@@ -2762,7 +3039,7 @@ export async function POST(request: Request) {
         if (session?.step === 'rating') {
           if (lower === 'cancel' || lower === 'help' || lower === 'back') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           await handleRatingReply(from, session, text)
@@ -2774,7 +3051,7 @@ export async function POST(request: Request) {
           // Waiting for the user's town (term already captured)
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -2813,7 +3090,7 @@ export async function POST(request: Request) {
           // Waiting for the search term (town already captured)
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -2862,7 +3139,7 @@ export async function POST(request: Request) {
           // more/next pages through the stored candidates.
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -2909,7 +3186,7 @@ export async function POST(request: Request) {
         if (session?.step === 'reg_contact') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           const c = parseContactLine(text)
@@ -2954,7 +3231,7 @@ export async function POST(request: Request) {
         if (session?.step === 'list_form') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           if (/^(publish|submit|yes|y|go live)\b/.test(lower)) {
@@ -2969,7 +3246,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_search') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           await handlePaySearchText(from, session, text)
@@ -2978,7 +3255,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_pick') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           const mPick = lower.match(/^([1-9])$/)
@@ -2995,7 +3272,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_plan') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           const plan = canonicalPlan(text)
@@ -3009,7 +3286,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_ecocash') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, HELP_TEXT)
+            await sendWhatsAppMessage(from, await helpText())
             continue
           }
           await handleEcoCashText(from, session, text)
@@ -3023,7 +3300,7 @@ export async function POST(request: Request) {
 
         if (session?.step && (lower === 'cancel' || lower === 'help')) {
           await clearSession(from)
-          await sendWhatsAppMessage(from, HELP_TEXT)
+          await sendWhatsAppMessage(from, await helpText())
           continue
         }
 
@@ -3046,7 +3323,7 @@ export async function POST(request: Request) {
         }
 
         if (lower === 'help') {
-          await sendWhatsAppMessage(from, HELP_TEXT)
+          await sendWhatsAppMessage(from, await helpText())
           continue
         }
 

@@ -58,6 +58,11 @@ export interface ChatSessionData {
   // ── Need intake (S16 matchmaking) ──────────────────────────────────
   // Living need draft: what, how many, budget hint, town.
   need?: { item: string; qty: string; budget: string; city: string }
+  // ── Admin commands over WhatsApp ──────────────────────────────────
+  // Last `pending` listing: business ids in display order for verify N.
+  pendingBiz?: string[]
+  // Broadcast preview body waiting for the ✅ confirm tap.
+  castText?: string
 }
 
 export interface ChatSession {
