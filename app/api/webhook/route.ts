@@ -70,6 +70,7 @@ import {
   renderNeedFilled,
   renderDealAsk,
   renderCeremony,
+  formatPhone,
   type ResultCard,
 } from '@/lib/bot-templates'
 import {
@@ -203,6 +204,58 @@ async function listRecentBusinesses(limit = 10): Promise<BusinessSummary[]> {
   } catch {
     return []
   }
+}
+
+// The whole directory (businesses + personal contacts share the businesses
+// table; personal rows carry 'Personal Contact' in their category array).
+// Expired listings are excluded — renewals are tracked elsewhere (bot-only
+// duplication with the Subscriptions tab is intentional).
+type DirectoryRow = {
+  id: number
+  name: string
+  city: string | null
+  phone: string
+  phone_type: string | null
+  category: string[] | null
+}
+
+async function listDirectoryRows(limit = 600): Promise<DirectoryRow[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select('id, name, city, phone, phone_type, category')
+      .neq('payment_status', 'expired')
+      .order('name', { ascending: true })
+      .limit(limit)
+    return (data as DirectoryRow[]) || []
+  } catch {
+    return []
+  }
+}
+
+// Rows are pre-blocked at ~38 lines so each WhatsApp message stays well
+// under the 4KB media limit even after bold + emoji widening.
+function contactChunkMessages(
+  header: string,
+  rows: Array<{ name: string; city: string | null; phone: string; phoneType: string | null }>,
+  startIndex = 0
+): string[] {
+  const lines = rows.map((r, i) => {
+    const num = formatPhone(r.phone) || 'no number'
+    return `${startIndex + i + 1}. *${r.name}* · ${r.city || '—'} · ${num}${r.phoneType === 'voice' ? ' 📞' : ''}`
+  })
+  if (lines.length === 0) return []
+  const pageSize = 38
+  const pages: string[] = []
+  for (let i = 0; i < lines.length; i += pageSize) {
+    const part = lines.slice(i, i + pageSize)
+    pages.push(
+      i === 0
+        ? [header, `${rows.length} listed`, '', ...part].join('\n')
+        : ['…cont.', '', ...part].join('\n')
+    )
+  }
+  return pages
 }
 
 // Broadcast v1 audience: numbers with an inbound message in the last 24h
@@ -1769,13 +1822,36 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
 
   if (lower === 'digest' || lower.startsWith('digest ')) {
     const args = clean.slice(6).trim().split(/\s+/).filter(Boolean)
+    // Day view: "digest 21-10-2026" (or today / yesterday) compiles that
+    // calendar day's full report without touching the cursor. Times
+    // ("digest 10:30 13:00") keep their existing window behavior.
+    const first = args[0]?.toLowerCase() || ''
+    const dayMatch = args.length === 1 ? first.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/) : null
+    if (args.length === 1 && (dayMatch || first === 'today' || first === 'yesterday')) {
+      let dayIso = new Date().toISOString().slice(0, 10)
+      if (first === 'yesterday') {
+        dayIso = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+      } else if (dayMatch) {
+        const dd = Number(dayMatch[1]); const mm = Number(dayMatch[2]); const yy = Number(dayMatch[3])
+        const probe = new Date(Date.UTC(yy, mm - 1, dd))
+        if (mm < 1 || mm > 12 || probe.getUTCMonth() !== mm - 1 || probe.getUTCDate() !== dd) {
+          await sendWhatsAppMessage(from, 'That date looks off. Use *digest 21-10-2026*.')
+          return true
+        }
+        dayIso = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`
+      }
+      const dayDigest = await compileDigest(`${dayIso}T00:00:00Z`, new Date(new Date(`${dayIso}T00:00:00Z`).getTime() + 86400000).toISOString())
+      await sendWhatsAppMessage(from, dayDigest)
+      await sendWhatsAppMessage(from, '— view only; your cursor is untouched.')
+      return true
+    }
     const cursor = await getDigestCursor()
     const win = parseDigestWindow(args, cursor)
     if (win.error) {
       await sendWhatsAppMessage(
         from,
         [
-          "Didn't catch that time. Formats: *digest*, *digest 10:30*, *digest 10:30 13:00*.",
+          "Didn't catch that time. Formats: *digest*, *digest 10:30*, *digest 10:30 13:00*, *digest 21-10-2026*.",
           '*digest* reports everything since your last check-in and moves the window.',
         ].join('\n')
       )
@@ -1883,6 +1959,49 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     }
     lines.push('', 'Unverified ones: reply *pending* to verify.')
     await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
+  if (lower === 'contacts' || lower.startsWith('contacts ')) {
+    const arg = lower === 'contacts' ? 'all' : clean.slice(9).trim().toLowerCase()
+    if (!['all', 'biz', 'businesses', 'people', 'personal'].includes(arg)) {
+      await sendWhatsAppMessage(from, 'Try: *contacts* (all) · *contacts biz* · *contacts people*.')
+      return true
+    }
+    const rows = await listDirectoryRows()
+    const isPersonal = (r: DirectoryRow) => (r.category || []).includes('Personal Contact')
+    const businesses = rows.filter(r => !isPersonal(r))
+    const personal = rows.filter(isPersonal)
+
+    const wantBiz = arg === 'all' || arg === 'biz' || arg === 'businesses'
+    const wantPeople = arg === 'all' || arg === 'people' || arg === 'personal'
+    if (!businesses.length && wantBiz && !wantPeople) {
+      await sendWhatsAppMessage(from, 'No businesses in the directory yet.')
+      return true
+    }
+    if (!personal.length && wantPeople && !wantBiz) {
+      await sendWhatsAppMessage(from, 'No personal contacts listed yet.')
+      return true
+    }
+
+    const messages: string[] = []
+    if (arg === 'all') {
+      messages.push(`📇 *WA Directory contacts*\n🏪 ${businesses.length} businesses · 👤 ${personal.length} personal`)
+    }
+    if (wantBiz) {
+      messages.push(
+        ...contactChunkMessages('🏪 *Businesses*', businesses.map(r => ({ name: r.name, city: r.city, phone: r.phone, phoneType: r.phone_type })))
+      )
+    }
+    if (wantPeople) {
+      messages.push(
+        ...contactChunkMessages('👤 *Personal contacts*', personal.map(r => ({ name: r.name, city: r.city, phone: r.phone, phoneType: r.phone_type })))
+      )
+    }
+    for (const m of messages) {
+      await sendWhatsAppMessage(from, m)
+      await new Promise(r => setTimeout(r, 350))
+    }
     return true
   }
 
