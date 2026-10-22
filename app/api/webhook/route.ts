@@ -173,6 +173,36 @@ async function listUnverifiedBusinesses(limit = 10): Promise<PendingBusiness[]> 
   }
 }
 
+// Broadcast v1 audience: numbers with an inbound message in the last 24h
+// (Meta session window is open, so replies are free-form and free), minus
+// opted-out contacts and bot admins.
+async function broadcastAudience(): Promise<string[]> {
+  try {
+    const since = new Date(Date.now() - 24 * 3600000).toISOString()
+    const { data } = await getSupabase()
+      .from('bot_messages')
+      .select('phone')
+      .eq('dir', 'in')
+      .gte('created_at', since)
+      .limit(2000)
+    const phones = [...new Set(((data as { phone: string }[]) || []).map(r => r.phone).filter(Boolean))]
+    if (!phones.length) return []
+    const { data: contacts } = await getSupabase()
+      .from('bot_contacts')
+      .select('phone, opted_out')
+      .in('phone', phones)
+    const optedOut = new Set(
+      ((contacts as { phone: string; opted_out: boolean }[]) || [])
+        .filter(c => c.opted_out)
+        .map(c => c.phone)
+    )
+    const admins = new Set(await adminNumbers())
+    return phones.filter(p => !optedOut.has(p) && !admins.has(digitsOnly(p)))
+  } catch {
+    return []
+  }
+}
+
 // ── Transcript-logging send wrappers (S16) ────────────────────────────────
 // Every bot send goes through one replay: the raw Cloud API call plus a
 // fire-and-forget transcript row in bot_messages. Call sites keep the old
@@ -1765,6 +1795,7 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     const lines = ['👥 *Bot admins*', '']
     for (const n of list) lines.push(`${fmtAdminNumber(n)}${n === root ? ' · owner' : ''}`)
     lines.push('', 'Owner can add/remove: *admin add 263…* / *admin del 263…*')
+    lines.push('Broadcast: *cast your message* (24h-active contacts only)')
     await sendWhatsAppMessage(from, lines.join('\n'))
     return true
   }
@@ -1968,10 +1999,79 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
+  const castCmd = clean.match(/^cast(?:\s+([\s\S]+))?$/i)
+  if (castCmd) {
+    const body = (castCmd[1] || '').trim()
+    if (!body) {
+      await sendWhatsAppMessage(from, 'Broadcast to recent contacts: *cast your announcement here*.\nOnly numbers active in the last 24h get it.')
+      return true
+    }
+    const audience = await broadcastAudience()
+    await saveSession(from, 'admin_cast', { castText: body })
+    await sendInteractiveButtons(
+      from,
+      [
+        '📣 *Broadcast preview*',
+        '',
+        body,
+        '',
+        `Will reach *${audience.length}* contact${audience.length === 1 ? '' : 's'} active in the last 24h (opted-out skipped).`,
+        'Send now?',
+      ].join('\n'),
+      [
+        { id: 'cast_send', title: '✅ Send now' },
+        { id: 'cast_cancel', title: '✖ Cancel' },
+      ]
+    )
+    return true
+  }
+
   return false
 }
 
 async function handleAction(from: string, session: ChatSession | null, action: string, msgId?: string) {
+  // Broadcast confirm/cancel (admins only).
+  if (action === 'cast_send' || action === 'cast_cancel') {
+    if (!(await isBotAdmin(from))) {
+      await sendWhatsAppMessage(from, 'That button belongs to a broadcast preview.')
+      return
+    }
+    if (action === 'cast_cancel') {
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'Broadcast cancelled.')
+      return
+    }
+    const body = (session?.data.castText || '').trim()
+    if (!body) {
+      await sendWhatsAppMessage(from, 'Nothing to send — start with *cast your message*.')
+      return
+    }
+    const audience = (await broadcastAudience()).slice(0, 200)
+    let sent = 0
+    let failed = 0
+    for (const phone of audience) {
+      try {
+        await sendWhatsAppMessage(phone, body)
+        sent++
+      } catch {
+        failed++
+      }
+    }
+    await clearSession(from)
+    await sendWhatsAppMessage(
+      from,
+      [
+        '📣 *Broadcast done*',
+        `✅ Sent: ${sent}`,
+        failed ? `⚠️ Failed: ${failed}` : '',
+        `👥 Audience: ${audience.length} active in last 24h`,
+        '',
+        'Recipients can reply *stop* to opt out anytime.',
+      ].filter(Boolean).join('\n')
+    )
+    return
+  }
+
   // Need-quote actions carry data ids (pick / stop / deal-ask answers).
   const pick = action.match(/^q_pick_(\d+)$/)
   if (pick) {
