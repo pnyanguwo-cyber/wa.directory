@@ -10,6 +10,8 @@ import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-ico
 import { digitsOnly } from '@/lib/phone'
 import { formatPrice, getInitials } from '@/lib/utils'
 import { accentFor } from '@/lib/category-style'
+import { getPreset } from '@/lib/site-design'
+import { getFontPair } from '@/lib/site-fonts'
 
 import Reveal from '@/components/site/reveal'
 import SiteNav from '@/components/site/site-nav'
@@ -185,7 +187,14 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
     shop?: string
     contact?: string
     accent?: string
+    design?: string
+    font?: string
   }
+
+  // Choosable template preset + font pair (portal "Design" panel writes these).
+  const preset = getPreset(theme.design)
+  const fontPair = getFontPair(theme.font || preset.defaultFont)
+  const isPreset = preset.key !== 'classic'
 
   // Owner override (site_theme.accent) wins; otherwise the category default
   // gives every industry a distinct brand colour.
@@ -269,7 +278,10 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   ]
 
   return (
-    <div className="min-h-screen bg-surface text-text-primary isolate selection:bg-whatsapp-100 selection:text-whatsapp-900">
+    <div
+      className="site-wrap min-h-screen bg-surface text-text-primary isolate selection:bg-whatsapp-100 selection:text-whatsapp-900"
+      style={{ fontFamily: fontPair.body, ['--site-head' as string]: fontPair.head }}
+    >
       {/* Ambient drifting glow orbs — subtle full-page life behind all content.
           `isolate` on the root makes it a stacking context so the -z-10 orbs
           paint above the opaque bg-surface instead of behind it. */}
@@ -343,22 +355,14 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
               alt=""
               fetchPriority="high"
               decoding="async"
-              className="absolute inset-0 h-full w-full object-cover object-center scale-105 brightness-110 saturate-[1.12]"
+              className="absolute inset-0 h-full w-full object-cover object-center scale-105 brightness-125 contrast-105 saturate-[1.15]"
             />
-            {/* Scrim Layer 1: Whisper-light obsidian base — barely tints the photo */}
-            <div
-              className="absolute inset-0 bg-slate-950/15 backdrop-blur-[0.5px]"
-              style={
-                heroBg
-                  ? { backgroundColor: `color-mix(in srgb, ${heroBg} 15%, #020617)` }
-                  : undefined
-              }
-            />
-            {/* Scrim Layer 2: Left text wash (WCAG AAA where the headline lives) + accent radial + bottom fade */}
+            {/* Left text wash: strong protection behind the headline column,
+                transparent over the photo's open half */}
             <div
               className="absolute inset-0"
               style={{
-                backgroundImage: `radial-gradient(ellipse 80% 85% at 85% 15%, color-mix(in srgb, ${accent} 40%, transparent), transparent 65%), linear-gradient(to right, rgba(2, 6, 23, 0.85) 0%, rgba(2, 6, 23, 0.55) 42%, rgba(2, 6, 23, 0.1) 72%, transparent 90%), linear-gradient(to bottom, transparent 50%, rgba(2, 6, 23, 0.8) 100%)`,
+                backgroundImage: `radial-gradient(ellipse 80% 85% at 85% 15%, color-mix(in srgb, ${accent} 40%, transparent), transparent 65%), linear-gradient(to right, rgba(2, 6, 23, 0.65) 0%, rgba(2, 6, 23, 0.45) 40%, rgba(2, 6, 23, 0) 62%), linear-gradient(to bottom, transparent 62%, rgba(2, 6, 23, 0.5) 100%)`,
               }}
             />
             {/* Scrim Layer 3: Tactile SVG noise grain overlay */}
@@ -393,12 +397,48 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
           </>
         )}
 
+        {/* Craft preset: tilted photo collage on the desktop hero right edge */}
+        {preset.key === 'craft' && (itemPhotos.length > 0 || coverImage) && (
+          <div className="hidden lg:block absolute right-8 top-1/2 -translate-y-1/2 z-10 w-[300px] h-[300px]" aria-hidden="true">
+            <div
+              className="absolute right-6 top-8 w-52 h-52 rounded-[1.5rem] overflow-hidden shadow-2xl rotate-6 ring-4 ring-white/40"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={(itemPhotos[1] || itemPhotos[0] || coverImage) as string}
+                alt=""
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+            <div
+              className="absolute left-2 bottom-2 w-44 h-44 rounded-[1.25rem] overflow-hidden shadow-2xl -rotate-6 ring-4 ring-white/40"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={(blocks.gallery?.[1] || coverImage || itemPhotos[0]) as string}
+                alt=""
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            </div>
+            <span
+              className="absolute -top-3 right-16 rounded-full px-4 py-1.5 text-[12px] font-extrabold shadow-xl -rotate-3"
+              style={{ backgroundColor: accent, color: accentCtaText }}
+            >
+              Fresh &amp; local
+            </span>
+          </div>
+        )}
+
         <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
           <Reveal>
-            <div className="max-w-3xl">
+            <div
+              className={`max-w-3xl ${preset.centeredHero ? 'mx-auto text-center' : ''}`}
+            >
               {/* Fluid H1 Clamp Heading - Rock-solid, zero layout shift */}
               <h1
-                className="text-[clamp(2.25rem,5.5vw,4.25rem)] font-black tracking-[-0.035em] leading-[1.04] drop-shadow-[0_2px_12px_rgba(0,0,0,0.35)] bg-clip-text text-transparent animate-gloss-sheen"
+                className="text-[clamp(2.25rem,5.5vw,4.25rem)] font-black tracking-[-0.035em] leading-[1.04] drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)] drop-shadow-[0_8px_22px_rgba(0,0,0,0.35)] bg-clip-text text-transparent animate-gloss-sheen"
                 style={{
                   backgroundImage: isHeroDark
                     ? `linear-gradient(100deg, #ffffff 0%, #ffffff 40%, color-mix(in srgb, ${accent} 75%, #ffffff) 50%, #ffffff 60%, #ffffff 100%)`
@@ -411,8 +451,8 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
               {/* H2: Tagline that types through the business's services */}
               <h2
-                className={`mt-4 text-[clamp(1.15rem,2.4vw,1.75rem)] font-semibold leading-snug max-w-2xl ${
-                  isHeroDark ? 'text-white/85' : 'text-text-secondary'
+                className={`mt-4 text-[clamp(1.15rem,2.4vw,1.75rem)] font-semibold leading-snug max-w-2xl [text-shadow:0_1px_3px_rgba(0,0,0,0.6)] ${
+                  isHeroDark ? 'text-white/90' : 'text-text-secondary'
                 }`}
               >
                 <TypingTagline
@@ -424,21 +464,21 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
               {/* Prose intro with optimal line measure */}
               <p
-                className={`mt-6 text-[clamp(1.05rem,1.8vw,1.25rem)] leading-relaxed max-w-2xl line-clamp-4 ${
-                  isHeroDark ? 'text-white/80' : 'text-text-secondary'
+                className={`mt-6 text-[clamp(1.05rem,1.8vw,1.25rem)] leading-relaxed max-w-2xl line-clamp-4 [text-shadow:0_1px_3px_rgba(0,0,0,0.55)] ${
+                  isHeroDark ? 'text-white/85' : 'text-text-secondary'
                 }`}
               >
                 {hero}
               </p>
 
               {/* Primary & Secondary Action Row */}
-              <div className="mt-8 flex flex-wrap items-center gap-3.5">
-                {whatsappHref && (
-                  <a
-                    href={whatsappHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2.5 rounded-2xl px-7 py-4 text-[15px] font-extrabold shadow-card-lift hover:brightness-105 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-whatsapp-500"
+                <div className={`mt-8 flex flex-wrap items-center gap-3.5 ${preset.centeredHero ? 'justify-center' : ''}`}>
+                  {whatsappHref && (
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-2.5 ${preset.radiusPill} px-7 py-4 text-[15px] font-extrabold shadow-card-lift hover:brightness-105 active:scale-[0.98] transition-all focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-whatsapp-500`}
                     style={{
                       backgroundColor: accent,
                       color: accentCtaText,
@@ -456,7 +496,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                   (business.voice_phone ? digitsOnly(business.voice_phone) : phoneClean) && (
                     <a
                       href={`tel:${business.voice_phone ? digitsOnly(business.voice_phone) : phoneClean}`}
-                      className={`inline-flex items-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-bold border transition-all active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-whatsapp-500 ${
+                      className={`inline-flex items-center gap-2.5 ${preset.radiusPill} px-6 py-4 text-[15px] font-bold border transition-all active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-whatsapp-500 ${
                         isHeroDark
                           ? 'border-white/20 bg-white/10 text-white hover:bg-white/15'
                           : 'border-black/[0.08] bg-white/85 text-text-primary hover:bg-white shadow-sm'
@@ -472,7 +512,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                 {itemList.length > 0 && (
                   <a
                     href="#shop"
-                    className={`hidden sm:inline-flex items-center gap-2 rounded-2xl px-6 py-4 text-[15px] font-bold border transition-colors focus-visible:ring-2 focus-visible:ring-whatsapp-500 ${
+                    className={`hidden sm:inline-flex items-center gap-2 ${preset.radiusPill} px-6 py-4 text-[15px] font-bold border transition-colors focus-visible:ring-2 focus-visible:ring-whatsapp-500 ${
                       isHeroDark
                         ? 'border-white/20 text-white hover:bg-white/10'
                         : 'border-black/[0.08] text-text-primary hover:bg-black/[0.03]'
@@ -483,6 +523,24 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                   </a>
                 )}
               </div>
+
+              {/* Bolt preset: trust chips row under the CTAs */}
+              {preset.key === 'bolt' && (
+                <div
+                  className={`mt-7 flex flex-wrap gap-2.5 text-[13px] font-semibold ${preset.centeredHero ? 'justify-center' : ''}`}
+                >
+                  {['WhatsApp orders', business.city ? `${business.city} based` : 'Zimbabwe', itemList.length > 0 ? `${itemList.length} products` : 'Fast reply', 'EcoCash accepted'].map((chip) => (
+                    <span
+                      key={chip}
+                      className={`inline-flex items-center rounded-full border px-4 py-1.5 ${
+                        isHeroDark ? 'border-white/25 bg-white/10 text-white/85' : 'border-black/[0.09] bg-white/70 text-text-primary'
+                      }`}
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Star Rating Strip */}
               {business.rating > 0 && business.review_count > 0 && (
@@ -526,7 +584,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
       <main className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* ------- Services Grid with Category-Aware SVG Icons ------- */}
         {menuServices.length > 0 && (
-          <section id="services" className="scroll-mt-20 pt-20 md:pt-28">
+          <section id="services" className={`scroll-mt-20 pt-20 md:pt-28 ${preset.sectionRule}`}>
             <Reveal>
               <div className="max-w-2xl">
                 <p className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
@@ -545,7 +603,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
               {menuServices.map((serviceTitle, idx) => (
                 <Reveal key={idx} delay={Math.min(idx * 0.05, 0.3)}>
                   <div
-                    className="group relative h-full rounded-3xl border border-black/[0.07] bg-white p-6 shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1 hover:border-black/[0.12] overflow-hidden"
+                    className={`group relative h-full ${preset.radiusCard} border border-black/[0.07] bg-white p-6 shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-1 hover:border-black/[0.12] overflow-hidden`}
                   >
                     {/* Top specular highlight line on hover */}
                     <div
@@ -603,7 +661,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
           {itemList.length === 0 && (
             <Reveal>
-              <div className="mt-8 rounded-3xl border border-black/[0.06] bg-white/70 p-8 text-center max-w-xl">
+              <div className={`mt-8 ${preset.radiusCard} border border-black/[0.06] bg-white/70 p-8 text-center max-w-xl`}>
                 <p className="text-text-secondary leading-relaxed">
                   Nothing listed yet — message us on WhatsApp and we&apos;ll send our current catalogue.
                 </p>
@@ -627,7 +685,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
               {itemList.slice(0, 6).map((item, idx) => (
                 <Reveal key={item.id} delay={Math.min(idx * 0.05, 0.3)}>
                   <div
-                    className="group h-full rounded-3xl border border-black/[0.08] bg-white overflow-hidden shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 flex flex-col"
+                    className={`group h-full ${preset.radiusCard} border border-black/[0.08] bg-white overflow-hidden shadow-card hover:shadow-card-hover hover:-translate-y-1 transition-all duration-300 flex flex-col`}
                     style={
                       shopBg
                         ? {
@@ -713,7 +771,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
         {/* ------- Gallery Section: 6 Squares with Image Hover Zoom ------- */}
         {gallery.length > 0 && (
-          <section id="gallery" className="scroll-mt-20 pt-20 md:pt-28">
+          <section id="gallery" className={`scroll-mt-20 pt-20 md:pt-28 ${preset.sectionRule}`}>
             <Reveal>
               <div className="max-w-2xl">
                 <p className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
@@ -731,7 +789,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
             <div className="mt-10 grid grid-cols-2 md:grid-cols-3 gap-3.5 sm:gap-5">
               {gallery.slice(0, 6).map((imgUrl, idx) => (
                 <Reveal key={imgUrl + idx} delay={Math.min(idx * 0.05, 0.3)}>
-                  <div className="group relative aspect-square rounded-3xl overflow-hidden border border-black/[0.08] bg-surface shadow-card hover:shadow-card-hover transition-all duration-300">
+                  <div className={`group relative aspect-square ${preset.radiusTile} overflow-hidden border border-black/[0.08] bg-surface shadow-card hover:shadow-card-hover transition-all duration-300`}>
                     <Image
                       src={imgUrl}
                       alt={`${business.name} work sample ${idx + 1}`}
@@ -750,7 +808,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
         {/* ------- Testimonials Section: Typographic Quotations & Initials Avatars ------- */}
         {testimonials.length > 0 && (
-          <section id="reviews" className="scroll-mt-20 pt-20 md:pt-28">
+          <section id="reviews" className={`scroll-mt-20 pt-20 md:pt-28 ${preset.sectionRule}`}>
             <Reveal>
               <div className="max-w-2xl">
                 <p className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: accent }}>
@@ -768,7 +826,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
             <div className="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {testimonials.map((t, idx) => (
                 <Reveal key={idx} delay={Math.min(idx * 0.06, 0.3)}>
-                  <figure className="relative h-full rounded-3xl border border-black/[0.08] bg-white p-6 sm:p-7 shadow-card flex flex-col justify-between overflow-hidden">
+                  <figure className={`relative h-full ${preset.radiusCard} border border-black/[0.08] bg-white p-6 sm:p-7 shadow-card flex flex-col justify-between overflow-hidden`}>
                     {/* Large decorative quote watermark */}
                     <span
                       aria-hidden="true"

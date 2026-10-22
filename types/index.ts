@@ -57,6 +57,9 @@ export interface Business {
     shop?: string
     contact?: string
     accent?: string
+    // Choosable template + font pair (whitelist-validated on write).
+    design?: SiteDesignKey
+    font?: SiteFontKey
   } | null
   // Optional social profiles shown on the auto-generated website + profile page.
   // Empty string / missing key = the platform is not linked.
@@ -85,6 +88,10 @@ export interface SiteHoursEntry {
   open: string
   close: string
 }
+
+// Choosable auto-website templates + font pairings (lib/site-design.ts).
+export type SiteDesignKey = 'classic' | 'maison' | 'bolt' | 'craft'
+export type SiteFontKey = 'modern' | 'editorial' | 'grotesk' | 'warm'
 
 export interface SiteContentBlocks {
   // Short punchy line used in the hero under the headline.

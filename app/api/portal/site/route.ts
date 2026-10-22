@@ -2,26 +2,38 @@ import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
-import { parseSiteContent, generateSiteSections } from '@/lib/site-content'
+import { parseSiteContent, generateSiteSections, generateSiteDesign } from '@/lib/site-content'
+import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
 import type { SiteContentBlocks } from '@/types'
 
 const MAX_TEXT = 2000
 const MAX_EMAIL = 320
 
 // Whitelisted per-section theme keys; values must be '' (default) or strict #RRGGBB.
-const THEME_KEYS = ['header', 'hero', 'shop', 'contact', 'accent'] as const
+const DESIGN_KEYS: string[] = SITE_DESIGNS.map(d => d.key)
+const FONT_KEYS: string[] = SITE_FONTS.map(f => f.key)
+const THEME_KEYS = ['header', 'hero', 'shop', 'contact', 'accent', 'design', 'font'] as const
 type ThemeKey = (typeof THEME_KEYS)[number]
+const HEX_KEYS = ['header', 'hero', 'shop', 'contact', 'accent'] as const
+type HexKey = (typeof HEX_KEYS)[number]
 const HEX_RE = /^#[0-9a-fA-F]{6}$/
 
 function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null
   const src = input as Record<string, unknown>
-  const out: Record<ThemeKey, string> = { header: '', hero: '', shop: '', contact: '', accent: '' }
+  const out: Record<ThemeKey, string> = { header: '', hero: '', shop: '', contact: '', accent: '', design: '', font: '' }
   let touched = false
   for (const key of THEME_KEYS) {
     const raw = src[key]
-    if (typeof raw === 'string') {
-      const v = raw.trim()
+    if (typeof raw !== 'string') continue
+    const v = raw.trim()
+    if (key === 'design' && (v === '' || DESIGN_KEYS.includes(v))) {
+      out[key] = v
+      touched = true
+    } else if (key === 'font' && (v === '' || FONT_KEYS.includes(v))) {
+      out[key] = v
+      touched = true
+    } else if ((HEX_KEYS as readonly string[]).includes(key)) {
       if (v === '') {
         out[key] = ''
         touched = true
@@ -29,8 +41,8 @@ function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
         out[key] = v.toUpperCase()
         touched = true
       }
-      // Invalid values are dropped (left as default).
     }
+    // Invalid values are dropped (left as default).
   }
   return touched ? out : null
 }
@@ -115,6 +127,22 @@ export async function POST(request: Request) {
       // No links stored clears the column entirely.
       const allEmpty = SOCIAL_KEYS.every(k => socials[k] === '')
       updates.site_socials = allEmpty ? null : socials
+    }
+
+    // "Let AI decide": Gemini maps the business to a preset + font pair and
+    // merges over whatever theme the owner already has.
+    if (body?.design_ai === true) {
+      const existing = (business.site_theme || {}) as Record<string, string>
+      const chosen = await generateSiteDesign({
+        businessName: business.name,
+        category: business.category?.[0] || '',
+        bio: business.site_hero || business.bio || '',
+        city: business.city || '',
+      })
+      const merged: Record<string, string> = { ...existing, design: chosen.design }
+      if (!merged.font) merged.font = chosen.font
+      const allBlank = Object.keys(merged).length > 0 && Object.values(merged).every(v => v === '')
+      updates.site_theme = allBlank ? null : merged
     }
 
     // Structured content blocks (tagline / faq / hours / gallery).

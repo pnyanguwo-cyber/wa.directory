@@ -1,4 +1,5 @@
 import type { SiteContentBlocks, SiteFaqEntry, SiteHoursEntry } from '@/types'
+import { SITE_DESIGN_KEYS, SITE_FONT_KEYS, getPreset } from '@/lib/site-design'
 
 // ---------------------------------------------------------------------------
 // Whitelist parser for the businesses.site_content JSONB column.
@@ -161,8 +162,54 @@ export async function generateSiteSections(input: {
 // sentences become cards of their own; plain prose falls back gracefully.
 // ---------------------------------------------------------------------------
 
-export function servicesToCards(services: string): string[] {
-  if (!services || !services.trim()) return []
+// ---------------------------------------------------------------------------
+// AI design pick: maps a business to a template preset + font pair (S17).
+// Deterministic category heuristics first, Gemini as the tie-breaker.
+// ---------------------------------------------------------------------------
+const CATEGORY_DESIGN: Record<string, { design: string; font: string }> = {
+  'Hair & Beauty': { design: 'maison', font: 'editorial' },
+  'Jewelry': { design: 'maison', font: 'editorial' },
+  'Hotel & Lodging': { design: 'maison', font: 'editorial' },
+  'Legal Services': { design: 'maison', font: 'editorial' },
+  'Financial Services': { design: 'bolt', font: 'grotesk' },
+  'IT & Web': { design: 'bolt', font: 'grotesk' },
+  'Electronics': { design: 'bolt', font: 'grotesk' },
+  'Fitness & Gym': { design: 'bolt', font: 'grotesk' },
+  'Food & Restaurant': { design: 'craft', font: 'warm' },
+  'Baker': { design: 'craft', font: 'warm' },
+  'Brewery': { design: 'craft', font: 'warm' },
+  'Clothing & Fashion': { design: 'craft', font: 'warm' },
+  'Farming & Agriculture': { design: 'craft', font: 'warm' },
+}
+
+export async function generateSiteDesign(input: {
+  businessName: string
+  category: string
+  bio: string
+  city: string
+}): Promise<{ design: string; font: string }> {
+  const heuristic = CATEGORY_DESIGN[input.category?.trim() || '']
+  if (!process.env.GEMINI_API_KEY) return heuristic || { design: 'classic', font: 'modern' }
+
+  try {
+    const { callGemini } = await import('./gemini')
+    const text = await callGemini(
+      `Pick an auto-website template and font for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Choose design from exactly: classic, maison, bolt, craft (maison=editorial luxury serif, bolt=bold startup energy, craft=warm local maker, classic=clean default). Choose font from exactly: modern, editorial, grotesk, warm. Return ONLY JSON: {"design":"<one>","font":"<one>"}.`
+    ) || ''
+    const match = text.match(/\{[\s\S]*\}/)
+    if (match) {
+      const parsed = JSON.parse(match[0]) as { design?: string; font?: string }
+      const design = typeof parsed.design === 'string' && SITE_DESIGN_KEYS.includes(parsed.design as never) ? parsed.design : ''
+      const font = typeof parsed.font === 'string' && SITE_FONT_KEYS.includes(parsed.font as never) ? parsed.font : ''
+      if (design) return { design, font: font || getPreset(design).defaultFont }
+    }
+  } catch {
+    // Best-effort — fall through to heuristics.
+  }
+  return heuristic || { design: 'classic', font: 'modern' }
+}
+
+export function servicesToCards(services: string): string[] {  if (!services || !services.trim()) return []
   const bulletLines = services
     .split('\n')
     .map((line) => line.trim())

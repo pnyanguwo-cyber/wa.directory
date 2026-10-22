@@ -434,3 +434,8 @@
 .animate-orb-c { animation: orb-drift-c 48s ease-in-out infinite; }
 
 
+
+/* Auto-website template system: heading font var is injected per design. */
+.site-wrap h1, .site-wrap h2, .site-wrap h3 {
+  font-family: var(--site-head, inherit);
+}

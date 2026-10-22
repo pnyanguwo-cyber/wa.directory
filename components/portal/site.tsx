@@ -3,10 +3,11 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
+import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
 import type { SiteHoursEntry, SiteFaqEntry, SiteContentBlocks } from '@/types'
 
 type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
-type SiteTheme = Record<ThemeKey, string>
+type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const THEME_ROWS: { key: ThemeKey; label: string; hint: string }[] = [
@@ -59,7 +60,7 @@ export default function PortalSite({
   siteHero: string
   siteServices: string
   siteContactEmail: string
-  siteTheme?: Partial<Record<ThemeKey, string>> | null
+  siteTheme?: Partial<SiteTheme> | null
   siteSocials?: Partial<Record<SocialKey, string>> | null
   siteContent?: SiteContentBlocks | null
 }) {
@@ -74,6 +75,8 @@ export default function PortalSite({
     shop: siteTheme?.shop || '',
     contact: siteTheme?.contact || '',
     accent: siteTheme?.accent || '',
+    design: siteTheme?.design || '',
+    font: siteTheme?.font || '',
   })
   const [socials, setSocials] = useState<Record<SocialKey, string>>({
     twitter: siteSocials?.twitter || '',
@@ -124,6 +127,33 @@ export default function PortalSite({
       gallery,
     },
   })
+
+  async function handleDesignAi() {
+    setBusy(true)
+    setGenerating(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await fetch('/api/portal/site', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ design_ai: true }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'AI design pick failed')
+        return
+      }
+      if (data.site_theme) setTheme((t) => ({ ...t, design: data.site_theme.design || '', font: data.site_theme.font || '' }))
+      setNotice(`AI picked the "${data.site_theme?.design || 'classic'}" design — press Save to apply.`)
+      router.refresh()
+    } catch {
+      setError('AI design pick failed. Check your connection and try again.')
+    } finally {
+      setBusy(false)
+      setGenerating(false)
+    }
+  }
 
   async function handleSave(ai = false) {
     setBusy(true)
@@ -258,6 +288,65 @@ export default function PortalSite({
         </div>
         <p className="text-[11px] text-text-secondary mt-3">
           Only links matching the network&apos;s web address are saved. Untick a network to remove it.
+        </p>
+      </div>
+
+      {/* Design template */}
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">Design</h3>
+            <p className="text-xs text-text-secondary mt-0.5">
+              Pick the look of your website — layout, fonts and feel change instantly.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleDesignAi}
+            disabled={busy}
+            className="rounded-full px-4 py-2 text-xs font-bold text-white bg-text-primary hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+          >
+            {generating ? 'Thinking…' : '✨ Let AI decide'}
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {SITE_DESIGNS.map(d => {
+            const active = (theme.design || 'classic') === d.key
+            return (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => setTheme((prev) => ({ ...prev, design: d.key, font: prev.font || d.defaultFont }))}
+                className={`text-left rounded-xl border p-3 transition-all ${
+                  active
+                    ? 'border-whatsapp-500 bg-whatsapp-50 ring-1 ring-whatsapp-400'
+                    : 'border-gray-200/80 bg-surface hover:border-whatsapp-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-bold text-text-primary">{d.label}</span>
+                  {active && <span aria-hidden="true">✓</span>}
+                </div>
+                <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{d.desc}</p>
+              </button>
+            )
+          })}
+        </div>
+        <label className="block mt-4">
+          <span className="block text-xs font-semibold text-text-primary mb-1.5">Font pairing</span>
+          <select
+            value={theme.font || ''}
+            onChange={(e) => setTheme((prev) => ({ ...prev, font: e.target.value }))}
+            className="input text-sm"
+          >
+            {SITE_FONTS.map(f => (
+              <option key={f.key} value={f.key}>{f.label} — {f.desc}</option>
+            ))}
+          </select>
+          <span className="block text-xs text-text-secondary mt-1">Leave as the template default unless you have a brand font taste.</span>
+        </label>
+        <p className="text-xs text-text-secondary mt-3">
+          Changes go live when you press Save website settings below.
         </p>
       </div>
 
