@@ -355,3 +355,55 @@ export async function sendWhatsAppTemplate(
     },
   })
 }
+
+/** Document message (CSV exports etc.): upload the file to Meta's media API,
+ * then reference it by media id. Dry-run logs instead of uploading. */
+export async function sendWhatsAppDocument(
+  to: string,
+  filename: string,
+  mime: string,
+  content: string | Buffer
+): Promise<boolean> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return false
+  }
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][document] to=${to} ${filename} (${mime}, ${content.length} bytes)`)
+    return true
+  }
+
+  try {
+    const form = new FormData()
+    const bytes = typeof content === 'string' ? Buffer.from(content, 'utf8') : content
+    form.append('file', new Blob([new Uint8Array(bytes)], { type: mime }), filename)
+    form.append('messaging_product', 'whatsapp')
+    const up = await fetch(`${WHATSAPP_API}/${phoneNumberId}/media`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+    })
+    if (!up.ok) {
+      console.error('[whatsapp] Media upload failed:', await up.text())
+      return false
+    }
+    const { id } = (await up.json()) as { id: string }
+    if (!id) {
+      console.error('[whatsapp] Media upload returned no id')
+      return false
+    }
+    return await postToWhatsApp(phoneNumberId, accessToken, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'document',
+      document: { id, filename },
+    })
+  } catch (err) {
+    console.error('[whatsapp] Document send error:', err)
+    return false
+  }
+}

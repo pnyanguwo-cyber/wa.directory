@@ -7,6 +7,7 @@ import {
   sendCtaUrl as sendCtaUrlRaw,
   sendLocationRequest as sendLocationRequestRaw,
   sendReaction as sendReactionRaw,
+  sendWhatsAppDocument as sendWhatsAppDocumentRaw,
   sendContactCard,
   markRead,
   sendWhatsAppTemplate,
@@ -258,6 +259,94 @@ function contactChunkMessages(
   return pages
 }
 
+// Everyone who has ever messaged the bot — the engagement list.
+type ChatCsvRow = {
+  phone: string
+  name: string | null
+  first_seen: string | null
+  last_seen: string | null
+  message_count: number | null
+  last_step: string | null
+  opted_out: boolean | null
+}
+
+async function listChatCsvRows(limit = 200): Promise<ChatCsvRow[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('bot_contacts')
+      .select('phone, name, first_seen, last_seen, message_count, last_step, opted_out')
+      .order('message_count', { ascending: false })
+      .order('last_seen', { ascending: false })
+      .limit(limit)
+    return (data as ChatCsvRow[]) || []
+  } catch {
+    return []
+  }
+}
+
+// ── CSV exports (admin) ───────────────────────────────────────────────────
+function csvEsc(value: unknown): string {
+  const s = String(value ?? '')
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
+function csvBody(headers: string[], rows: unknown[][]): string {
+  const lines = [headers.join(','), ...rows.map(r => r.map(csvEsc).join(','))]
+  return lines.join('\r\n') + '\r\n'
+}
+
+type BizCsvRow = {
+  name: string
+  username: string | null
+  city: string | null
+  phone: string
+  phone_type: string | null
+  verified: boolean
+  payment_status: string | null
+  created_at: string | null
+  socials: string[] | null
+  category: string[] | null
+}
+
+async function listBizCsvRows(): Promise<BizCsvRow[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select('name, username, city, phone, phone_type, verified, payment_status, created_at, socials, category')
+      .neq('payment_status', 'expired')
+      .order('name', { ascending: true })
+      .limit(600)
+    return (data as BizCsvRow[]) || []
+  } catch {
+    return []
+  }
+}
+
+function csvForBusinesses(rows: BizCsvRow[]): string {
+  return csvBody(
+    ['name', 'username', 'city', 'phone', 'phone_type', 'verified', 'payment_status', 'created_at'],
+    rows
+      .filter(r => !(r.category || []).includes('Personal Contact'))
+      .map(r => [r.name, r.username || '', r.city || '', r.phone, r.phone_type || 'whatsapp', r.verified ? 'true' : 'false', r.payment_status || '', r.created_at || ''])
+  )
+}
+
+function csvForPeople(rows: BizCsvRow[]): string {
+  return csvBody(
+    ['name', 'city', 'phone', 'phone_type', 'socials', 'created_at'],
+    rows
+      .filter(r => (r.category || []).includes('Personal Contact'))
+      .map(r => [r.name, r.city || '', r.phone, r.phone_type || 'whatsapp', (r.socials || []).join(' | '), r.created_at || ''])
+  )
+}
+
+function csvForChats(rows: ChatCsvRow[]): string {
+  return csvBody(
+    ['name', 'phone', 'first_seen', 'last_seen', 'notes', 'last_step', 'opted_out'],
+    rows.map(r => [r.name || '', r.phone, r.first_seen || '', r.last_seen || '', r.message_count ?? 0, r.last_step || '', r.opted_out ? 'true' : 'false'])
+  )
+}
+
 // Broadcast v1 audience: numbers with an inbound message in the last 24h
 // (Meta session window is open, so replies are free-form and free), minus
 // opted-out contacts and bot admins.
@@ -335,6 +424,11 @@ async function sendLocationRequest(to: string, body: string) {
 async function sendReaction(to: string, messageId: string, emoji: string) {
   logOut(to, 'reaction', `[${emoji}] on ${messageId}`)
   return sendReactionRaw(to, messageId, emoji)
+}
+
+async function sendWhatsAppDocument(to: string, filename: string, mime: string, content: string) {
+  logOut(to, 'document', `${filename} (${mime})`)
+  return sendWhatsAppDocumentRaw(to, filename, mime, content)
 }
 
 function generateSlug(name: string): string {
@@ -1964,10 +2058,32 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
 
   if (lower === 'contacts' || lower.startsWith('contacts ')) {
     const arg = lower === 'contacts' ? 'all' : clean.slice(9).trim().toLowerCase()
-    if (!['all', 'biz', 'businesses', 'people', 'personal'].includes(arg)) {
-      await sendWhatsAppMessage(from, 'Try: *contacts* (all) · *contacts biz* · *contacts people*.')
+    if (!['all', 'biz', 'businesses', 'people', 'personal', 'chats'].includes(arg)) {
+      await sendWhatsAppMessage(from, 'Try: *contacts* (all) · *contacts biz* · *contacts people* · *contacts chats*.')
       return true
     }
+
+    if (arg === 'chats') {
+      const chats = await listChatCsvRows(50)
+      if (!chats.length) {
+        await sendWhatsAppMessage(from, 'No bot participants yet.')
+        return true
+      }
+      const lines = ['📇 *Bot participants* (most engaged first)', '']
+      let opted = 0
+      chats.forEach((c, i) => {
+        if (c.opted_out) opted++
+        lines.push(
+          `${i + 1}. *${c.name || 'Unknown'}* · ${formatPhone(c.phone)} · ${c.message_count ?? 0} msgs` +
+          (c.opted_out ? ' · opted out' : '')
+        )
+      })
+      lines.push('', `${chats.length} shown · ${opted} opted out${arg === 'chats' ? '' : ''}`,
+        'Full file: reply *csv chats*.')
+      await sendWhatsAppMessage(from, lines.join('\n'))
+      return true
+    }
+
     const rows = await listDirectoryRows()
     const isPersonal = (r: DirectoryRow) => (r.category || []).includes('Personal Contact')
     const businesses = rows.filter(r => !isPersonal(r))
@@ -2002,6 +2118,34 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
       await sendWhatsAppMessage(from, m)
       await new Promise(r => setTimeout(r, 350))
     }
+    return true
+  }
+
+  if (lower === 'csv' || lower.startsWith('csv ')) {
+    const arg = lower === 'csv' ? '' : clean.slice(4).trim().toLowerCase()
+    if (!['businesses', 'people', 'chats'].includes(arg)) {
+      await sendWhatsAppMessage(from, 'Try: *csv businesses* · *csv people* · *csv chats*.')
+      return true
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    let filename = ''
+    let mime = 'text/csv'
+    let content = ''
+    if (arg === 'businesses' || arg === 'people') {
+      const dirRows = await listBizCsvRows()
+      if (arg === 'businesses') {
+        content = csvForBusinesses(dirRows)
+        filename = `wa-businesses-${today}.csv`
+      } else {
+        content = csvForPeople(dirRows)
+        filename = `wa-people-${today}.csv`
+      }
+    } else {
+      const chats = await listChatCsvRows()
+      content = csvForChats(chats)
+      filename = `wa-chats-${today}.csv`
+    }
+    await sendWhatsAppDocument(from, filename, mime, content)
     return true
   }
 
