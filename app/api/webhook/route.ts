@@ -1937,8 +1937,8 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
   if (lower === 'channel' || lower.startsWith('channel ')) {
     const stored = await getBotSetting('channel_link')
     const cur = (stored || process.env.CHANNEL_LINK || '').trim()
-    if (lower === 'channel') {
-      await sendWhatsAppMessage(from, cur ? `📣 Channel: ${cur}` : 'No channel link set. Reply *channel set <link>*.')
+    if (lower === 'channel' || lower === 'channel status') {
+      await sendWhatsAppMessage(from, cur ? `📣 Channel: ${cur}\n\nReply *channel set <link>* to update or *channel clear* to remove.` : 'No channel link set. Reply *channel set <link>*.')
       return true
     }
     const setMatch = clean.match(/^channel\s+set\s+(https?:\/\/\S+)$/i)
