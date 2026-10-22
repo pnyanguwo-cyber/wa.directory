@@ -15,11 +15,11 @@ import LogoImage from '@/components/logo-image'
 import BusinessCardPrint from '@/components/business-card-print'
 import { Suspense } from 'react'
 import { SkeletonProfile } from '@/components/skeleton-card'
-import type { Business } from '@/types'
+import type { Business, BusinessItem } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio, getInitials } from '@/lib/utils'
+import { cleanBio, getInitials, formatPrice } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
 import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
 import { SITE_URL } from '@/lib/site-url'
@@ -174,7 +174,7 @@ async function BusinessContent({ slug }: { slug: string }) {
     }))
   }
 
-  const [approvedCategoryNames, approvedAreaNames, statsRes, similarRes, ratingsRes] = await Promise.all([
+  const [approvedCategoryNames, approvedAreaNames, statsRes, similarRes, ratingsRes, itemsRes] = await Promise.all([
     getApprovedCategoryNames(),
     getApprovedAreaNames(business.city || ''),
     getSupabase()
@@ -197,11 +197,19 @@ async function BusinessContent({ slug }: { slug: string }) {
       .eq('business_id', business.id)
       .order('created_at', { ascending: false })
       .limit(50),
+    getSupabase()
+      .from('business_items')
+      .select('id, business_id, name, slug, price, image_url, is_active')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(24),
   ])
 
   const monthlyViews = (statsRes.data || []).reduce((a, r) => a + Number(r.count), 0)
   const similar = similarRes.data || []
   const ratings = ratingsRes.data || []
+  const shopItems = (((itemsRes.data || []) as unknown) as BusinessItem[]) || []
 
   const businessAreas = business.areas?.length
     ? business.areas
@@ -691,6 +699,42 @@ async function BusinessContent({ slug }: { slug: string }) {
                 <div className="mb-3 sm:mb-6">
                   <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Catalog</h2>
                   <CatalogItems catalogLink={business.catalog_link} />
+                </div>
+              )}
+
+              {shopItems.length > 0 && (
+                <div id="shop" className="mb-4 sm:mb-8 scroll-mt-6">
+                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary">Shop</h2>
+                    {business.generate_site && business.payment_status === 'active' && business.slug && (
+                      <Link href={`/site/${business.slug}`} className="text-xs font-semibold text-whatsapp-600 hover:underline shrink-0">
+                        View full website &rarr;
+                      </Link>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {shopItems.map(item => (
+                      <div key={item.id} className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {item.image_url ? (
+                            <div className="w-11 h-11 rounded-xl border border-gray-200/80 overflow-hidden bg-surface shrink-0">
+                              <Image src={item.image_url} alt={item.name} width={44} height={44} className="w-11 h-11 object-cover" unoptimized />
+                            </div>
+                          ) : (
+                            <div className="w-11 h-11 rounded-xl border border-dashed border-gray-300 bg-surface flex items-center justify-center shrink-0">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M18 6h.008v.008H18V6Zm2.25 12H3.75A1.5 1.5 0 0 1 2.25 16.5v-9A1.5 1.5 0 0 1 3.75 6h16.5A1.5 1.5 0 0 1 21.75 7.5v9a1.5 1.5 0 0 1-1.5 1.5Z" />
+                              </svg>
+                            </div>
+                          )}
+                          <p className="font-semibold text-text-primary text-sm break-words">{item.name}</p>
+                        </div>
+                        <span className="shrink-0 inline-flex items-center rounded-full bg-whatsapp-50 border border-whatsapp-200 px-2.5 py-1 text-xs font-bold text-whatsapp-800">
+                          {formatPrice(item.price)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

@@ -79,7 +79,7 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   const itemsQuery = q && q.trim()
     ? supabase
         .from('business_items')
-        .select('id, business_id, name, slug, price, is_active, businesses!inner(name, slug, city)')
+        .select('id, business_id, name, slug, price, image_url, is_active, businesses!inner(name, slug, city)')
         .eq('is_active', true)
         .eq('businesses.payment_status', 'active')
         .ilike('name', `%${q.trim()}%`)

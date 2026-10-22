@@ -405,4 +405,32 @@
   background: rgba(18, 140, 126, 0.4);
 }
 
+/* ── Ambient page animations: hero gloss sheen + drifting glow orbs ──────
+   Both are neutralized by the prefers-reduced-motion block above (WCAG 2.3.3). */
+@keyframes gloss-sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.animate-gloss-sheen { animation: gloss-sheen 6s ease-in-out infinite; }
+
+@keyframes orb-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 8vh) scale(1.12); }
+}
+
+@keyframes orb-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-7vw, -6vh) scale(1.08); }
+}
+
+@keyframes orb-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1.05); }
+  50% { transform: translate(5vw, -7vh) scale(0.95); }
+}
+
+.animate-orb-a { animation: orb-drift-a 42s ease-in-out infinite; }
+.animate-orb-b { animation: orb-drift-b 36s ease-in-out infinite; }
+.animate-orb-c { animation: orb-drift-c 48s ease-in-out infinite; }
+
 

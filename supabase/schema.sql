@@ -88,6 +88,7 @@ DO $$ BEGIN
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS site_contact_email TEXT NOT NULL DEFAULT '';
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS site_theme JSONB NULL;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS site_socials JSONB NULL;
+  ALTER TABLE businesses ADD COLUMN IF NOT EXISTS site_content JSONB NULL;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS org_id UUID REFERENCES organizations(id) ON DELETE SET NULL;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS is_hq BOOLEAN DEFAULT FALSE;
   ALTER TABLE businesses ADD COLUMN IF NOT EXISTS branch_label TEXT DEFAULT '';
@@ -114,6 +115,7 @@ CREATE TABLE IF NOT EXISTS business_items (
   name TEXT NOT NULL,
   slug TEXT,
   price NUMERIC(10,2) NOT NULL DEFAULT 0,
+  image_url TEXT DEFAULT '',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -280,7 +282,7 @@ CREATE TABLE IF NOT EXISTS stats_events (
   type TEXT NOT NULL CHECK (type IN (
     'profile_view', 'click_whatsapp', 'click_call', 'click_website',
     'impression', 'qr_scan', 'bot_search', 'bot_chat_open',
-    'share_bot', 'share_web'
+    'share_bot', 'share_web', 'bot_select'
   )),
   category TEXT DEFAULT '',
   city TEXT DEFAULT '',

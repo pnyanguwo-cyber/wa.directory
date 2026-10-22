@@ -18,6 +18,8 @@ export default async function PortalSitePage({ searchParams }: { searchParams: {
       siteServices={business.site_services || ''}
       siteContactEmail={business.site_contact_email || ''}
       siteTheme={business.site_theme || null}
+      siteSocials={business.site_socials || null}
+      siteContent={business.site_content || null}
     />
   )
 }

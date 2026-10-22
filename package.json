@@ -17,6 +17,7 @@
     "@types/leaflet": "^1.9.22",
     "@vercel/og": "^0.11.1",
     "bcryptjs": "^3.0.3",
+    "framer-motion": "^14.3.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.33.0",
     "next": "^14.2.0",

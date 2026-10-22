@@ -1,4 +1,4 @@
-const CACHE = 'wa-directory-v5'
+const CACHE = 'wa-directory-v7'
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

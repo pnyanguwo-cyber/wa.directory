@@ -68,6 +68,31 @@ export interface Business {
     tiktok?: string
     youtube?: string
   } | null
+  // Structured content blocks for the flagship auto-website template.
+  // All fields optional + whitelist-parsed server-side (lib/site-content.ts).
+  site_content?: SiteContentBlocks | null
+}
+
+// FAQ / hours / gallery blocks owned via the portal Site editor.
+export interface SiteFaqEntry {
+  q: string
+  a: string
+}
+
+export interface SiteHoursEntry {
+  day: string
+  // "08:00" — empty strings mean closed that day.
+  open: string
+  close: string
+}
+
+export interface SiteContentBlocks {
+  // Short punchy line used in the hero under the headline.
+  tagline?: string
+  faq?: SiteFaqEntry[]
+  hours?: SiteHoursEntry[]
+  // Hosted image URLs (https only, validated on write).
+  gallery?: string[]
 }
 
 export interface BusinessItem {
@@ -76,6 +101,7 @@ export interface BusinessItem {
   name: string
   slug: string
   price: number
+  image_url?: string
   is_active: boolean
   created_at: string
   updated_at: string

@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
+import { parseSiteContent, generateSiteSections } from '@/lib/site-content'
+import type { SiteContentBlocks } from '@/types'
 
 const MAX_TEXT = 2000
 const MAX_EMAIL = 320
@@ -72,12 +75,16 @@ function parseSiteSocials(input: unknown): Record<SocialKey, string> | null {
   return touched ? out : null
 }
 
+function contentEmpty(c: SiteContentBlocks): boolean {
+  return !c.tagline && !(c.faq && c.faq.length) && !(c.hours && c.hours.length) && !(c.gallery && c.gallery.length)
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
     const session = await getActingPortalBusiness()
     if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-    const businessId = session.business.id
+    const business = session.business
 
     const site_hero = typeof body?.site_hero === 'string' ? body.site_hero.trim().slice(0, MAX_TEXT) : null
     const site_services = typeof body?.site_services === 'string' ? body.site_services.trim().slice(0, MAX_TEXT) : null
@@ -93,6 +100,7 @@ export async function POST(request: Request) {
       site_contact_email?: string
       site_theme?: Record<ThemeKey, string> | null
       site_socials?: Record<SocialKey, string> | null
+      site_content?: SiteContentBlocks | null
     } = {}
     if (generate_site !== null) updates.generate_site = generate_site
     if (site_hero !== null) updates.site_hero = site_hero
@@ -109,15 +117,49 @@ export async function POST(request: Request) {
       updates.site_socials = allEmpty ? null : socials
     }
 
+    // Structured content blocks (tagline / faq / hours / gallery).
+    let finalContent: SiteContentBlocks | null = null
+    if (body?.site_content !== undefined || body?.generate_ai === true) {
+      const parsed = parseSiteContent(body?.site_content)
+      if (body?.generate_ai === true) {
+        // Regenerate the tagline + FAQ with AI; keep manual hours/gallery.
+        const ai = await generateSiteSections({
+          businessName: business.name,
+          category: business.category?.[0] || '',
+          bio: (typeof body?.site_hero === 'string' ? body.site_hero.trim() : business.site_hero) || '',
+          city: business.city || '',
+        })
+        finalContent = {
+          tagline: ai.tagline,
+          faq: ai.faq,
+          hours: parsed.hours,
+          gallery: parsed.gallery,
+        }
+      } else {
+        finalContent = {
+          tagline: parsed.tagline,
+          faq: parsed.faq,
+          hours: parsed.hours,
+          gallery: parsed.gallery,
+        }
+      }
+      updates.site_content = contentEmpty(finalContent) ? null : finalContent
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
     }
 
     const supabase = getSupabase()
-    const { error } = await supabase.from('businesses').update(updates).eq('id', businessId)
+    const { error } = await supabase.from('businesses').update(updates).eq('id', business.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    return NextResponse.json({ success: true })
+    // Push the saved settings live immediately (auto-site + profile are ISR).
+    const slug = business.slug || business.id
+    revalidatePath(`/site/${slug}`)
+    revalidatePath(`/business/${slug}`)
+
+    return NextResponse.json({ success: true, site_content: finalContent })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
