@@ -169,6 +169,8 @@ export function renderDetailCard(b: DetailData): string {
       // All items unpriced, keep the note honest without inventing prices
       lines.push('(prices not listed, chat for a quote)')
     }
+    // Order-builder pointer: the shelf below turns taps into one order.
+    lines.push('🧺 Reply *order* to build an order.')
   }
 
   const digits = (b.phone || '').replace(/[^0-9]/g, '')
@@ -204,15 +206,13 @@ function listingUrl(b: { slug: string | null }): string {
 
 // ── S18 customer cart ─────────────────────────────────────────────────────
 
-/** Prompt above the picker list while building an order. */
-export function renderCartPickerPrompt(name: string, picked: number): string {
+/** Prompt above the ± picker list (the only step where items are chosen). */
+export function renderCartAdjustIntro(name: string, picked: number): string {
   return [
-    `🧺 *Building your order — ${name}*`,
+    `🧺 *Build your order — ${name}*`,
     '',
-    'Tap the products you want — pick as many as you like.',
-    picked > 0 ? `In your order: ${picked} line${picked === 1 ? '' : 's'}.` : '',
-    '',
-    'When done, send *cart* to view or check out.',
+    'Tap ➕ rows to add · ➖ rows to take back.',
+    picked > 0 ? `In the order: ${picked} item${picked === 1 ? '' : 's'} — it updates on every tap.` : '',
   ].filter(Boolean).join('\n')
 }
 
@@ -234,8 +234,7 @@ export function renderCartSummary(cart: CartState): string {
     ...lines,
     ...(total != null ? ['', `*Total: ${monoUSD(total).replace(/`/g, '')}*`] : []),
     '',
-    'Reply a # to remove that item · *more* to add ·',
-    '*checkout* to send it · *clear* to empty.',
+    'Tap ± Add / remove below to change quantities.',
   ].join('\n')
 }
 
@@ -244,11 +243,6 @@ export function renderCartLines(lines: CartLine[]): string[] {
   return lines.map(
     (l, i) => `${i + 1}. ${l.name} ×${l.qty}${l.price != null ? ` — ${monoUSD(l.price)}` : ''}`
   )
-}
-
-/** Prompt on the URL button that hands the compiled order to the supplier. */
-export function renderOrderHandoff(name: string): string {
-  return `Send it to *${name}* — WhatsApp opens with your order ready to press send.`
 }
 
 /** Empty results / no supply message. */

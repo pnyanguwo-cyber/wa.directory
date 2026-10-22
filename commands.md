@@ -13,6 +13,11 @@ Everything below works in plain WhatsApp text. Bold = a literal word.
 | `bread chinhoyi USD 1` | Add a price offer to your search — suppliers can accept it or counteroffer |
 | photo / voice note | Send one of what you need; the bot reads it and picks matches |
 | `1` … `5` | Pick from the result rows for the contact card (WhatsApp tap or call number) |
+| 🧺 Start order (tap) | On a business card with priced products — opens the order builder |
+| `order` | Same as the tap — builds a multi-item order for the business you are viewing |
+| ± Add / remove (tap) | Inside the order: ➕/➖ rows set quantities; one tap updates the order view |
+| 📤 Checkout (tap) | Compiles one order message and opens the supplier's WhatsApp — you press send |
+| 🗑 Empty order (tap) | Clears the order; the cart is per-supplier (a new business card starts a new one) |
 | `register` | Start business registration (guided, ends at payment) |
 | `pay` | Pay/activate a listing |
 | `menu` | Interactive menu (post a need, register, pay, help) |

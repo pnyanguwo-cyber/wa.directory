@@ -67,6 +67,9 @@ export interface ChatSessionData {
   // One cart per conversation, scoped to a single supplier. Cleared when the
   // customer starts a new search or opens a different business card.
   cart?: CartState
+  // Last business whose detail card was opened — lets typed `order` flow in
+  // even before any item has been picked.
+  lastBizId?: string
 }
 
 export interface CartLine {
