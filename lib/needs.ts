@@ -458,18 +458,18 @@ export async function compileDigest(fromIso: string, toIso: string): Promise<str
       lines.push(`*NEEDS (${rows.length})*`)
       for (let i = 0; i < rows.length; i++) {
         const n = rows[i]
-        const head = [n.qty, n.item].filter(Boolean).join(' ') || '—'
+        // Admin ask: every request reads as item · quantity · location, with
+        // the buyer's contact one tap away.
+        const head = [n.qty ? `${n.qty} ×`.trim() : '', n.item].filter(Boolean).join(' ') || '—'
         const details = [
           n.budget ? `budget ${n.budget}` : '',
-          (n.city || 'ZIMBABWE').toUpperCase(),
-          phoneDisplay(n.buyer_phone),
         ].filter(Boolean).join(' · ')
-        lines.push(`${i + 1}. ${n.rq_id} · ${head}`)
-        lines.push(`   ↳ ${details}${n.status === 'open' ? '' : ` · ${n.status.toUpperCase()}`}`)
+        lines.push(`${i + 1}. ${n.rq_id} · *${head}* · ${(n.city || 'ZIMBABWE').toUpperCase()}`)
+        lines.push(`   ↳ 👤 Buyer: ${phoneDisplay(n.buyer_phone)}${details ? ` · ${details}` : ''}${n.status === 'open' ? '' : ` · ${n.status.toUpperCase()}`}`)
         const cleanPhone = (n.buyer_phone || '').replace(/\D/g, '')
         const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi, regarding your request ${n.rq_id} (${head}): `)}` : ''
         if (waLink) {
-          lines.push(`   ↳ 💬 Direct WhatsApp: ${waLink}`)
+          lines.push(`   ↳ 💬 Chat the buyer: ${waLink}`)
         }
         const quotes = (await listNeedQuotes(n.id, QUOTES_PER_SEARCH)).filter(q => q.price)
         if (quotes.length > 0) {
