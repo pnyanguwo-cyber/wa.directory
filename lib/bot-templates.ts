@@ -1,6 +1,6 @@
 import { SITE_URL } from './site-url'
 import type { InteractiveRow } from './whatsapp'
-import type { CartState, CartLine } from './chat-session'
+import type { PendingGroup } from './chat-session'
 
 // The literal phrase that ties a customer chat to our attribution message:
 // written by /go/[id] when a customer opens a business chat, and matched by
@@ -38,7 +38,9 @@ export interface ResultCard {
 }
 
 export function displayLocation(city: string | null, area?: string | null): string {
-  return [area, city || 'Zimbabwe'].filter(Boolean).join(', ')
+  if (area && city) return `Area of service: ${area}, ${city}`
+  if (area) return `Area of service: ${area}`
+  return city || 'Zimbabwe'
 }
 
 function searchCardPriceLine(card: ResultCard): string | null {
@@ -169,8 +171,8 @@ export function renderDetailCard(b: DetailData): string {
       // All items unpriced, keep the note honest without inventing prices
       lines.push('(prices not listed, chat for a quote)')
     }
-    // Order-builder pointer: the shelf below turns taps into one order.
-    lines.push('🧺 Reply *order* to build an order.')
+    // Order-builder pointer: the shelf accepts a typed one-liner order.
+    lines.push('🧺 Order from this shop: reply *order 2 bread 1 cake*.')
   }
 
   const digits = (b.phone || '').replace(/[^0-9]/g, '')
@@ -204,45 +206,81 @@ function listingUrl(b: { slug: string | null }): string {
   return `${SITE_URL}/business/${b.slug || 'listing'}`
 }
 
-// ── S18 customer cart ─────────────────────────────────────────────────────
+// ── S18.2 typed customer orders ───────────────────────────────────────────
 
-/** Prompt above the ± picker list (the only step where items are chosen). */
-export function renderCartAdjustIntro(name: string, picked: number): string {
-  return [
-    `🧺 *Build your order — ${name}*`,
-    '',
-    'Tap ➕ rows to add · ➖ rows to take back.',
-    picked > 0 ? `In the order: ${picked} item${picked === 1 ? '' : 's'} — it updates on every tap.` : '',
-  ].filter(Boolean).join('\n')
+export interface VerifyGroup {
+  businessName: string
+  city?: string
+  lines: { name: string; qty: number; price: number | null }[]
 }
 
-/** One-line confirmation after a tap-add. */
-export function renderCartAdded(added: number, name: string): string {
-  const line = added > 1 ? `${added} × ${name}` : name
-  return `✅ ${line} added to your order.`
+/** Verify screen of the typed order: everything matched, grouped per shop,
+ * with a grand total when every line carries a price. */
+export function renderOrderVerify(groups: VerifyGroup[]): string {
+  const out: string[] = []
+  let total = 0
+  let priced = 0
+
+  for (const g of groups) {
+    out.push(`🏪 *${g.businessName}*${g.city ? `, ${g.city}` : ''}`)
+    for (const l of g.lines) {
+      out.push(`· ${l.qty} × ${l.name}${l.price != null ? ` ${monoUSD(l.price)}` : ''}`)
+      if (l.price != null) {
+        total += l.price * l.qty
+        priced++
+      }
+    }
+    out.push('')
+  }
+  out.pop()
+
+  const bits = [
+    '🧺 *Check your order* 🔎',
+    '',
+    ...out,
+  ]
+  if (priced && priced === groups.reduce((s, g) => s + g.lines.length, 0)) {
+    bits.push('', `*Total: ${monoUSD(total).replace(/`/g, '')}*`)
+  }
+  bits.push('', 'Tap ✅ to send now, or ✎ to re-type it.')
+  return bits.join('\n')
 }
 
-/** Cart view. Line numbers double as removal commands: typed `2` removes line 2. */
-export function renderCartSummary(cart: CartState): string {
-  const picked = cart.lines.filter(l => l.qty > 0)
-  const lines = renderCartLines(picked)
-  const total = picked.length ? picked.reduce((s, l) => s + (l.price || 0) * l.qty, 0) : null
+/** Post-commit receipt: what went out, where, and which shops are quiet. */
+export function renderOrderSent(
+  rows: { businessName: string; status: string; token: string; dmOk: boolean | null }[]
+): string {
+  const out: string[] = []
+  for (const r of rows) {
+    const mark =
+      r.dmOk === true ? '💬' : r.dmOk === false ? '⏳' : '⚠️'
+    out.push(`${mark} *${r.businessName}*, wa.directory/go/o/${r.token}`)
+  }
   return [
-    `🧺 *Your order — ${cart.businessName}*`,
-    ...(cart.city ? [`📍 ${cart.city}`] : []),
+    `📤 *Order off! ${rows.length} shop${rows.length === 1 ? '' : 's'} queued.*`,
     '',
-    ...lines,
-    ...(total != null ? ['', `*Total: ${monoUSD(total).replace(/`/g, '')}*`] : []),
+    ...out,
     '',
-    'Tap ± Add / remove below to change quantities.',
+    '📩 Now let them know, open each link and press send.',
+    '🔔 I ping you here when each shop confirms.',
   ].join('\n')
 }
 
-/** Shared line renderer (summary + web preview parity). */
-export function renderCartLines(lines: CartLine[]): string[] {
-  return lines.map(
-    (l, i) => `${i + 1}. ${l.name} ×${l.qty}${l.price != null ? ` — ${monoUSD(l.price)}` : ''}`
-  )
+/** Buyer-side "my orders" tracker. */
+export function renderMyOrders(
+  rows: { biz_name: string; status: string; token: string }[]
+): string {
+  const label: Record<string, string> = {
+    open: '⏳ waiting for you to send',
+    sent: '📩 sent, waiting to confirm',
+    claimed: '✅ shop confirmed!',
+    closed: '⌛ expired (re-order anytime)',
+  }
+  return [
+    '🧾 *Your orders*',
+    '',
+    ...rows.map(r => `· *${r.biz_name}*, ${label[r.status] || r.status}, wa.directory/go/o/${r.token}`),
+  ].join('\n')
 }
 
 /** Empty results / no supply message. */
@@ -257,7 +295,7 @@ export interface NeedDraft {
 
 export function renderNeedIntro(): string {
   return [
-    '🛒 *Post a need — we find suppliers for you.*',
+    '🛒 *Post a need, we find suppliers for you.*',
     '',
     'Send it in one line: what + how many (+ town).',
     '*50 bags cement harare* · *3kg wedding cake $60* · *fix my geyser mbare*',
@@ -270,7 +308,7 @@ export function renderNeedConfirm(d: NeedDraft): string {
   return [
     '*Match this?* 🛒',
     `📦 ${[d.qty, d.item].filter(Boolean).join(' ')}`,
-    `💰 ${d.budget || 'no budget given — quotes can set the price'}`,
+    `💰 ${d.budget || 'no budget given, quotes can set the price'}`,
     `📍 ${(d.city || 'countrywide').toUpperCase()}`,
     '',
     'Up to 5 supplier quotes arrive here. Reply *stop* to quiet it anytime.',
@@ -304,7 +342,7 @@ export function renderNeedSilence(rqId: string): string {
 }
 
 export function renderNeedClosedByBuyer(rqId: string): string {
-  return `✋ ${rqId} quieted — no more quotes relayed. Reply *${rqId} open* if you want more quotes.`
+  return `✋ ${rqId} quieted, no more quotes relayed. Reply *${rqId} open* if you want more quotes.`
 }
 
 export function renderNeedFilled(rqId: string, when: string, winner: string): string {
@@ -320,13 +358,13 @@ export function renderDealAsk(rqId: string): string {
 
 export function renderCeremony(rqId: string, item: string, quoteLines: string[]): string {
   const lines = [
-    `⏳ This thread goes quiet soon — *${rqId}* (${item}).`,
+    `⏳ This thread goes quiet soon, *${rqId}* (${item}).`,
     '',
   ]
   if (quoteLines.length > 0) {
     lines.push('Quotes received:', ...quoteLines.map((q, i) => `${i + 1}. ${q}`), '')
   }
-  lines.push('Sorted? Great — nothing to do.', 'Still on? Answer the 🤝 question:', '')
+  lines.push('Sorted? Great, nothing to do.', 'Still on? Answer the 🤝 question:', '')
   return lines.join('\n')
 }
 
@@ -362,7 +400,7 @@ export function renderResultsListBody(
   ]
   const shown = page * RESULTS_PER_PAGE
   if (page === 0 && count > RESULTS_PER_PAGE) {
-    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} — tap *More results* for the rest.`)
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE}, tap *More results* for the rest.`)
   } else if (page > 0) {
     lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
   }
@@ -437,7 +475,7 @@ export function renderWelcomeInstructions(greeting?: string): string {
   return [
     greeting || 'Hey! 👋',
     '',
-    'Type what you\'re looking for — the product or service + your location.',
+    'Type what you\'re looking for, the product or service + your location.',
     'e.g. *bread chinhoyi*, *plumber harare*',
     '',
     'Looking for a specific company? Just add its name to your search',
@@ -518,7 +556,7 @@ export function renderChannelPitch(channelLink: string): string {
   return [
     '📣 *Get free buyer leads on WhatsApp*',
     '',
-    'Join our WhatsApp channel — we post live buyer needs like "50 bags cement Harare".',
+    'Join our WhatsApp channel, we post live buyer needs like "50 bags cement Harare".',
     '',
     'When you see one, quote with a single reply:',
     'RQ-7181 $45 delivered',
@@ -609,7 +647,7 @@ export function renderNearbyListBody(
 ): string {
   const lines = [`No ${termDisplay} in *${city}*. Nearest:`]
   if (page === 0 && count > RESULTS_PER_PAGE) {
-    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} of ${count} — tap *More results* for the rest.`)
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} of ${count}, tap *More results* for the rest.`)
   } else if (page > 0) {
     const shown = page * RESULTS_PER_PAGE
     lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
@@ -619,7 +657,7 @@ export function renderNearbyListBody(
 }
 
 /** Body for distance-ranked results from a shared location ("📍 Near me").
- * Rows carry a "~N km" badge; copy should never say "nearest" — the whole
+ * Rows carry a "~N km" badge; copy should never say "nearest", the whole
  * screen IS the nearest. */
 export function renderNearMeListBody(
   termDisplay: string,
@@ -629,10 +667,10 @@ export function renderNearMeListBody(
   const lines = [
     `*${capFirst(termDisplay)} near you* 📍`,
     '',
-    `Closest matches to your shared location, ranked by distance — ${count} found.`,
+    `Closest matches to your shared location, ranked by distance, ${count} found.`,
   ]
   if (page === 0 && count > RESULTS_PER_PAGE) {
-    lines.push(`Showing 1 to ${RESULTS_PER_PAGE} — tap *More results* for the rest.`)
+    lines.push(`Showing 1 to ${RESULTS_PER_PAGE}, tap *More results* for the rest.`)
   } else if (page > 0) {
     const shown = page * RESULTS_PER_PAGE
     lines.push(`Showing ${shown + 1} to ${Math.min(count, shown + RESULTS_PER_PAGE)} of ${count}.`)
@@ -662,6 +700,10 @@ export function FALLBACK_HELP_LINES(siteUrl: string): string[] {
     'Looking for a specific company? Add its name to the search.',
     '',
     'Reply *1* to *5* after results for contact details',
+    '',
+    '*Order without chatting:* send "order 2 bread, 1 cake"',
+    'I match the shops that stock those items and package it per shop.',
+    '*My orders:* send *myorders* · Shops: send *orders*',
     '',
     '*List your business:* send *register*',
     '*Pay subscription:* send *pay*',

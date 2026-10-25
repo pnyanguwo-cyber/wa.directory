@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PaymentPlanModal from '@/components/payment-plan-modal'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
-import type { PlanType } from '@/types'
-import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import type { PlanType, SupportTier } from '@/types'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE, SUPPORT_TIERS } from '@/types'
 
 export default function PortalBilling({ businessId, businessName, sub, listingSub }: {
   businessId: string
@@ -335,6 +335,65 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
             </button>
           )}
         </div>
+      </div>
+
+      {/* IT Concierge Support Packages */}
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold text-text-primary">IT Concierge Support</p>
+            <p className="text-xs text-text-secondary mt-0.5">Dedicated WhatsApp Business expertise — from setup to scale</p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 text-xs font-bold">
+            Add-on
+          </span>
+        </div>
+
+        {/* Tier cards */}
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {(Object.keys(SUPPORT_TIERS) as SupportTier[]).map(tier => {
+            const cfg = SUPPORT_TIERS[tier]
+            return (
+              <div key={tier} className="relative rounded-2xl border-2 bg-white p-4 transition-all overflow-hidden border-gray-200 hover:border-gray-300">
+                <div className="flex items-center justify-between mb-3">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    tier === 'bronze' ? 'bg-amber-100 text-amber-700' :
+                    tier === 'silver' ? 'bg-gray-100 text-gray-700' :
+                    'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {cfg.label}
+                  </span>
+                  <span className="text-lg font-extrabold text-text-primary">${cfg.price.toFixed(0)}/mo</span>
+                </div>
+                <ul className="space-y-2 text-xs text-text-secondary">
+                  {cfg.features.map((feat, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-whatsapp-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                      </svg>
+                      <span className="leading-snug">{feat}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  className="mt-4 w-full py-2 rounded-xl text-xs font-semibold transition-all border-2 ${
+                    tier === 'bronze' ? 'border-amber-300 text-amber-700 hover:bg-amber-50' :
+                    tier === 'silver' ? 'border-gray-300 text-gray-700 hover:bg-gray-50' :
+                    'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                  }"
+                  onClick={() => alert(`${cfg.label} package: $${cfg.price.toFixed(2)}/month — Contact admin to subscribe (payment gateway coming soon)`)}
+                >
+                  Request Subscription
+                </button>
+              </div>
+            )
+          })}
+        </div>
+
+        <p className="text-center text-[10px] text-text-secondary mt-4">
+          IT Concierge auto-renews with your directory listing. Cancel anytime.
+        </p>
       </div>
     </div>
   )

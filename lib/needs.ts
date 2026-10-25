@@ -466,6 +466,11 @@ export async function compileDigest(fromIso: string, toIso: string): Promise<str
         ].filter(Boolean).join(' · ')
         lines.push(`${i + 1}. ${n.rq_id} · ${head}`)
         lines.push(`   ↳ ${details}${n.status === 'open' ? '' : ` · ${n.status.toUpperCase()}`}`)
+        const cleanPhone = (n.buyer_phone || '').replace(/\D/g, '')
+        const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi, regarding your request ${n.rq_id} (${head}): `)}` : ''
+        if (waLink) {
+          lines.push(`   ↳ 💬 Direct WhatsApp: ${waLink}`)
+        }
         const quotes = (await listNeedQuotes(n.id, QUOTES_PER_SEARCH)).filter(q => q.price)
         if (quotes.length > 0) {
           lines.push(`   ↳ ${quotes.length} quote${quotes.length === 1 ? '' : 's'}: ${quotes.map(q => q.price).join(', ')}`)
@@ -491,6 +496,26 @@ export async function compileDigest(fromIso: string, toIso: string): Promise<str
       if (tally.size > top.length) lines.push(`• …and ${tally.size - top.length} more lookup variants`)
     } else {
       lines.push('', '*DEMAND RADAR*: no searches in this window.')
+    }
+
+    // S18.2: typed orders ride on the same record — one line, zero fluff.
+    const { data: orderRows } = await supabase
+      .from('supply_orders')
+      .select('status, lines')
+      .gte('created_at', fromIso)
+      .lte('created_at', toIso)
+      .limit(200)
+    if (orderRows && orderRows.length > 0) {
+      const claimed = orderRows.filter(r => r.status === 'claimed' || r.status === 'closed').length
+      let value = 0
+      for (const r of orderRows) {
+        for (const l of (r.lines || []) as { name: string; qty: number; price: number | null }[]) {
+          value += (l.price || 0) * (l.qty || 0)
+        }
+      }
+      lines.push('')
+      lines.push(`*ORDERS (${orderRows.length})* · ${claimed} confirmed · $${Math.round(value * 100) / 100} value`)
+      lines.push('   ↳ suppliers confirm with their *orders* button; buyers get pings.')
     }
 
     return lines.join('\n')
@@ -533,17 +558,19 @@ export async function adminWeeklyStats(): Promise<string> {
   try {
     const supabase = getSupabase()
     const since = new Date(Date.now() - 7 * 86400000).toISOString()
-    const [needs, quotes, searches, contacts] = await Promise.all([
+    const [needs, quotes, searches, contacts, orders] = await Promise.all([
       supabase.from('work_needs').select('id', { count: 'exact', head: true }).gte('created_at', since),
       supabase.from('need_quotes').select('id', { count: 'exact', head: true }).gte('created_at', since),
       supabase.from('bot_searches').select('id', { count: 'exact', head: true }).gte('created_at', since),
       supabase.from('bot_contacts').select('phone', { count: 'exact', head: true }).gte('created_at', since),
+      supabase.from('supply_orders').select('id', { count: 'exact', head: true }).gte('created_at', since),
     ])
     return [
       '📊 *Last 7 days*',
       `🛒 Needs posted: ${needs.count ?? 0}`,
       `💬 Quotes received: ${quotes.count ?? 0}`,
       `🔍 Searches: ${searches.count ?? 0}`,
+      `🧾 Orders: ${orders.count ?? 0}`,
       `🆕 New bot contacts: ${contacts.count ?? 0}`,
     ].join('\n')
   } catch {

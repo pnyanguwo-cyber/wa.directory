@@ -132,9 +132,51 @@ export interface Organization {
 export type PlanType = '1m' | '6m' | '12m'
 
 export const PLAN_CONFIG: Record<PlanType, { label: string; months: number; days: number; price: number; perMonth: number }> = {
-  '1m': { label: '1 Month', months: 1, days: 30, price: 1.0, perMonth: 1.0 },
-  '6m': { label: '6 Months', months: 6, days: 180, price: 5.0, perMonth: 0.83 },
-  '12m': { label: '12 Months', months: 12, days: 360, price: 9.0, perMonth: 0.75 },
+  '1m': { label: '1 Month', months: 1, days: 30, price: 2.0, perMonth: 2.0 },
+  '6m': { label: '6 Months', months: 6, days: 180, price: 10.0, perMonth: 1.67 },
+  '12m': { label: '12 Months', months: 12, days: 360, price: 20.0, perMonth: 1.67 },
 }
 
 export const PRO_ASSISTANCE_PRICE = 2.0
+
+// IT Support Packages (Concierge add-on)
+export type SupportTier = 'bronze' | 'silver' | 'gold'
+
+export const SUPPORT_TIERS: Record<SupportTier, { label: string; price: number; features: string[] }> = {
+  bronze: {
+    label: 'Bronze',
+    price: 10.0,
+    features: [
+      'Monthly 15-min WhatsApp check-in',
+      'Profile & SEO review (quarterly)',
+      'Priority email support (48h response)',
+      'Auto-website content audit (quarterly)',
+    ],
+  },
+  silver: {
+    label: 'Silver',
+    price: 25.0,
+    features: [
+      'Everything in Bronze, plus:',
+      'Bi-weekly 20-min strategy call (WhatsApp/voice)',
+      'WhatsApp Business catalog optimization (monthly)',
+      'Competitor benchmark report (quarterly)',
+      'WhatsApp template message setup & approval help',
+      'Priority support (24h response)',
+    ],
+  },
+  gold: {
+    label: 'Gold',
+    price: 50.0,
+    features: [
+      'Everything in Silver, plus:',
+      'Weekly 30-min dedicated concierge session',
+      'Full WhatsApp Business API configuration & maintenance',
+      'Custom automation flows (catalog sync, auto-replies, labels)',
+      'Monthly growth report with actionable insights',
+      'Direct line to account manager (WhatsApp + email)',
+      'Quarterly on-site/virtual business review',
+      'Custom integration assistance (CRM, POS, etc.)',
+    ],
+  },
+}

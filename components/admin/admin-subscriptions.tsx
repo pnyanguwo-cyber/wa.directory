@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
-import { PLAN_CONFIG } from '@/types'
-import type { PlanType } from '@/types'
+import { PLAN_CONFIG, SUPPORT_TIERS } from '@/types'
+import type { PlanType, SupportTier } from '@/types'
 
 interface Subscription {
   id: string
@@ -36,7 +36,21 @@ interface ListingSubscription {
   business: { id: string; name: string; slug: string; phone: string; business_id: string; username: string; city: string; payment_status: string } | null
 }
 
-type Tab = 'listing' | 'premium'
+interface SupportSubscription {
+  id: string
+  biz_id: string
+  tier: string
+  price_usd: number
+  status: string
+  current_period_start: string | null
+  current_period_end: string | null
+  external_subscription_id: string | null
+  created_at: string
+  updated_at: string
+  business: { id: string; name: string; slug: string; phone: string; business_id: string; username: string; city: string; payment_status: string } | null
+}
+
+type Tab = 'listing' | 'premium' | 'support'
 type ListingFilter = 'all' | 'pending' | 'active' | 'expired' | '1st_reminder' | '2nd_reminder'
 
 function getDaysLeft(expiresAt: string | null): number | null {
@@ -68,10 +82,11 @@ export default function AdminSubscriptions() {
   const [tab, setTab] = useState<Tab>('listing')
   const [rows, setRows] = useState<Subscription[]>([])
   const [listingRows, setListingRows] = useState<ListingSubscription[]>([])
+  const [supportRows, setSupportRows] = useState<SupportSubscription[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [confirmCancel, setConfirmCancel] = useState<Subscription | ListingSubscription | null>(null)
+  const [confirmCancel, setConfirmCancel] = useState<Subscription | ListingSubscription | SupportSubscription | null>(null)
   const [filter, setFilter] = useState<ListingFilter>('all')
 
   useEffect(() => { load() }, [])
@@ -84,10 +99,28 @@ export default function AdminSubscriptions() {
     }
     setRows(data.subscriptions || [])
     setListingRows(data.listingSubscriptions || [])
+    setSupportRows(data.supportSubscriptions || [])
     setLoading(false)
   }
 
   async function act(action: string, payload: Record<string, unknown>) {
+    setBusy(true)
+    setMessage('')
+    const { ok, data } = await adminFetch('/api/admin/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({ action, ...payload }),
+    })
+    setBusy(false)
+    if (!ok) {
+      setMessage(data?.error || 'Action failed')
+      return
+    }
+    setConfirmCancel(null)
+    setMessage('Saved.')
+    load()
+  }
+
+  async function actSupport(action: string, payload: Record<string, unknown>) {
     setBusy(true)
     setMessage('')
     const { ok, data } = await adminFetch('/api/admin/subscriptions', {
@@ -180,6 +213,14 @@ export default function AdminSubscriptions() {
           }`}
         >
           Premium Subscriptions ({rows.length})
+        </button>
+        <button
+          onClick={() => setTab('support')}
+          className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all ${
+            tab === 'support' ? 'bg-white shadow-sm text-text-primary' : 'text-text-secondary hover:text-text-primary'
+          }`}
+        >
+          IT Concierge ({supportRows.length})
         </button>
       </div>
 
@@ -407,6 +448,113 @@ export default function AdminSubscriptions() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'support' && (
+        <>
+          <AdminSectionHeader
+            title="IT Concierge Support Subscriptions"
+            subtitle={`${supportRows.length} total · Tiered WhatsApp Business expertise add-on`}
+          />
+
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="skeleton h-14 w-full rounded-xl" />)}
+            </div>
+          ) : supportRows.length === 0 ? (
+            <div className="neo-card p-8 text-center">
+              <p className="text-sm font-semibold text-text-primary">No IT Concierge subscriptions yet</p>
+              <p className="text-xs text-text-secondary mt-1">When businesses subscribe, they appear here.</p>
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {supportRows.map(s => {
+                const tierCfg = SUPPORT_TIERS[s.tier as SupportTier]
+                const daysLeft = s.current_period_end ? Math.ceil((new Date(s.current_period_end).getTime() - Date.now()) / 86400000) : null
+                return (
+                  <div key={s.id} className="neo-card p-4 flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-bold text-text-primary truncate">{s.business?.name || 'Unknown business'}</p>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          s.tier === 'bronze' ? 'bg-amber-100 text-amber-700' :
+                          s.tier === 'silver' ? 'bg-gray-100 text-gray-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {tierCfg?.label || s.tier}
+                        </span>
+                        {s.business?.username && (
+                          <span className="text-xs text-text-secondary font-mono">@{s.business.username}</span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-text-secondary">
+                        {s.business?.business_id && <>{s.business.business_id} · </>}
+                        {s.business?.city || 'N/A'}
+                        {s.created_at && <> · Started {new Date(s.created_at).toLocaleDateString()}</>}
+                        {s.current_period_end && <> · Period ends {new Date(s.current_period_end).toLocaleDateString()}</>}
+                        {daysLeft !== null && s.status === 'active' && <> · <span className={daysLeft <= 3 ? 'text-red-600 font-semibold' : daysLeft <= 7 ? 'text-amber-600 font-semibold' : ''}>{daysLeft}d left</span></>}
+                      </p>
+                      <p className="text-[11px] text-text-secondary">
+                        ${Number(s.price_usd || 0).toFixed(2)}/mo
+                        {tierCfg && tierCfg.features.length > 0 && <> · {tierCfg.features[0]}</>}
+                      </p>
+                    </div>
+
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${statusStyle[s.status] || statusStyle.cancelled}`}>
+                      {s.status}
+                    </span>
+
+                    {s.status === 'active' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => actSupport('extend_support', { subscription_id: s.id, days: 30 })}
+                          disabled={busy}
+                          className="h-9 px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-semibold rounded-2xl"
+                        >
+                          +30 days
+                        </button>
+                        <button
+                          onClick={() => setConfirmCancel(s)}
+                          className="btn-secondary h-9 px-3.5 text-xs font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {s.status === 'expired' && (
+                      <button
+                        onClick={() => actSupport('extend_support', { subscription_id: s.id, days: 30 })}
+                        disabled={busy}
+                        className="h-9 px-3.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-xs font-semibold rounded-2xl"
+                      >
+                        Reactivate +30 days
+                      </button>
+                    )}
+
+                    {s.status === 'pending' && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => actSupport('activate_support', { subscription_id: s.id, amount: s.price_usd })}
+                          disabled={busy}
+                          className="h-9 px-3.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold rounded-2xl"
+                        >
+                          Activate
+                        </button>
+                        <button
+                          onClick={() => setConfirmCancel(s)}
+                          className="btn-secondary h-9 px-3.5 text-xs font-semibold"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </>

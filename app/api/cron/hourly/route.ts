@@ -3,6 +3,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendInteractiveButtons } from '@/lib/whatsapp'
 import { CEREMONY_IDLE_HOURS, listNeedQuotes, fmtHarare } from '@/lib/needs'
 import { logBotMessage, pruneBotMessages } from '@/lib/bot-log'
+import { sweepStaleOrders } from '@/lib/orders'
 
 function authorized(request: Request): boolean {
   if (request.headers.get('x-vercel-cron') === '1') return true
@@ -104,6 +105,14 @@ export async function GET(request: Request) {
     console.error('[cron-hourly] deal-ask failed:', err)
   }
 
+  // ── Typed-order TTL: stale open/sent rows close at 24h ────────────────
+  let ordersSwept = 0
+  try {
+    ordersSwept = await sweepStaleOrders()
+  } catch (err) {
+    console.error('[cron-hourly] order sweep failed:', err)
+  }
+
   // ── Transcript hygiene (60-day trim) ───────────────────────────────────
   await pruneBotMessages()
 
@@ -112,5 +121,6 @@ export async function GET(request: Request) {
     at: fmtHarare(new Date().toISOString(), true),
     ceremonies,
     dealAsks,
+    ordersSwept,
   })
 }

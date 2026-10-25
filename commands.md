@@ -1,6 +1,6 @@
 # WA Directory — WhatsApp bot command reference
 
-Last updated: 2026-10-22 · Bot number +263716150206 · Web app wadirectory.co.zw
+Last updated: 2026-10-25 · Bot number +263716150206 · Web app wadirectory.co.zw
 Everything below works in plain WhatsApp text. Bold = a literal word.
 
 ## Customer commands (anyone)
@@ -13,11 +13,11 @@ Everything below works in plain WhatsApp text. Bold = a literal word.
 | `bread chinhoyi USD 1` | Add a price offer to your search — suppliers can accept it or counteroffer |
 | photo / voice note | Send one of what you need; the bot reads it and picks matches |
 | `1` … `5` | Pick from the result rows for the contact card (WhatsApp tap or call number) |
-| 🧺 Start order (tap) | On a business card with priced products — opens the order builder |
-| `order` | Same as the tap — builds a multi-item order for the business you are viewing |
-| ± Add / remove (tap) | Inside the order: ➕/➖ rows set quantities; one tap updates the order view |
-| 📤 Checkout (tap) | Compiles one order message and opens the supplier's WhatsApp — you press send |
-| 🗑 Empty order (tap) | Clears the order; the cart is per-supplier (a new business card starts a new one) |
+| `order 2 bread, 1 cake` | Typed order — matches the shop you're viewing first, then every active supplier's shelf; one ✅ sends it to all of them |
+| `order` | Shows how a typed order works (lesson + example) |
+| `myorders` | Your order tracker: per-shop status (sent / confirmed / expired) with a link back into each supplier chat |
+| `orders` (shops) | Supplier board: every open order aimed at your shop, tap ✅ to confirm — the buyer is pinged instantly with a chat link |
+| `/go/o/<token>` | One-tap checkout link per shop inside an order receipt (carries the order text into the supplier's WhatsApp) |
 | `register` | Start business registration (guided, ends at payment) |
 | `pay` | Pay/activate a listing |
 | `menu` | Interactive menu (post a need, register, pay, help) |
@@ -93,7 +93,7 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 - Welcome (first contact: full starter kit + channel link + menu; returning contacts get a named welcome-back)
 - Closing ceremony check at 07:00 Harare — needs silent for 22h get their closure, winner recap + quotes to the buyer
 - Daily store report at 04:00 Harare (stats rollup)
-- Idle nudges to stalled conversations (once per session, replaces silence)
+- Idle nudges only during an active search/order step (replaceable "End search" button)
 - Registration/payment confirmations + channel pitches to business owners
 
 ## Notes

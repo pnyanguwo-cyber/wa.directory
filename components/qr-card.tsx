@@ -222,6 +222,7 @@ export interface QrCardProps {
   fullPage?: boolean
   whatsappNumber?: string
   catalogUrl?: string
+  username?: string
 }
 
 export default function QrCard({
@@ -240,6 +241,7 @@ export default function QrCard({
   fullPage = false,
   whatsappNumber,
   catalogUrl,
+  username,
 }: QrCardProps) {
   const uid = useId().replace(/:/g, '_')
   const qrRef = useRef<HTMLDivElement>(null)
@@ -811,7 +813,7 @@ export default function QrCard({
               fontFamily="inherit"
               letterSpacing="0.5"
             >
-              wadirectory.co.zw • No contact saving required
+              {username ? `wa.directory/u/${username}` : 'wadirectory.co.zw'} • No contact saving required
             </text>
           </g>
         )}
@@ -964,7 +966,7 @@ export default function QrCard({
               </g>
 
               <text x="0" y="248" fill={theme.subtextColor} fontSize="10.5" fontWeight="600" fontFamily="inherit">
-                wadirectory.co.zw • Direct Chat
+                {username ? `wa.directory/u/${username}` : 'wadirectory.co.zw'} • Direct Chat
               </text>
             </g>
 

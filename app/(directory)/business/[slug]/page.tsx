@@ -295,7 +295,7 @@ async function BusinessContent({ slug }: { slug: string }) {
               </svg>
               Back
             </Link>
-            <ShareButton businessSlug={shareSlug} businessName={business.name} businessId={business.id} />
+            <ShareButton businessSlug={shareSlug} businessName={business.name} businessId={business.id} username={(business as { username?: string }).username} />
           </div>
 
           <div className="card overflow-hidden">
@@ -534,6 +534,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                       downloadName={`${business.slug || 'business'}-qr.png`}
                       size={200}
                       interactive={true}
+                      username={(business as { username?: string }).username}
                     />
                   </div>
                 )}

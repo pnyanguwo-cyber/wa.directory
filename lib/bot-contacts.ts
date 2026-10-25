@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase-server'
+import { sendInteractiveButtons } from '@/lib/whatsapp'
 
 // One row per WhatsApp number that talks to the bot (customer base).
 // Atomic increment happens in the DB (migration 025 upsert_bot_contact).
@@ -104,14 +105,27 @@ export async function sweepIdleNudges(
       .order('last_seen', { ascending: false })
       .limit(8)
 
+    const ACTIVE_NUDGE_STEPS = new Set([
+      'search_term',
+      'search_loc',
+      'detail',
+      'order',
+      'need_draft',
+      'need_confirm',
+      'pay_search',
+    ])
+
     for (const c of (due || []).slice(0, 5)) {
       if (skip.has(c.phone)) continue
-      if (c.last_step === 'rating') continue
+      // Only nudge users who abandoned an active search or order flow
+      if (!c.last_step || !ACTIVE_NUDGE_STEPS.has(c.last_step)) continue
       await getSupabase()
         .from('bot_contacts')
         .update({ nudge_sent_at: new Date().toISOString() })
         .eq('phone', c.phone)
-      await sendMessage(c.phone, idleNudgeBody())
+      await sendInteractiveButtons(c.phone, idleNudgeBody(), [
+        { id: 'end_search', title: 'End search' }
+      ])
     }
   } catch {
     // Never disturb the interacting customer.
@@ -123,12 +137,7 @@ const APP_LINK = process.env.SITE_URL || 'https://wadirectory.co.zw'
 
 export function idleNudgeBody(): string {
   return [
-    '👋 Still there? Find more businesses on the web app, all of Zimbabwe:',
-    APP_LINK,
-    '',
-    'Try things like *mile stones*, *vet chitungwiza*, *pool builder*, or a business name (*bakehouse*).',
-    '',
-    'For news, new listings and offers follow our channel:',
-    CHANNEL_LINK,
-  ].filter(Boolean).join('\n')
+    'Hey! You were looking for something — just reply with what you need and I\'ll find it.',
+    'If you\'re no longer searching, press **End search**.',
+  ].join('\n')
 }

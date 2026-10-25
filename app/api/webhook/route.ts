@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+﻿import { NextResponse } from 'next/server'
 import crypto from 'node:crypto'
 import {
   sendWhatsAppMessage as sendWhatsAppText,
@@ -17,8 +17,13 @@ import { logBotMessage, logBotSearch } from '@/lib/bot-log'
 import { orderSearchResults } from '@/lib/ranking'
 import { expandSearchQuery } from '@/lib/gemini'
 import type { Business } from '@/types'
-import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData, type CartState, type CartLine } from '@/lib/chat-session'
-import { compileOrderText, orderWaHref } from '@/lib/order-message'
+import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData, type PendingGroup, type PendingOrder } from '@/lib/chat-session'
+import { compileOrderText } from '@/lib/order-message'
+import { parseOrderLine, matchOrder, type ShelfSupplier, type OrderPair, type MatchResult } from '@/lib/order-intake'
+import {
+  createSupplyOrder, recordOrderOpen, claimSupplyOrder, getSupplyOrderById, listOrdersForBusiness,
+  listOrdersForBuyer, orderStats, type SupplyOrderRow,
+} from '@/lib/orders'
 import { getSupabase } from '@/lib/supabase-server'
 import { upsertBotContact, markBotContactOptOut, setBotContactOptIn, hasSeenContact, sweepIdleNudges, getBotContactName } from '@/lib/bot-contacts'
 import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
@@ -73,8 +78,9 @@ import {
   renderDealAsk,
   renderCeremony,
   formatPhone,
-  renderCartAdjustIntro,
-  renderCartSummary,
+  renderOrderVerify,
+  renderOrderSent,
+  renderMyOrders,
   type ResultCard,
 } from '@/lib/bot-templates'
 import {
@@ -782,12 +788,18 @@ async function fetchMatchingItems(
 ): Promise<Map<string, { name: string; price: number | null }>> {
   const out = new Map<string, { name: string; price: number | null }>()
   if (bizIds.length === 0 || term.length < 3) return out
-  const { data } = await getSupabase()
+  const tokens = term.split(/[^a-z0-9]+/).filter(w => w.length >= 2)
+  let req = getSupabase()
     .from('business_items')
     .select('business_id, name, price')
     .in('business_id', bizIds)
     .eq('is_active', true)
-    .ilike('name', `%${term}%`)
+  // Word-tokens ANDed ("zzcart bread" → name must contain both) so the
+  // item tier keeps up with the tokenized order matcher; single tokens
+  // degrade to the old substring behavior.
+  if (tokens.length >= 2) tokens.forEach(t => { req = req.ilike('name', `%${t}%`) })
+  else req = req.ilike('name', `%${term}%`)
+  const { data } = await req
     .order('price', { ascending: true })
     .limit(200)
   for (const it of (data as { business_id: string; name: string; price: number | null }[]) || []) {
@@ -837,6 +849,7 @@ async function startFreshSearchPrompt(from: string) {
 // the pricing hook lives in the row description.
 const MENU_ROWS = [
   { id: 'menu_needs', title: '🛒 Post a need', description: 'Suppliers quote you here' },
+  { id: 'menu_order', title: '🧺 Order items', description: 'Type items — sent shop by shop' },
   { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal 20c' },
   { id: 'menu_pay', title: '$ Pay (EcoCash)', description: 'Pay or top up via EcoCash' },
   { id: 'menu_help', title: '✆ Help', description: 'Tips & support' },
@@ -2452,46 +2465,24 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     return
   }
 
-  // ── S18 cart actions ──────────────────────────────────────────────────
-  const cstart = action.match(/^cstart_([A-Za-z0-9-]+)$/)
-  if (cstart) {
-    await startCartFlow(from, session, cstart[1])
+  // ── S18.2 typed-order actions ─────────────────────────────────────────
+  // One verify screen owns the flow: ✅ commits (and pushes to every shop),
+  // ✎ re-opens the keyboard. Supplier-side taps claim the sale.
+  if (action === 'osend') {
+    await commitPendingOrder(from, session)
     return
   }
-  const citems = action.match(/^c(?:items|more)_([A-Za-z0-9-]+)$/)
-  if (citems) {
-    await cartAdjustList(from, session, citems[1])
+  if (action === 'oedit') {
+    await saveSession(from, 'order', { ...session?.data, pendingOrder: undefined })
+    await sendWhatsAppMessage(
+      from,
+      'Say it again and I will type along — e.g. *order 2 bread, 1 cake*, or *order 1 bread 2 scones*.'
+    )
     return
   }
-  if (action === 'cql') {
-    await cartAdjustList(from, session)
-    return
-  }
-  const cAdd = action.match(/^c(add|inc)_([A-Za-z0-9-]+)$/)
-  if (cAdd) {
-    await cartAddTap(from, session, cAdd[2])
-    return
-  }
-  const cDec = action.match(/^cdec_([A-Za-z0-9-]+)$/)
-  if (cDec) {
-    await cartDecTap(from, session, cDec[1])
-    return
-  }
-  if (action === 'cview') {
-    await showCartView(from, session?.data.cart ?? null)
-    return
-  }
-  if (action === 'cchk') {
-    await cartCheckout(from, session)
-    return
-  }
-  if (action === 'cclr') {
-    await cartClearTap(from, session)
-    return
-  }
-  const cQty = action.match(/^cqty_([A-Za-z0-9-]+)_(\d+)$/)
-  if (cQty) {
-    await cartQtyTap(from, session, cQty[1], Number(cQty[2]))
+  const oclaim = action.match(/^oclaim_(\d+)$/)
+  if (oclaim) {
+    await handleClaimTap(from, session, Number(oclaim[1]))
     return
   }
 
@@ -2587,8 +2578,16 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'new_search':
       await startFreshSearchPrompt(from)
       return
+    case 'end_search': {
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'No problem! Just send a new search anytime you need something.')
+      return
+    }
     case 'menu_needs':
       await startNeedIntake(from)
+      return
+    case 'menu_order':
+      await typedOrderFromText(from, session, 'order')
       return
     case 'need_post':
       await postBuyerNeed(from, session)
@@ -3044,10 +3043,13 @@ async function dispatchSearch(
   await runSearchAndReply(from, p, { replyTo: opts?.replyTo })
 }
 
-// ── S18 customer cart: build a multi-item order in the chat, then hand the
-// compiled message to the supplier's WhatsApp via the CUSTOMER's own session
-// (no 24h window, no template review). Scope: one supplier per conversation;
-// a new search or a different business card replaces the cart.
+// ── S18.2 typed customer orders: the buyer writes "2 bread, 1 cake", the
+// bot matches it against supplier shelves (the business on screen first,
+// then the whole directory), shows a one-tap verify screen, and hands the
+// compiled order to each supplier via the CUSTOMER's own WhatsApp — no 24h
+// window, no template review. Every order is one row per supplier
+// (supply_orders), so the same record powers the short checkout link, the
+// supplier push, and the sale tracker.
 
 /** Digits usable for a wa.me handoff: voice listings fall back to an
  * owner-entered custom WhatsApp link; non-voice use the phone digits. */
@@ -3057,8 +3059,8 @@ async function cartWaDigits(phoneType: string | null, phone: string, whatsappLin
   return (phone || '').replace(/[^0-9]/g, '') || linkDigits || ''
 }
 
-/** Item shelf for a supplier: active, priced, cheapest first (cap = list cap). */
-async function cartItemRows(businessId: string) {
+/** Item shelf for one supplier: active, priced, cheapest first. */
+async function shelfForBusiness(businessId: string, cap = 50) {
   const { data } = await getSupabase()
     .from('business_items')
     .select('id, name, price')
@@ -3066,233 +3068,432 @@ async function cartItemRows(businessId: string) {
     .eq('is_active', true)
     .not('price', 'is', null)
     .order('price', { ascending: true })
-    .limit(10)
+    .limit(cap)
   return ((data || []) as { id: string; name: string; price: number | null }[])
 }
 
-/** Enter the cart flow for one supplier: rebuild the shelf state, then land
- * on the builder screen (order + verbs) or the ± list when empty. */
-async function startCartFlow(from: string, session: ChatSession | null, businessId: string) {
-  const supabase = getSupabase()
-  const [{ data: biz }, itemRows] = await Promise.all([
-    supabase
-      .from('businesses')
-      .select('id, name, phone, phone_type, whatsapp_link, city')
-      .eq('id', businessId)
-      .maybeSingle(),
-    cartItemRows(businessId),
-  ])
-  const b = biz as { id: string; name: string; phone: string; phone_type: string | null; whatsapp_link: string | null; city: string | null } | null
-
-  if (!b) {
-    await sendWhatsAppMessage(from, 'That listing is not available anymore. Send a new search.')
-    await clearSession(from)
-    return
-  }
-  if (!itemRows.length) {
-    await sendWhatsAppMessage(from, `*${b.name}* has no priced products yet — send a message to chat with them instead.`)
-    return
-  }
-
-  // Cart is scoped to ONE supplier: switching businesses starts over.
-  const prior = session?.data.cart && session.data.cart.businessId === b.id ? session.data.cart : null
-  const priorQtys = new Map((prior?.lines || []).filter(l => l.qty > 0).map(l => [l.id, l.qty]))
-  const cart: CartState = {
-    businessId: b.id,
-    businessName: b.name,
-    supplierDigits: await cartWaDigits(b.phone_type, b.phone, b.whatsapp_link),
-    city: b.city || undefined,
-    lines: itemRows.map(i => ({ id: i.id, name: i.name, price: i.price, qty: priorQtys.get(i.id) ?? 0 })),
-  }
-
-  await saveSession(from, 'cart', { ...(session?.data || {}), cart })
-  if (cart.lines.some(l => l.qty > 0)) await showCartView(from, cart)
-  else await sendCartPicker(from, cart)
-}
-
-/** ± list: the only screen where items are chosen. One ➕ row per product
- * (cheapest first); picked items also get a ➖ row above their ➕ to take
- * one back. Ten-row cap favors ➕ rows; ➖ falls back to typed numbers. */
-async function sendCartPicker(from: string, cart: CartState) {
-  const rows: InteractiveRow[] = []
-  for (const l of cart.lines) {
-    const price = l.price != null ? `$${l.price.toFixed(2)}` : 'Price on chat'
-    if (l.qty > 0) {
-      rows.push({ id: `cdec_${l.id}`, title: `− ${l.name} ×${l.qty}`, description: 'tap to take one back' })
-    }
-    rows.push({
-      id: l.qty > 0 ? `cinc_${l.id}` : `cadd_${l.id}`,
-      title: `+ ${l.qty > 0 ? `${l.name} ×${l.qty}` : l.name}`,
-      description: price,
-    })
-  }
-  // Trim to the list cap without dropping reachable ➕ rows.
-  while (rows.length > 10) {
-    const lastMinus = rows.map(r => r.id.startsWith('cdec_')).lastIndexOf(true)
-    if (lastMinus < 0) break
-    rows.splice(lastMinus, 1)
-  }
-  const picked = cart.lines.filter(l => l.qty > 0).reduce((s, l) => s + l.qty, 0)
-  await sendInteractiveList(
-    from,
-    renderCartAdjustIntro(cart.businessName, picked),
-    rows,
-    'Adjust order'
-  )
-}
-
-/** One item row re-fetch so stale taps stay safe (deleted/removed items). */
-async function fetchCartItem(itemId: string) {
-  const { data: row } = await getSupabase()
+/** Cross-directory catalogue: every go-live supplier and their priced items,
+ * grouped into ShelfSupplier records ready for order matching. */
+async function catalogueSuppliers(): Promise<ShelfSupplier[]> {
+  const { data } = await getSupabase()
     .from('business_items')
-    .select('business_id, name, price')
-    .eq('id', itemId)
-    .maybeSingle()
-  return row as { business_id: string; name: string; price: number | null } | null
-}
-
-/** Builder screen: the home of the flow. The summary refreshes on every tap
- * so customers always see live quantities; verbs stay in the same buttons. */
-async function showCartView(from: string, cart: CartState | null) {
-  if (!cart || !cart.lines.some(l => l.qty > 0)) {
-    if (cart) {
-      await sendWhatsAppMessage(from, `🧺 Your order for *${cart.businessName}* is empty.`)
-      await sendInteractiveButtons(
-        from,
-        'Anything else from the shelf?',
-        [{ id: `citems_${cart.businessId}`, title: '➕ Add items' }]
-      )
-    } else {
-      await sendWhatsAppMessage(
-        from,
-        '🧺 No active order — open a business card and tap 🧺 Start order, or send a new search.'
-      )
-    }
-    return
-  }
-  await sendWhatsAppMessage(from, renderCartSummary(cart))
-  await sendInteractiveButtons(
-    from,
-    'Send it off, keep shaping it, or start over?',
-    [
-      { id: 'cchk', title: '📤 Checkout' },
-      { id: `citems_${cart.businessId}`, title: '± Add / remove' },
-      { id: 'cclr', title: '🗑 Empty order' },
-    ]
-  )
-}
-
-/** Open the ± list from the live cart. With no cart, flow in from the last
- * viewed business (or explain how to start). */
-async function cartAdjustList(from: string, session: ChatSession | null, businessId?: string) {
-  const cart = session?.data.cart
-  if (cart && cart.lines.length && (!businessId || cart.businessId === businessId)) {
-    await sendCartPicker(from, cart)
-    return
-  }
-  const bid = businessId || cart?.businessId || session?.data.lastBizId
-  if (bid) {
-    await startCartFlow(from, session, bid)
-    return
-  }
-  await sendWhatsAppMessage(from, 'Open a business card first — send a search, tap a result, then 🧺 Start order.')
-}
-
-/** Tap-path adjustments: one reply — the refreshed builder screen. The old
- * "✅ added" + extra button chatter is gone; the summary IS the receipt. */
-async function cartAddTap(from: string, session: ChatSession | null, itemId: string) {
-  const cart = session?.data.cart
-  if (!cart) {
-    await sendWhatsAppMessage(from, 'Your order expired — open a business card and tap 🧺 Start order.')
-    return
-  }
-  const item = await fetchCartItem(itemId)
-  if (!item || item.business_id !== cart.businessId) {
-    // Stale tap (item delisted): say so, and reopen the live shelf.
-    await sendWhatsAppMessage(from, 'That product just came off the shelf — here is what is available now.')
-    await sendCartPicker(from, cart)
-    return
-  }
-  const lines: CartLine[] = cart.lines.some(l => l.id === itemId)
-    ? cart.lines.map(l => (l.id === itemId ? { ...l, qty: Math.min(l.qty + 1, 99) } : l))
-    : [...cart.lines, { id: itemId, name: item.name, price: item.price, qty: 1 }]
-  const fresh: CartState = { ...cart, lines }
-  await saveSession(from, 'cart', { ...session.data, cart: fresh })
-  await showCartView(from, fresh)
-}
-
-async function cartDecTap(from: string, session: ChatSession | null, itemId: string) {
-  const cart = session?.data.cart
-  if (!cart) return
-  const lines = cart.lines
-    .map(l => (l.id === itemId ? { ...l, qty: l.qty - 1 } : l))
-    .filter(l => l.qty > 0)
-  const fresh: CartState = { ...cart, lines }
-  await saveSession(from, 'cart', { ...session.data, cart: fresh })
-  await showCartView(from, fresh)
-}
-
-/** Compile the order text and hand it to the supplier via the customer's own
- * WhatsApp chat — the supplier receives a normal customer message. */
-async function cartCheckout(from: string, session: ChatSession | null) {
-  const cart = session?.data.cart
-  if (!cart || !cart.lines.some(l => l.qty > 0)) {
-    await sendWhatsAppMessage(from, '🧺 Nothing to check out yet — add something first.')
-    return
-  }
-  const order = compileOrderText({
-    businessName: cart.businessName,
-    city: cart.city,
-    lines: cart.lines.filter(l => l.qty > 0).map(l => ({ name: l.name, qty: l.qty, price: l.price })),
-    note: cart.note,
-  })
-
-  const digits = cart.supplierDigits
-  if (digits) {
-    await sendCtaUrl(
-      from,
-      `Your order for *${cart.businessName}*:\n${order.text.slice(0, 900)}`,
-      '📤 Open WhatsApp order ▸',
-      orderWaHref(digits, order.text)
+    .select(
+      'id, name, price, business_id, businesses!inner ( id, name, phone, phone_type, whatsapp_link, city, payment_status )'
     )
-    await saveSession(from, 'cart', { ...(session.data || {}), cart })
-  } else {
-    // Voice-only listing: nothing to hand off to — surface the order text
-    // so the customer can call and read it out.
+    .eq('is_active', true)
+    .not('price', 'is', null)
+    .eq('businesses.payment_status', 'active')
+    .limit(600)
+  const rows = ((data || []) as unknown as {
+    id: string
+    name: string
+    price: number | null
+    business_id: string
+    businesses:
+      | {
+          id: string
+          name: string | null
+          phone: string | null
+          phone_type: string | null
+          whatsapp_link: string | null
+          city: string | null
+        }
+      | null
+  }[]) || []
+  const byBiz = new Map<string, ShelfSupplier>()
+  for (const row of rows) {
+    // The PostgREST FK embed is an object for many-to-one, but the generated
+    // TS types widen it to an array — accept both shapes.
+    const biz = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses
+    if (!biz || !biz.name) continue
+    let sup = byBiz.get(biz.id)
+    if (!sup) {
+      sup = {
+        businessId: biz.id,
+        businessName: biz.name,
+        supplierDigits: await cartWaDigits(biz.phone_type, biz.phone || '', biz.whatsapp_link),
+        city: biz.city || null,
+        items: [],
+      }
+      byBiz.set(biz.id, sup)
+    }
+    sup.items.push({ id: row.id, name: row.name, price: row.price })
+  }
+  return [...byBiz.values()]
+}
+
+/** Entry of the typed order flow: parse the buyer's line, match against the
+ * shop on screen first (when there is one), then against the whole
+ * directory. Anything left over is surfaced as a skip, never invented. */
+async function typedOrderFromText(from: string, session: ChatSession | null, tail: string, taughtShop?: string) {
+  const { pairs, junk } = parseOrderLine(tail)
+  if (!pairs.length) {
+    const ctx = taughtShop || (session?.data.lastBizId ? await bizNameById(session.data.lastBizId) : '')
     await sendWhatsAppMessage(
       from,
       [
-        `*${cart.businessName}* doesn't have a WhatsApp channel here — call and read your order:`,
+        '🧺 Tell me what to order — quantities first, then names.',
+        'e.g. *order 2 bread, 1 cake* or *order 1 bread 2 scones*',
+        ctx ? `Your words go straight to *${ctx}*'s shelf — other shops supply anything they don't stock.` : 'I find the shops that stock those items and package the order per shop.',
         '',
-        order.text,
+        'Or reply a number to keep browsing. Send *menu* anytime.',
       ].join('\n')
     )
-    await clearSession(from)
-    await sendWhatsAppMessage(from, '✅ Order ready to read out. Send a new search anytime.')
-  }
-}
-
-/** Cart emptied by the customer (verb or button). */
-async function cartClearTap(from: string, session: ChatSession | null) {
-  await sendWhatsAppMessage(from, '🗑 Order emptied. Send a new search or tap a business to start another.')
-  if (session) await saveSession(from, 'browse', { ...session.data, cart: undefined, lastScreen: 'list' })
-}
-
-/** Set an absolute quantity on one line (typed or quick-button path). */
-async function cartQtyTap(from: string, session: ChatSession | null, itemId: string, qty: number) {
-  const cart = session?.data.cart
-  if (!cart) return
-  const clamped = Math.max(0, Math.min(99, qty))
-  const lines = cart.lines
-    .map(l => (l.id === itemId ? { ...l, qty: clamped } : l))
-    .filter(l => l.qty > 0)
-  const fresh: CartState = { ...cart, lines }
-  await saveSession(from, 'cart', { ...session.data, cart: fresh })
-  if (!lines.length) {
-    await cartClearTap(from, session)
     return
   }
-  await showCartView(from, fresh)
+
+  const lastBizId = session?.data.lastBizId
+  let unmatched: OrderPair[] = []
+  let explicit: ShelfSupplier | null = null
+
+  if (lastBizId) {
+    const [{ data: biz }, shelf] = await Promise.all([
+      getSupabase()
+        .from('businesses')
+        .select('id, name, phone, phone_type, whatsapp_link, city')
+        .eq('id', lastBizId)
+        .maybeSingle(),
+      shelfForBusiness(lastBizId),
+    ])
+    const b = biz as {
+      id: string
+      name: string | null
+      phone: string | null
+      phone_type: string | null
+      whatsapp_link: string | null
+      city: string | null
+    } | null
+    if (b && shelf.length) {
+      explicit = {
+        businessId: b.id,
+        businessName: b.name || 'the shop',
+        supplierDigits: await cartWaDigits(b.phone_type, b.phone || '', b.whatsapp_link),
+        city: b.city || null,
+        items: shelf,
+      }
+    }
+  }
+
+  const matched = matchOrder(pairs, explicit ? [explicit] : [], explicit?.businessId)
+  const leftover = matched.unmatched
+
+  if (leftover.length) {
+    const catalogue = await catalogueSuppliers()
+    const spread = catalogue.filter(s => s.businessId !== explicit?.businessId)
+    if (spread.length) {
+      const more = matchOrder(leftover, spread)
+      unmatched = more.unmatched
+      const all = explicit ? [...matched.groups, ...more.groups] : more.groups
+      return await renderPendingVerify(from, session, all, unmatched, junk)
+    }
+    unmatched = leftover
+    return await renderPendingVerify(from, session, matched.groups, unmatched, junk)
+  }
+  return await renderPendingVerify(from, session, matched.groups, [], junk)
+}
+
+/** Render the verify screen for a parsed-and-matched order. */
+async function renderPendingVerify(
+  from: string,
+  session: ChatSession | null,
+  groups: MatchResult['groups'],
+  unmatched: OrderPair[],
+  junk: string[]
+) {
+  if (!groups.length) {
+    const missed = unmatched.map(u => `• ${u.term}`)
+    await sendWhatsAppMessage(
+      from,
+      [
+        '🔍 Nothing on any shelf matches:',
+        ...missed,
+        '',
+        'Try another name — or *menu* to browse shops.',
+      ].join('\n')
+    )
+    return
+  }
+  const pendingOrder: PendingOrder = {
+    groups: groups.map(g => ({
+      businessId: g.supplier.businessId,
+      businessName: g.supplier.businessName,
+      supplierDigits: g.supplier.supplierDigits,
+      city: g.supplier.city || undefined,
+      lines: g.lines.map(l => ({ name: l.item.name, qty: l.qty, price: l.item.price })),
+    })),
+  }
+  await saveSession(from, 'order', { ...(session?.data || {}), pendingOrder })
+  const note =
+    unmatched.length || junk.length
+      ? [
+          '',
+          `⚠️ Waiting for corrected items: ${[...unmatched.map(u => u.term), ...junk].join(', ')}`,
+          'These are skipped for now — type the order again to fix them BEFORE sending.',
+        ].join('\n')
+      : ''
+  await sendWhatsAppMessage(from, `${renderOrderVerify(pendingOrder.groups)}\n${note}`)
+  await sendInteractiveButtons(from, '', [
+    { id: 'osend', title: '✅ Send order' },
+    { id: 'oedit', title: '✎ Re-type' },
+  ])
+}
+
+/** Commit the pending order: one supply_orders row per shop, short
+ * /go/o/<token> checkout links back to the buyer, and a push to every
+ * supplier who talks to the bot (active in DM, template if silent). */
+async function commitPendingOrder(from: string, session: ChatSession | null) {
+  const pending = session?.data.pendingOrder
+  if (!pending || !pending.groups.length) {
+    await sendWhatsAppMessage(from, 'Nothing queued yet — type *order 2 bread* to start one.')
+    return
+  }
+  const groupId = `G${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`
+  const rows: SupplyOrderRow[] = []
+  for (const g of pending.groups) {
+    const row = await createSupplyOrder({
+      group_id: groupId,
+      biz_id: g.businessId,
+      biz_name: g.businessName,
+      buyer_phone: digitsOnly(from),
+      lines: g.lines,
+      city: g.city,
+    })
+    if (row) rows.push(row)
+  }
+  if (!rows.length) {
+    await sendWhatsAppMessage(from, '⚠️ Could not file the order — try again in a minute.')
+    return
+  }
+  for (const row of rows) {
+    const ok = await pushOrderToSupplier(row, from)
+    if (ok != null) {
+      await getSupabase()
+        .from('supply_orders')
+        .update({ pushed_via: ok ? 'dm' : 'silent' })
+        .eq('id', row.id)
+    }
+  }
+  await saveSession(from, 'browse', { ...session.data, pendingOrder: undefined, lastScreen: 'list' })
+  await sendWhatsAppMessage(
+    from,
+    renderOrderSent(
+      rows.map(r => {
+        const g = pending.groups.find(gr => gr.businessName === r.biz_name)
+        return { businessName: r.biz_name, status: r.status, token: r.token, dmOk: g?.supplierDigits ? true : null }
+      })
+    )
+  )
+  // The short links double as checkout: one cta per shop (3-button cap).
+  for (const r of rows.slice(0, 3)) {
+    const g = pending.groups.find(gr => gr.businessName === r.biz_name)
+    await sendCtaUrl(
+      from,
+      `Send your order to *${r.biz_name}* — one tap opens their chat with it typed in.`,
+      '📤 Send now ▸',
+      `${SITE_URL}/go/o/${r.token}`
+    )
+    if (g && !g.supplierDigits) {
+      // Voice-only shop: no wa.me — remind to call.
+      await sendWhatsAppMessage(from, `📞 *${r.biz_name}* is voice-only too — the link dials them with your order ready to read.`)
+    }
+  }
+}
+
+/** Push one committed slice to the supplier. true = DMd or templated,
+ * false = they have WhatsApp but haven't spoken to the bot lately,
+ * null = no wa.me target at all (they get the sold-out list + digest). */
+async function pushOrderToSupplier(row: SupplyOrderRow, buyerPhone: string): Promise<boolean | null> {
+  const { data: biz } = await getSupabase()
+    .from('businesses')
+    .select('phone, phone_type, whatsapp_link')
+    .eq('id', row.biz_id)
+    .maybeSingle()
+  const b = biz as { phone: string | null; phone_type: string | null; whatsapp_link: string | null } | null
+  const digits = b ? await cartWaDigits(b.phone_type, b.phone || '', b.whatsapp_link) : ''
+  const shortUrl = `${SITE_URL}/go/o/${row.token}`
+  const body = [
+    '🧾 *New order on WA Directory*',
+    '',
+    ...((row.lines || []) as { name: string; qty: number; price: number | null }[]).map(
+      l => `• ${l.qty} × ${l.name}${l.price != null ? ` — $${l.price}` : ''}`
+    ),
+    '',
+    `Buyer: +${digitsOnly(buyerPhone)}`,
+    `Checkout: ${shortUrl}`,
+    '',
+    'Tap ✅ when you can supply — the buyer is notified instantly.',
+  ].join('\n')
+
+  if (!digits) {
+    await bumpOrderTrace(row.id, { event: 'push-skip', reason: 'voice-only' })
+    return null
+  }
+  const active = await supplierRecentlyActive(digits)
+  if (active) {
+    try {
+      await sendWhatsAppMessage(digits, body)
+      await sendInteractiveButtons(digits, '', [{ id: `oclaim_${row.id}`, title: '✅ I can supply' }])
+      await bumpOrderTrace(row.id, { event: 'push-dm', at: new Date().toISOString() })
+      return true
+    } catch {
+      // window/escalation failure — fall through to the silent path below
+    }
+  }
+  const tpl = process.env.WHATSAPP_TEMPLATE_ORDER
+  if (tpl && !active) {
+    try {
+      await sendWhatsAppTemplate(digits, tpl, [row.biz_name, buyerPhone, shortUrl])
+      await bumpOrderTrace(row.id, { event: 'push-template', at: new Date().toISOString() })
+      return true
+    } catch {
+      // template missing/unapproved — category still listed below
+    }
+  }
+  await bumpOrderTrace(row.id, { event: 'push-skip', reason: 'inactive' })
+  return false
+}
+
+async function bumpOrderTrace(id: number, event: Record<string, unknown>) {
+  try {
+    await getSupabase()
+      .from('supply_orders')
+      .update({ trace: [event] })
+      .eq('id', id)
+  } catch {
+    // tracer is cosmetic — ignore failures
+  }
+}
+
+/** Supplier considered poppable when they messaged the bot within 24h. */
+async function supplierRecentlyActive(digits: string): Promise<boolean> {
+  if (!digits) return false
+  try {
+    const { data } = await getSupabase()
+      .from('bot_contacts')
+      .select('last_seen')
+      .eq('phone', `+${digits}`)
+      .maybeSingle()
+    if (!data?.last_seen) {
+      // Try the bare-digit storage some older flows wrote.
+      const alt = await getSupabase().from('bot_contacts').select('last_seen').eq('phone', digits).maybeSingle()
+      if (!alt.data?.last_seen) return false
+      return Date.now() - new Date(alt.data.last_seen).getTime() < 86_400_000
+    }
+    return Date.now() - new Date(data.last_seen).getTime() < 86_400_000
+  } catch {
+    return false
+  }
+}
+
+/** Supplier taps ✅ I can supply: claim the sale and arm the buyer. */
+async function handleClaimTap(from: string, session: ChatSession | null, orderId: number) {
+  const row = await getSupplyOrderById(orderId)
+  if (!row) {
+    await sendWhatsAppMessage(from, 'That order is gone from the board already.')
+    return
+  }
+  const { data: biz } = await getSupabase()
+    .from('businesses')
+    .select('phone, phone_type, whatsapp_link')
+    .eq('id', row.biz_id)
+    .maybeSingle()
+  const b = biz as { phone: string | null; phone_type: string | null; whatsapp_link: string | null } | null
+  const digits = b ? await cartWaDigits(b.phone_type, b.phone || '', b.whatsapp_link) : ''
+  if (digits && digitsOnly(from) !== digits) {
+    await sendWhatsAppMessage(from, 'Only the shop WhatsApp can confirm its orders.')
+    return
+  }
+  const claimed = await claimSupplyOrder(orderId)
+  if (!claimed) {
+    await sendWhatsAppMessage(from, 'Already confirmed — the buyer knows.')
+    return
+  }
+  const buyer = digitsOnly(row.buyer_phone)
+  const summary = ((row.lines || []) as { name: string; qty: number }[])
+    .map(l => `${l.qty} × ${l.name}`)
+    .join(', ')
+  const plain = `${row.biz_name} confirmed your order (${summary}). Their number: ${digits ? '+' + digits : 'on the listing web page'}.`
+  await sendWhatsAppMessage(buyer, plain)
+  if (digits) {
+    await sendCtaUrl(
+      buyer,
+      `*${row.biz_name}* confirmed your order — say hi and lock in pickup/delivery 🛒`,
+      '💬 Chat shop ▸',
+      `https://wa.me/${digits}?text=${encodeURIComponent(
+        `Hello! I placed order wa.directory/go/o/${row.token} — my number was shared.`
+      )}`
+    )
+  }
+  await sendWhatsAppMessage(from, `✅ Noted — your buyer has been pinged with this chat.`)
+  void session
+}
+
+/** Typed `orders` for the shops: open slices waiting on them. */
+async function sendSupplierOrders(from: string, session: ChatSession | null) {
+  void session
+  const digits = digitsOnly(from)
+  const { data: bizRows } = await getSupabase()
+    .from('businesses')
+    .select('id, name')
+    .or(`phone.ilike.${digits},phone.ilike.+${digits},phone.ilike.%${digits}`)
+    .limit(3)
+  if (!bizRows || !bizRows.length) {
+    await sendWhatsAppMessage(from, 'No shop synced to this WhatsApp number yet. List yours first — *menu*.')
+    return
+  }
+  const allRows: SupplyOrderRow[] = []
+  for (const biz of bizRows.slice(0, 3)) {
+    allRows.push(...(await listOrdersForBusiness(biz.id, 3)))
+  }
+  if (!allRows.length) {
+    await sendWhatsAppMessage(from, '🧾 No open orders on your shelves right now.')
+    return
+  }
+  const lines: string[] = ['🧾 *Open orders waiting on you*', '']
+  for (const r of allRows.slice(0, 3)) {
+    const summary = ((r.lines || []) as { name: string; qty: number }[])
+      .map(l => `${l.qty} × ${l.name}`)
+      .join(', ')
+    lines.push(`*${r.token}* · ${r.buyer_phone ? '+' + digitsOnly(r.buyer_phone) : ''}`)
+    lines.push(`↳ ${summary}`)
+    lines.push('')
+  }
+  await sendWhatsAppMessage(from, lines.join('\n'))
+  await sendInteractiveButtons(
+    from,
+    'Tap to confirm an order — the buyer is notified instantly.',
+    allRows.slice(0, 3).map(r => ({ id: `oclaim_${r.id}`, title: `✅ ${r.token}` }))
+  )
+}
+
+/** Buyer-side tracker: status of their open rows + drop-in stats fodder. */
+async function sendMyOrders(from: string, session: ChatSession | null) {
+  void session
+  const rows = await listOrdersForBuyer(digitsOnly(from), 5)
+  if (!rows.length) {
+    await sendWhatsAppMessage(from, '🧾 No orders yet — type *order 2 bread* to see how it works.')
+    return
+  }
+  await sendWhatsAppMessage(
+    from,
+    renderMyOrders(rows.map(r => ({ biz_name: r.biz_name, status: r.status, token: r.token })))
+  )
+}
+
+/** Small lookup strip used by the typed-order teach message. */
+async function bizNameById(id: string): Promise<string> {
+  const { data } = await getSupabase()
+    .from('businesses')
+    .select('name')
+    .eq('id', id)
+    .maybeSingle()
+  return (data as { name: string | null } | null)?.name || 'the shop'
+}
+
+/** How the bot describes itself on stats day (admin digest riff). */
+async function adminOrderStatsLine(): Promise<string> {
+  const stats = await orderStats(168)
+  return `🧾 Orders this week: ${stats.orders} · confirmed: ${stats.claimed} · value: $${stats.usd}`
 }
 
 async function sendResultDetail(
@@ -3325,12 +3526,9 @@ async function sendResultDetail(
     .order('price', { ascending: true })
     .limit(3)
 
-  // Cart scope: a cart belongs to ONE supplier. Opening a different business's
-  // card replaces it so a stale supplier never receives an abandoned draft.
-  const priorCart = session.data.cart
-  const keptCart = priorCart?.businessId === b.id ? priorCart : undefined
-
-  await saveSession(from, 'browse', { ...session.data, cart: keptCart, lastScreen: 'detail', lastBizId: b.id })
+  // The typed-order flow latches onto the shop the customer is looking at:
+  // a bare `order` line prefers this shelf over the whole directory.
+  await saveSession(from, 'browse', { ...session.data, lastScreen: 'detail', lastBizId: b.id })
 
   // One interactive item only: the Chat on WhatsApp button (the old
   // Back/New-search row is gone — typed replies cover those actions).
@@ -3360,14 +3558,9 @@ async function sendResultDetail(
     )
   }
 
-  // S18: shelves with priced items get the order build button after the card.
-  if (itemRows && itemRows.length > 0) {
-    await sendInteractiveButtons(
-      from,
-      `Want to order a few things at once? I'll package your items and quantities into one message for *${b.name}*.`,
-      [{ id: `cstart_${b.id}`, title: '🧺 Start order' }]
-    )
-  }
+  // S18.2: typed-order affordance lives in the card footer itself
+  // ("🧺 Order from this shop: reply *order 2 bread 1 cake*."), so the card
+  // stays button-light and every entry is one keystroke away.
 
   // Selection analytics — 'bot_select' requires migration 023 to be applied;
   // the insert is best-effort so nothing breaks before then.
@@ -3853,6 +4046,32 @@ export async function POST(request: Request) {
           continue
         }
 
+        // ── S18.2 typed orders: global entry ─────────────────────────────
+        // Fires before search steps so `order …` always means ordering — but
+        // only when the buyer is not mid-registration or mid-listing-form.
+        const orderM = lower.match(/^order\b[,;:]?\s*([\s\S]*)$/)
+        if (
+          orderM &&
+          (!session || !['need_form', 'reg_contact', 'list_form', 'pay', 'confirm', 'rating', 'order'].includes(session.step))
+        ) {
+          const tail = orderM[1].trim() || 'order'
+          const { pairs, junk } = parseOrderLine(tail)
+          if (!pairs.length || !junk.length) {
+            // Bare `order` (or a cleanly parseable line) → order flow.
+            await typedOrderFromText(from, session, tail)
+            continue
+          }
+          // Junk-laden ("order a logo for outside") → keep acting like search.
+        }
+        if (lower === 'myorders' || lower === 'my orders') {
+          await sendMyOrders(from, session)
+          continue
+        }
+        if (lower === 'orders' || lower.startsWith('orders ')) {
+          await sendSupplierOrders(from, session)
+          continue
+        }
+
         // ── Bot search conversation steps ───────────────────────────────
         if (session?.step === 'search_loc') {
           // Waiting for the user's town (term already captured)
@@ -3941,52 +4160,42 @@ export async function POST(request: Request) {
           continue
         }
 
-        if (session?.step === 'cart') {
-          // Order builder on screen. Verbs mirror the cart view footer.
+        if (session?.step === 'order') {
+          // Verify screen up: finish, fix, or speak a brand-new order line.
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
             await sendWhatsAppMessage(from, await helpText())
             continue
           }
           if (lower === 'back') {
-            // Back = abandon ordering for now (keep the search results alive).
-            await saveSession(from, 'browse', { ...session.data, cart: undefined, lastScreen: 'list' })
+            // Back = pause ordering (search results stay alive).
+            await saveSession(from, 'browse', { ...session.data, pendingOrder: undefined, lastScreen: 'list' })
             await sendWhatsAppMessage(from, 'Ordering paused. Reply a numbered business, or send a new search.')
             continue
           }
-          if (lower === 'more' || lower === 'add' || lower === 'order') {
-            await cartAdjustList(from, session)
+          if (lower === 'yes' || lower === 'send' || lower === 'checkout' || lower === 'done') {
+            await commitPendingOrder(from, session)
             continue
           }
-          if (lower === 'view' || lower === 'cart') {
-            await showCartView(from, session.data.cart ?? null)
+          if (lower === 'no' || lower === 'edit' || lower === 'retype') {
+            await sendWhatsAppMessage(
+              from,
+              'Say it again and I will type along — e.g. *order 2 bread, 1 cake*.'
+            )
+            await sendInteractiveButtons(from, '', [{ id: 'osend', title: '✅ Send as-is' }])
             continue
           }
-          if (lower === 'checkout' || lower === 'done' || lower === 'send') {
-            await cartCheckout(from, session)
+          // A fresh order line re-types ("order …" or leading quantity);
+          // anything else is a plain search — the draft dies with it.
+          const trimmed = text.trim()
+          const orderish = /^order\b/.test(lower) || (/^\d/.test(trimmed) && parseOrderLine(trimmed).pairs.length > 0)
+          if (orderish) {
+            await typedOrderFromText(from, session, trimmed.replace(/^order\b[,;:]?\s*/i, ''), )
             continue
           }
-          if (lower === 'clear' || lower === 'empty') {
-            await cartClearTap(from, session)
-            continue
-          }
-          const rm = text.trim().match(/^([1-9][0-9]?)$/)
-          if (rm && session.data.cart) {
-            // Hidden shortcut: a bare number nudges that visible line down one.
-            const visible = session.data.cart.lines.filter(l => l.qty > 0)
-            const line = visible[Number(rm[1]) - 1]
-            if (line) {
-              await cartQtyTap(from, session, line.id, line.qty - 1)
-              continue
-            }
-          }
-          await sendWhatsAppMessage(
-            from,
-            [
-              'Tap your way through the order — use the buttons above,',
-              'or tap ➕ / ➖ again from "± Add / remove".',
-            ].join('\n')
-          )
+          await clearSession(from)
+          session = null
+          await dispatchSearch(from, text)
           continue
         }
 
@@ -3996,23 +4205,6 @@ export async function POST(request: Request) {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
             await sendWhatsAppMessage(from, await helpText())
-            continue
-          }
-          if (lower === 'cart' || lower === 'order' || lower === 'checkout') {
-            if (session.data.cart?.lines.some(l => l.qty > 0)) {
-              await saveSession(from, 'cart', session.data)
-              await showCartView(from, session.data.cart)
-            } else {
-              const bid = session.data.cart?.businessId || session.data.lastBizId
-              if (bid) {
-                await startCartFlow(from, session, bid)
-              } else {
-                await sendWhatsAppMessage(
-                  from,
-                  'No active order — open a business card and tap 🧺 Start order, or send a new search.'
-                )
-              }
-            }
             continue
           }
           if (lower === 'back' || lower === '0') {

@@ -1,6 +1,7 @@
 // S16 smoke battery: need intake → quote → pick → close → admin commands.
 // Runs against a LOCAL dev server with WHATSAPP_DRY_RUN=1 so nothing real
-// goes out. Env: SUPABASE_PAT, PROJECT_REF (for DB checks + cleanup).
+// goes out. DB checks + cleanup use the service-role key via PostgREST
+// (read from .env.local — no management PAT needed).
 import crypto from 'node:crypto'
 import { readFileSync } from 'node:fs'
 
@@ -9,8 +10,8 @@ const env = readFileSync('.env.local', 'utf8')
 const get = k => (env.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1] || ''
 const APP_SECRET = get('WHATSAPP_APP_SECRET')
 const ADMIN = get('ADMIN_WHATSAPP').replace(/\D/g, '')
-const PAT = process.env.SUPABASE_PAT || ''
-const REF = process.env.PROJECT_REF || ''
+const SB_URL = get('NEXT_PUBLIC_SUPABASE_URL').replace(/\/$/, '')
+const SB_KEY = get('SUPABASE_SERVICE_ROLE_KEY')
 
 const BUYER = process.env.SMOKE_BUYER || '263770111222'
 const SUPPLIER = process.env.SMOKE_SUPPLIER || '263770333444'
@@ -52,16 +53,25 @@ async function send(from, name, { text, action } = {}) {
   return res.status
 }
 
-async function sql(query) {
-  const res = await fetch(`https://api.supabase.com/v1/projects/${REF}/database/query`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${PAT}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
+// PostgREST helpers on the service role (bypasses RLS; smoke is trusted).
+// Filters use REST syntax: "phone=eq.X&order=id.desc&limit=1", with *
+// wildcards inside like. patterns per PostgREST rules.
+async function rest(table, params = '', method = 'GET') {
+  const url = `${SB_URL}/rest/v1/${table}${params ? '?' + params : ''}`
+  const res = await fetch(url, {
+    method,
+    headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
   })
   const json = await res.json().catch(() => null)
-  if (!res.ok) throw new Error(`SQL failed: ${res.status} ${JSON.stringify(json)}`)
+  if (!res.ok) throw new Error(`REST failed: ${res.status} ${JSON.stringify(json)}`)
   return json
 }
+const dbRows = (table, filters) => rest(table, filters)
+const dbCount = async (table, filters) => {
+  const rows = await rest(table, filters)
+  return Array.isArray(rows) ? rows.length : 0
+}
+const dbDelete = (table, filters) => rest(table, filters, 'DELETE')
 
 function ok(label, cond) {
   console.log(`${cond ? '✓' : '✗ FAIL'} ${label}`)
@@ -77,8 +87,8 @@ ok('intake line → 200', (await send(BUYER, 'Test Buyer', { text: '50 bags ceme
 ok('post tap → 200', (await send(BUYER, 'Test Buyer', { action: 'need_post' })) === 200)
 
 // 4 — need row exists
-const needRows = await sql(
-  `SELECT id, rq_id, buyer_phone, item, qty, budget, city, status FROM work_needs WHERE buyer_phone = '${BUYER}' ORDER BY id DESC LIMIT 1`
+const needRows = await dbRows(
+  'work_needs', `buyer_phone=eq.${BUYER}&order=id.desc&limit=1&select=id,rq_id,buyer_phone,item,qty,budget,city,status`
 )
 const need = Array.isArray(needRows) ? needRows[0] : null
 ok('need row created', !!need)
@@ -89,8 +99,8 @@ console.log('   rq:', rq)
 
 // 5 — supplier quotes via deep-link style text
 ok('supplier quote → 200', (await send(SUPPLIER, 'Supplier Sam', { text: `${rq} $45 ready tuesday` })) === 200)
-const quoteRows = await sql(
-  `SELECT id, supplier_phone, price, body FROM need_quotes WHERE need_id = ${need.id} ORDER BY id DESC LIMIT 1`
+const quoteRows = await dbRows(
+  'need_quotes', `need_id=eq.${need.id}&order=id.desc&limit=1&select=id,supplier_phone,price,body`
 )
 const quote = Array.isArray(quoteRows) ? quoteRows[0] : null
 ok('quote row created', !!quote)
@@ -101,19 +111,19 @@ if (!quote) process.exit(1)
 for (let i = 0; i < 6; i++) {
   await send(SUPPLIER, 'Supplier Sam', { text: `${rq} $4${i} bulk deal ${i}` })
 }
-const cnt = await sql(`SELECT count(*)::int AS n FROM need_quotes WHERE need_id = ${need.id}`)
-ok('quotes stored ≤ 6 (cap holds relays, storage continues as quiet)', cnt?.[0]?.n <= 7)
+const cnt = await dbCount('need_quotes', `need_id=eq.${need.id}&select=id`)
+ok('quotes stored ≤ 6 (cap holds relays, storage continues as quiet)', cnt <= 7)
 
 // 7 — buyer picks the first real quote
 ok('q_pick → 200', (await send(BUYER, 'Test Buyer', { action: `q_pick_${quote.id}` })) === 200)
-const closed = await sql(`SELECT status, closed_by, winner_quote_id FROM work_needs WHERE id = ${need.id}`)
+const closed = await dbRows('work_needs', `id=eq.${need.id}&select=status,closed_by,winner_quote_id`)
 ok('need closed with winner', Array.isArray(closed) && closed[0]?.status === 'closed' && closed[0]?.winner_quote_id === quote.id)
 
 // 8 — quote after close gets the filled notice (no new quote row)
-const before = cnt?.[0]?.n
+const before = cnt
 ok('late quote → 200', (await send(SUPPLIER, 'Supplier Sam', { text: `${rq} $20 late` })) === 200)
-const after = await sql(`SELECT count(*)::int AS n FROM need_quotes WHERE need_id = ${need.id}`)
-ok('no quote stored after close', after?.[0]?.n === before)
+const after = await dbCount('need_quotes', `need_id=eq.${need.id}&select=id`)
+ok('no quote stored after close', after === before)
 
 // 9 — admin command suite
 ok('digest → 200', (await send(ADMIN, 'Owner', { text: 'digest' })) === 200)
@@ -125,18 +135,20 @@ ok('stats → 200', (await send(ADMIN, 'Owner', { text: 'stats' })) === 200)
 
 // 10 — demand radar: a buyer search lands in bot_searches
 ok('search → 200', (await send(BUYER, 'Test Buyer', { text: 'cement harare' })) === 200)
-const searches = await sql(`SELECT count(*)::int AS n FROM bot_searches WHERE phone IN ('${BUYER}','${SUPPLIER}')`)
-ok('search logged', searches?.[0]?.n >= 1)
+const searches = await dbCount('bot_searches', `phone=in.(${BUYER},${SUPPLIER})&select=id`)
+ok('search logged', searches >= 1)
 
 // 11 — transcripts logged both directions
-const msgs = await sql(`SELECT count(*)::int AS n FROM bot_messages WHERE phone = '${BUYER}'`)
-ok('transcript rows exist', msgs?.[0]?.n >= 5)
+const msgs = await dbCount('bot_messages', `phone=eq.${BUYER}&select=id`)
+ok('transcript rows exist', msgs >= 5)
 
-// cleanup
-await sql(`DELETE FROM need_quotes WHERE need_id IN (SELECT id FROM work_needs WHERE buyer_phone IN ('${BUYER}','${SUPPLIER}'))`)
-await sql(`DELETE FROM work_needs WHERE buyer_phone IN ('${BUYER}','${SUPPLIER}')`)
-await sql(`DELETE FROM bot_messages WHERE phone IN ('${BUYER}','${SUPPLIER}','${ADMIN}')`)
-await sql(`DELETE FROM bot_searches WHERE phone IN ('${BUYER}','${SUPPLIER}')`)
-await sql(`DELETE FROM chat_sessions WHERE phone IN ('${BUYER}','${SUPPLIER}','${ADMIN}')`)
-await sql(`DELETE FROM webhook_receipts WHERE message_id LIKE 'wamid.s16%'`)
+// cleanup (PostgREST can't subquery — resolve the need ids first)
+const myNeeds = (await dbRows('work_needs', `buyer_phone=in.(${BUYER},${SUPPLIER})&select=id`)) || []
+const ids = myNeeds.map(r => r.id).join(',')
+if (ids) await dbDelete('need_quotes', `need_id=in.(${ids})`)
+await dbDelete('work_needs', `buyer_phone=in.(${BUYER},${SUPPLIER})`)
+await dbDelete('bot_messages', `phone=in.(${BUYER},${SUPPLIER},${ADMIN})`)
+await dbDelete('bot_searches', `phone=in.(${BUYER},${SUPPLIER})`)
+await dbDelete('chat_sessions', `phone=in.(${BUYER},${SUPPLIER},${ADMIN})`)
+await dbDelete('webhook_receipts', `message_id=like.wamid.s16*`)
 console.log('cleanup done')

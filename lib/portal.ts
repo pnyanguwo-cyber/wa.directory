@@ -107,6 +107,31 @@ export async function getListingSubscription(businessId: string): Promise<{
   }
 }
 
+export async function getSupportSubscription(businessId: string): Promise<{
+  tier: string
+  priceUsd: number
+  status: string
+  currentPeriodEnd: string | null
+  externalSubscriptionId: string | null
+} | null> {
+  const { data } = await getSupabase()
+    .from('support_subscriptions')
+    .select('tier, price_usd, status, current_period_end, external_subscription_id')
+    .eq('biz_id', businessId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!data) return null
+  return {
+    tier: data.tier,
+    priceUsd: data.price_usd,
+    status: data.status,
+    currentPeriodEnd: data.current_period_end,
+    externalSubscriptionId: data.external_subscription_id,
+  }
+}
+
 export async function getDailyStats(businessId: string, days: number | null) {
   const supabase = getSupabase()
   let q = supabase

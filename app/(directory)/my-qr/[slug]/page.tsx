@@ -16,7 +16,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, name, phone, phone_type, slug, catalog_link, verified, location, city, area')
+    .select('id, name, phone, phone_type, slug, catalog_link, verified, location, city, area, username')
     .eq('slug', slug)
     .maybeSingle()
 
@@ -95,6 +95,7 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
           fullPage={true}
           size={240}
           downloadName={`${key}-customer-chat-qr.png`}
+          username={business.username}
         />
       </div>
 
@@ -128,6 +129,25 @@ export default async function MyQrPage({ params }: { params: { slug: string } })
       {/* SECTION 3: FAST PROMOTIONAL & DIRECT LINKS */}
       <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 shadow-sm space-y-3">
         <h3 className="text-sm font-bold text-text-primary uppercase tracking-wide">Direct Links for WhatsApp Status & Social Media</h3>
+
+        {/* Short URL */}
+        {business.username && (
+          <a
+            href={`/u/${business.username}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-3 bg-whatsapp-50 border border-whatsapp-200 rounded-2xl p-4 hover:bg-whatsapp-100 transition-colors"
+          >
+            <div>
+              <p className="text-xs font-bold text-whatsapp-800">Short Profile URL</p>
+              <p className="text-[11px] text-text-secondary mt-0.5 font-mono">wa.directory/u/{business.username}</p>
+            </div>
+            <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+            </svg>
+          </a>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {waLink && (
             <a

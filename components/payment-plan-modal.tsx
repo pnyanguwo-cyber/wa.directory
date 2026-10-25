@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { PlanType } from '@/types'
-import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import type { PlanType, SupportTier } from '@/types'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE, SUPPORT_TIERS } from '@/types'
 
 interface Props {
   open: boolean
@@ -131,6 +131,34 @@ export default function PaymentPlanModal({ open, onClose, onProceed, onSimulate,
             </label>
           </div>
         )}
+
+        {/* IT Concierge Support — always shown, can be added to any plan */}
+        <div className="rounded-2xl border border-amber-200 bg-amber-50/30 p-4 animate-fade-in">
+          <p className="text-sm font-semibold text-text-primary mb-3">Add IT Concierge Support</p>
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            {(Object.keys(SUPPORT_TIERS) as SupportTier[]).map(tier => {
+              const cfg = SUPPORT_TIERS[tier]
+              return (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => alert(`${cfg.label}: $${cfg.price.toFixed(2)}/month — Contact admin to subscribe (payment gateway coming soon)`)}
+                  className={`rounded-xl p-3 text-center text-xs border-2 transition-all ${
+                    tier === 'bronze' ? 'border-amber-300 text-amber-700 hover:bg-amber-50' :
+                    tier === 'silver' ? 'border-gray-300 text-gray-700 hover:bg-gray-50' :
+                    'border-yellow-300 text-yellow-700 hover:bg-yellow-50'
+                  }`}
+                >
+                  <p className="font-bold capitalize">{cfg.label}</p>
+                  <p className="font-extrabold text-text-primary mt-0.5">${cfg.price.toFixed(0)}/mo</p>
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-text-secondary text-center">
+            Auto-renews with your listing. Contact admin to activate — gateway coming soon.
+          </p>
+        </div>
 
         {error && (
           <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>

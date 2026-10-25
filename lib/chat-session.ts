@@ -63,30 +63,27 @@ export interface ChatSessionData {
   pendingBiz?: string[]
   // Broadcast preview body waiting for the ✅ confirm tap.
   castText?: string
-  // ── Customer cart (S18) ───────────────────────────────────────────
-  // One cart per conversation, scoped to a single supplier. Cleared when the
-  // customer starts a new search or opens a different business card.
-  cart?: CartState
-  // Last business whose detail card was opened — lets typed `order` flow in
-  // even before any item has been picked.
+  // ── Typed customer order (S18.2) ─────────────────────────────────────
+  // Draft of the order being verified: parsed "2 bread 1 cake" matched
+  // against shelves, grouped per supplier. Committed on the ✅ tap.
+  pendingOrder?: PendingOrder
+  // Last business whose detail card was opened — lets a bare `order …` line
+  // prefer that shop's shelf first.
   lastBizId?: string
 }
 
-export interface CartLine {
-  id: string
-  name: string
-  price: number | null
-  qty: number
-}
-
-export interface CartState {
+// One supplier slice of a pending order.
+export interface PendingGroup {
   businessId: string
   businessName: string
   supplierDigits: string
   city?: string
-  phoneType?: 'whatsapp' | 'voice'
-  lines: CartLine[]
-  note?: string
+  lines: { name: string; qty: number; price: number | null }[]
+}
+
+export interface PendingOrder {
+  groups: PendingGroup[]
+  clearable?: string[]
 }
 
 export interface ChatSession {

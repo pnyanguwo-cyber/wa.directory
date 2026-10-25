@@ -264,6 +264,7 @@ export default function PayPage() {
                   `Link to WhatsApp search engine for ${cfg.days} days`,
                   'Access to portal insights',
                   'Allowed to bid for promotion in search',
+                  'Auto-generated website included',
                 ]
                 return (
                   <div
@@ -396,7 +397,7 @@ export default function PayPage() {
                   <svg className="w-5 h-5 text-whatsapp-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                   </svg>
-                ), title: 'Trusted Platform', desc: "Backed by Meta's secure infrastructure" },
+                ), title: 'Powered by Meta', desc: 'WhatsApp Business Cloud API' },
               ].map((b, i) => (
                 <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-white border border-gray-100"
                   style={{ boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
@@ -749,6 +750,9 @@ export default function PayPage() {
                   Back to Home
                 </Link>
               </div>
+              <p className="text-center text-[10px] text-text-secondary mt-6 max-w-md mx-auto leading-relaxed">
+                WA.Directory is an independent directory and is not affiliated with, endorsed by, or sponsored by Meta Platforms, Inc. WhatsApp and the WhatsApp logo are trademarks of Meta Platforms, Inc.
+              </p>
             </div>
           )}
               </div>
