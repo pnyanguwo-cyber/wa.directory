@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { adminGuard } from '@/lib/admin-auth'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 // GET /api/admin/payment-events?outcome=rejected&event=webhook_rejected
 // Serves the admin "Payment Events" audit tab. The payment_events table is
 // RLS-locked with no anon policies, so this service-role read is the only way
 // in — same pattern as the other admin endpoints.
 export async function GET(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const { searchParams } = new URL(request.url)
   const outcome = searchParams.get('outcome') || ''
@@ -40,9 +36,7 @@ export async function GET(request: Request) {
   for (const e of events || []) {
     if (e.business_id) bizIds.add(e.business_id)
   }
-  const { data: businesses } = bizIds.size
-    ? await supabase.from('businesses').select('id, name').in('id', [...bizIds])
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, [...bizIds], 'id, name')
   const nameById = new Map((businesses || []).map(b => [b.id, b.name]))
 
   return NextResponse.json({

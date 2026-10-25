@@ -1,14 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { normalizeUsername } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { SITE_URL } from '@/lib/site-url'
 
 export async function POST(request: Request) {
   try {
@@ -63,7 +57,7 @@ export async function POST(request: Request) {
 
     // Notify admin via WhatsApp
     if (process.env.ADMIN_WHATSAPP) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       sendWhatsAppMessage(
         process.env.ADMIN_WHATSAPP,
         [

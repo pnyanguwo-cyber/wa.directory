@@ -1,4 +1,5 @@
 import { cookies } from 'next/headers'
+import { NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual, createHash } from 'node:crypto'
 
 const COOKIE = 'admin_token'
@@ -54,6 +55,14 @@ export function verifyAdminPassword(input: unknown): boolean {
 
 export function isAdmin(): boolean {
   return verifyAdminToken(cookies().get(COOKIE)?.value)
+}
+
+// Route-handler guard: returns a 404-style response when denial is needed but
+// null when the caller is a verified admin — the two-line idiom:
+//   const denied = adminGuard(); if (denied) return denied
+export function adminGuard(): NextResponse | null {
+  if (isAdmin()) return null
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 }
 
 export { COOKIE as ADMIN_COOKIE, MAX_AGE_MS as ADMIN_MAX_AGE_MS }

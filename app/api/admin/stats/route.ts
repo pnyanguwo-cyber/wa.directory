@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { adminGuard } from '@/lib/admin-auth'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 export async function GET(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const { searchParams } = new URL(request.url)
   const businessId = searchParams.get('business_id')
@@ -130,9 +126,7 @@ export async function GET(request: Request) {
     .slice(0, 10)
 
   const topIds = topBusinesses.map(([id]) => id)
-  const { data: topBiz } = topIds.length
-    ? await supabase.from('businesses').select('id, name, slug, category, city').in('id', topIds)
-    : { data: [] }
+  const topBiz = await fetchBusinessesByIds(supabase, topIds, 'id, name, slug, category, city')
 
   const growthMap = new Map<string, number>()
   for (const r of growthData.data || []) {

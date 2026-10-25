@@ -1,0 +1,132 @@
+'use client'
+
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import AdminListings from '@/components/admin/admin-listings'
+import AdminCategories from '@/components/admin/admin-categories'
+import AdminAreas from '@/components/admin/admin-areas'
+import AdminRequests from '@/components/admin/admin-requests'
+import AdminAddressRequests from '@/components/admin/admin-address-requests'
+import AdminBanners from '@/components/admin/admin-banners'
+import AdminChatSessions from '@/components/admin/admin-chat-sessions'
+import AdminStats from '@/components/admin/admin-stats'
+import AdminRankings from '@/components/admin/admin-rankings'
+import AdminSubscriptions from '@/components/admin/admin-subscriptions'
+import AdminAccounts from '@/components/admin/admin-accounts'
+import AdminNameContests from '@/components/admin/admin-name-contests'
+import AdminPaymentEvents from '@/components/admin/admin-payment-events'
+import AdminOrganizations from '@/components/admin/admin-organizations'
+import AdminNeeds from '@/components/admin/admin-needs'
+import AdminTranscripts from '@/components/admin/admin-transcripts'
+import AdminSettings from '@/components/admin/admin-settings'
+import Splash from '@/components/splash'
+
+type Tab = 'listings' | 'categories' | 'areas' | 'requests' | 'addresses' | 'banners' | 'chat' | 'transcripts' | 'needs' | 'settings' | 'stats' | 'rankings' | 'subscriptions' | 'accounts' | 'contests' | 'payments' | 'organizations'
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'stats', label: 'Statistics', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125z' },
+  { id: 'listings', label: 'Listings', icon: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25zM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H15.75a2.25 2.25 0 0 1-2.25-2.25v-2.25z' },
+  { id: 'rankings', label: 'Rankings & Bids', icon: 'M3 13.5 9 6.75l4.5 4.5L21 3.75M21 15.75v4.5a1.5 1.5 0 0 1-1.5 1.5h-15a1.5 1.5 0 0 1-1.5-1.5v-15a1.5 1.5 0 0 1 1.5-1.5h4.5' },
+  { id: 'payments', label: 'Payment Events', icon: 'M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z' },
+  { id: 'subscriptions', label: 'Subscriptions', icon: 'M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5z' },
+  { id: 'accounts', label: 'Accounts', icon: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0zM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632z' },
+  { id: 'organizations', label: 'Organizations', icon: 'M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21' },
+  { id: 'categories', label: 'Categories', icon: 'M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125v-2.25' },
+  { id: 'areas', label: 'Areas', icon: 'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z' },
+  { id: 'requests', label: 'Requests', icon: 'M11.35 3.836c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m8.9-4.414c.376.023.75.05 1.124.08 1.131.094 1.976 1.057 1.976 2.192V16.5A2.25 2.25 0 0 1 18 18.75h-2.25m-7.5-10.5H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V18.75m-7.5-10.5h6.375c.621 0 1.125.504 1.125 1.125v9.375m-8.25-3 1.5 1.5 3-3.75' },
+  { id: 'addresses', label: 'Addresses', icon: 'M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z' },
+  { id: 'banners', label: 'Banners', icon: 'M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z' },
+  { id: 'chat', label: 'Chat Sessions', icon: 'M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 0 1-.923 1.785A5.969 5.969 0 0 0 6 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z' },
+  { id: 'needs', label: 'Needs & Digest', icon: 'M20.25 7.5l-.625 10.632a2.25 2.25 0 0 1-2.247 2.118h-8.756a2.25 2.25 0 0 1-2.247-2.118L5.75 7.5m5 5.25v4.5m2.5-4.5v4.5M4.5 7.5h15M9.75 4.5h4.5a1.125 1.125 0 0 1 1.125 1.125V7.5H8.625V5.625A1.125 1.125 0 0 1 9.75 4.5z' },
+  { id: 'transcripts', label: 'Transcripts', icon: 'M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 0 1 1.037-.443 48.282 48.282 0 0 0 5.68-.494c1.584-.233 2.707-1.626 2.707-3.228V15a3 3 0 0 0-3-3H3a3 3 0 0 0-3 3v1.5z' },
+  { id: 'settings', label: 'Settings', icon: 'M9.594 3.94c.09-.542.56-.94 1.11-.94h2.594c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 1.296a1.125 1.125 0 0 1 .49 1.37l-.456 1.217c-.123.355-.072.75.124 1.075.044.073.087.146.127.22.184.332.496.582.87.645l1.28.213c.543.09.941.56.941 1.11v2.594c0 .55-.398 1.02-.94 1.11l-1.281.213c-.374.063-.686.313-.87.645-.04.074-.083.147-.127.22-.196.324-.257.72-.124 1.075l.456 1.217a1.125 1.125 0 0 1-.49 1.37l-1.296 1.296a1.125 1.125 0 0 1-1.37.49l-1.217-.456c-.355-.123-.75-.072-1.075.124-.073.04-.146.087-.22.127-.332.184-.582.496-.645.87l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.063-.374-.313-.686-.645-.87a7.005 7.005 0 0 1-.22-.127c-.324-.196-.72-.257-1.075-.124l-1.217.456a1.125 1.125 0 0 1-1.37-.49l-1.296-1.296a1.125 1.125 0 0 1-.49-1.37l.456-1.217c.123-.355.072-.75-.124-1.075a6.998 6.998 0 0 1-.127-.22c-.184-.332-.496-.582-.87-.645l-1.28-.213c-.543-.09-.941-.56-.941-1.11v-2.594c0-.55.398-1.02.94-1.11l1.281-.213c.374-.063.686-.313.87-.645.04-.074.083-.147.127-.22.196-.324.257-.72.124-1.075l-.456-1.217a1.125 1.125 0 0 1 .49-1.37l1.296-1.296a1.125 1.125 0 0 1 1.37-.49l1.217.456c.355.123.75.072 1.075-.124.073-.04.146-.087.22-.127.332-.184.582-.496.645-.87l.213-1.28z' },
+  { id: 'contests', label: 'Name Contests', icon: 'M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z' },
+]
+
+export default function AdminPage() {
+  const router = useRouter()
+  const [tab, setTab] = useState<Tab>('stats')
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    await fetch('/api/admin/logout', { method: 'POST' })
+    router.push('/admin-login')
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+      {loggingOut && <Splash label="Logging out..." />}
+      {/* Mobile: shell padding is tighter (p-4) so content fills the narrow PWA viewport
+          instead of looking jammed inside oversized rounded frames. */}
+      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl sm:rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-whatsapp-700">Directory Administration</span>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight">Admin Dashboard</h1>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="hidden sm:flex items-center gap-1.5 text-xs text-whatsapp-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-whatsapp-500" />
+              Logged in
+            </span>
+            <button
+              onClick={logout}
+              disabled={loggingOut}
+              className="btn-secondary h-10 px-4 text-xs sm:text-sm font-semibold flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
+              </svg>
+              <span>Logout</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile: compact scrollable pill rail with edge fade so it's obviously scrollable,
+            plus larger touch targets that don't wrap the label. */}
+        <div className="relative -mx-4 sm:mx-0">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-4 sm:px-1 scrollbar-none">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={`h-11 px-3.5 sm:px-4 rounded-2xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 ${
+                  tab === t.id
+                    ? 'bg-whatsapp-500 text-white shadow-md'
+                    : 'bg-white border border-gray-200/80 text-text-secondary hover:bg-surface'
+                }`}
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={t.icon} />
+                </svg>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[rgb(var(--bg-primary))] to-transparent sm:hidden" />
+        </div>
+
+        {tab === 'listings' && <AdminListings />}
+        {tab === 'stats' && <AdminStats />}
+        {tab === 'rankings' && <AdminRankings />}
+        {tab === 'payments' && <AdminPaymentEvents />}
+        {tab === 'subscriptions' && <AdminSubscriptions />}
+        {tab === 'accounts' && <AdminAccounts />}
+        {tab === 'organizations' && <AdminOrganizations />}
+        {tab === 'categories' && <AdminCategories />}
+        {tab === 'areas' && <AdminAreas />}
+        {tab === 'requests' && <AdminRequests />}
+        {tab === 'addresses' && <AdminAddressRequests />}
+        {tab === 'banners' && <AdminBanners />}
+        {tab === 'chat' && <AdminChatSessions />}
+        {tab === 'needs' && <AdminNeeds />}
+        {tab === 'transcripts' && <AdminTranscripts />}
+        {tab === 'settings' && <AdminSettings />}
+        {tab === 'contests' && <AdminNameContests />}
+      </div>
+    </div>
+  )
+}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null)
@@ -16,21 +17,23 @@ export async function POST(request: Request) {
 
   const supabase = getSupabase()
 
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('id, name, phone')
-    .eq('id', businessId)
-    .maybeSingle()
+  // The business row and the latest subscription are independent — fetch together.
+  const [{ data: business }, { data: existing }] = await Promise.all([
+    supabase
+      .from('businesses')
+      .select('id, name, phone')
+      .eq('id', businessId)
+      .maybeSingle(),
+    supabase
+      .from('subscriptions')
+      .select('id, status, expires_at')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   if (!business) return NextResponse.json({ error: 'Business not found' }, { status: 404 })
-
-  const { data: existing } = await supabase
-    .from('subscriptions')
-    .select('id, status, expires_at')
-    .eq('business_id', businessId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   if (existing?.status === 'active' && (!existing.expires_at || new Date(existing.expires_at) > new Date())) {
     return NextResponse.json({ error: 'You already have an active subscription' }, { status: 400 })
@@ -56,7 +59,7 @@ export async function POST(request: Request) {
         `Business: *${business.name}*`,
         `Phone: ${business.phone}`,
         '',
-        `Confirm payment & activate: ${process.env.SITE_URL || 'https://wadirectory.co.zw'}/admin`,
+        `Confirm payment & activate: ${SITE_URL}/admin`,
       ].join('\n')
     ).catch(() => {})
   }

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
+import { getBotSetting } from '@/lib/bot-settings'
+import { renderChannelPitch } from '@/lib/bot-templates'
 
 export async function POST(request: Request) {
   try {
@@ -13,10 +15,7 @@ export async function POST(request: Request) {
 
     const { id, verified, reason } = await request.json()
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { data: business } = await supabase
       .from('businesses')
@@ -38,19 +37,28 @@ export async function POST(request: Request) {
     }
 
     if (verified && business?.phone) {
-      const to = '+' + business.phone.replace(/\D/g, '')
+      const to = '+' + digitsOnly(business.phone)
       const link = `${SITE_URL}/business/${business.slug || id}`
       sendWhatsAppTemplate(
         to,
         process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
         [business.name, link]
       ).catch(err => console.error('[verify] notification failed:', err))
+
+      // Channel pitch best-effort right after the live template (free-form
+      // only lands while the 24h window is open; fails silently otherwise).
+      getBotSetting('channel_link')
+        .then(stored => {
+          const chLink = (stored || process.env.CHANNEL_LINK || '').trim()
+          if (chLink) return sendWhatsAppMessage(to, renderChannelPitch(chLink))
+        })
+        .catch(() => {})
     }
 
     // Rejected / unverified: tell the owner why (optional admin note) and
     // give them their private edit link so they can fix and resubmit.
     if (!verified && business?.phone) {
-      const to = '+' + business.phone.replace(/\D/g, '')
+      const to = '+' + digitsOnly(business.phone)
       const editLink = business.edit_token
         ? `${SITE_URL}/edit?token=${business.edit_token}`
         : `${SITE_URL}/business/${business.slug || id}`

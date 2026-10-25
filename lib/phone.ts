@@ -10,6 +10,12 @@ function stripNoise(raw: string): string {
   return raw.replace(/[^0-9]/g, '')
 }
 
+// Just the digits of any phone input — no normalization. Many checks and
+// wa.me links only care about digits.
+export function digitsOnly(raw: string): string {
+  return (raw || '').replace(/\D/g, '')
+}
+
 // Full international digits (no '+') for a number entered alongside a
 // selected country code. Used at registration/listing time.
 export function toFullPhone(countryCode: string, raw: string): string {
@@ -31,17 +37,6 @@ export function canonicalPhone(raw: string): string {
   if (digits.startsWith(DEFAULT_COUNTRY) && digits.length >= 11) return digits
   if (digits.startsWith('0')) digits = digits.slice(1)
   return DEFAULT_COUNTRY + digits
-}
-
-// Do two phone strings refer to the same number? Accepts any mix of formats
-// on either side (stored value or user input).
-export function phoneMatches(input: string, stored: string): boolean {
-  if (!input || !stored) return false
-  const a = stripNoise(input)
-  const b = stripNoise(stored)
-  if (!a || !b) return false
-  if (a === b) return true
-  return canonicalPhone(input) === canonicalPhone(stored)
 }
 
 // Voice numbers (landlines & hotlines) are stored EXACTLY as entered, in

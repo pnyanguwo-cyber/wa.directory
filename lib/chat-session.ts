@@ -1,4 +1,5 @@
 import { getSupabase } from './supabase-server'
+import type { ResultCard } from './bot-templates'
 
 export interface ChatSessionData {
   name?: string
@@ -6,10 +7,83 @@ export interface ChatSessionData {
   phone?: string
   country_code?: string
   category?: string
+  // Multi-category support (the listing form fills up to 4).
+  categories?: string[]
   description?: string
   city?: string
   area?: string
+  // Optional listing details carried through registration (mostly empty;
+  // the webapp form supports far more fields than the chat flow asks for).
+  website?: string
+  address?: string
+  phone_type?: 'whatsapp' | 'voice'
+  price_range?: string
+  whole_country?: boolean
+  // Living form state for the paragraph intake flow (step 'list_form').
+  list?: import('./listing-intake').ListingFormState
+  // Personal contact draft (step 'reg_contact'): name + phone + optional
+  // city and up to 3 social links.
+  contact?: { name: string; phone: string; city: string | null; socials?: string[] }
   rating_pending?: string
+  // ── Bot search flow ────────────────────────────────────────────────
+  // Term typed by the user while waiting for a town ("Which town?").
+  pending_search_term?: string
+  // Town captured first, waiting for the search term ("What do you need in X?").
+  pending_city?: string
+  // Shared location ("Near me" flow): the user's point, used as the origin
+  // for km-ranked nearby searches.
+  origin_lat?: number
+  origin_lng?: number
+  // Render-ready numbered results currently on screen (taps + typed picks
+  // route through the same order).
+  results?: ResultCard[]
+  // What the user is currently looking at, for ⬅ Back routing.
+  lastScreen?: 'list' | 'detail'
+  // Where the search originated, so Back can restore the previous prompt.
+  origin?: 'search_loc' | 'search_term' | 'free'
+  // Search label of the current results, for Back re-rendering.
+  lastTerm?: string
+  lastCity?: string | null
+  // True when the on-screen list is the nearest-towns tier.
+  nearby?: boolean
+  // 0-based page of the results list (9 businesses per page).
+  page?: number
+  // ── Bot pay flow ─────────────────────────────────────────────────────
+  // Candidate businesses from a pay search (rows pay1..payN map by index).
+  pay_candidates?: { id: string; name: string }[]
+  // The business currently being paid (public WA-XXXXXX id + display name).
+  pay_business?: { id: string; name: string }
+  // Plan chosen at the pay_plan step.
+  pay_plan?: '1m' | '6m' | '12m'
+  // ── Need intake (S16 matchmaking) ──────────────────────────────────
+  // Living need draft: what, how many, budget hint, town.
+  need?: { item: string; qty: string; budget: string; city: string }
+  // ── Admin commands over WhatsApp ──────────────────────────────────
+  // Last `pending` listing: business ids in display order for verify N.
+  pendingBiz?: string[]
+  // Broadcast preview body waiting for the ✅ confirm tap.
+  castText?: string
+  // ── Typed customer order (S18.2) ─────────────────────────────────────
+  // Draft of the order being verified: parsed "2 bread 1 cake" matched
+  // against shelves, grouped per supplier. Committed on the ✅ tap.
+  pendingOrder?: PendingOrder
+  // Last business whose detail card was opened — lets a bare `order …` line
+  // prefer that shop's shelf first.
+  lastBizId?: string
+}
+
+// One supplier slice of a pending order.
+export interface PendingGroup {
+  businessId: string
+  businessName: string
+  supplierDigits: string
+  city?: string
+  lines: { name: string; qty: number; price: number | null }[]
+}
+
+export interface PendingOrder {
+  groups: PendingGroup[]
+  clearable?: string[]
 }
 
 export interface ChatSession {

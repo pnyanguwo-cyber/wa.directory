@@ -1,7 +1,13 @@
 import { getSupabase } from '@/lib/supabase-server'
+import { SITE_URL } from '@/lib/site-url'
+
+// ISR: regenerate the sitemap once a day instead of hitting the businesses
+// table on every crawler request (the CDN-level max-age below still smooths
+// hourly fetches).
+export const revalidate = 86400
 
 export async function GET() {
-  const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+  const siteUrl = SITE_URL
 
   const { data: businesses } = await getSupabase()
     .from('businesses')

@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-
-const SITE_URL = process.env.SITE_URL || 'https://wadirectory.co.zw'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { adminGuard } from '@/lib/admin-auth'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
 
@@ -29,7 +24,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const { id, action, corrected_name } = await request.json()
@@ -81,7 +77,7 @@ export async function POST(request: Request) {
           const profileUrl = biz.slug ? `${SITE_URL}/business/${biz.slug}` : SITE_URL
           const typeLabel = req.type === 'category' ? 'category' : req.type === 'area' ? 'area' : 'city / town'
           sendWhatsAppMessage(
-            '+' + String(biz.phone).replace(/\D/g, ''),
+            '+' + digitsOnly(biz.phone),
             [
               `Hi! We couldn't approve *"${req.name}"* as your ${typeLabel}.`,
               '',

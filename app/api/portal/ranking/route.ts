@@ -3,6 +3,9 @@ import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 // Minimum gap over the current #1 fee (10 cents).
 const MIN_BID_GAP = 0.1
@@ -108,9 +111,7 @@ export async function GET(request: Request) {
     ...(spotsRes.data || []).map(s => s.business_id),
     ...(allBidsRes.data || []).map(b => b.business_id),
   ])
-  const { data: bidders } = nameIds.size
-    ? await supabase.from('businesses').select('id, name').in('id', Array.from(nameIds))
-    : { data: [] }
+  const bidders = await fetchBusinessesByIds(supabase, Array.from(nameIds), 'id, name')
   const nameById = new Map((bidders || []).map(b => [b.id, b.name]))
 
   const competition = (allBidsRes.data || []).map(b => ({
@@ -172,7 +173,7 @@ export async function POST(request: Request) {
     await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'invalid_amount', amount }, request })
     return NextResponse.json({ error: 'Enter a valid amount' }, { status: 400 })
   }
-  const payerClean = String(payer_phone || '').replace(/\D/g, '')
+  const payerClean = digitsOnly(payer_phone || '')
   if (payerClean.length < 9) {
     await logPaymentEvent({ eventType: 'bid_rejected', outcome: 'rejected', businessId, detail: { reason: 'invalid_payer_phone' }, request })
     return NextResponse.json({ error: 'Enter the EcoCash number making the payment' }, { status: 400 })
@@ -206,30 +207,31 @@ export async function POST(request: Request) {
 
   const period = currentPeriodStart()
 
-  // One live (unpaid) bid at a time per scope — reuse it when re-bidding.
-  const { data: existing } = await supabase
-    .from('bids')
-    .select('id, amount')
-    .eq('business_id', businessId)
-    .eq('category', category)
-    .eq('city', city || '')
-    .eq('period', period)
-    .eq('status', 'pending')
-    .maybeSingle()
-
-  // Current #1 holder for this scope, covering the target month (or the
-  // running month when next month has no holder yet).
-  const { data: holderSpot } = await supabase
-    .from('rank_spots')
-    .select('monthly_fee, business_id')
-    .eq('category', category)
-    .eq('city', city || '')
-    .eq('position', 1)
-    .eq('status', 'active')
-    .gte('period_end', period)
-    .order('period_start', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  // The pending-bid reuse check and the current #1 holder lookup are
+  // independent — fetch together. (The fallback holder lookup below stays
+  // sequential because it depends on the result.)
+  const [{ data: existing }, { data: holderSpot }] = await Promise.all([
+    supabase
+      .from('bids')
+      .select('id, amount')
+      .eq('business_id', businessId)
+      .eq('category', category)
+      .eq('city', city || '')
+      .eq('period', period)
+      .eq('status', 'pending')
+      .maybeSingle(),
+    supabase
+      .from('rank_spots')
+      .select('monthly_fee, business_id')
+      .eq('category', category)
+      .eq('city', city || '')
+      .eq('position', 1)
+      .eq('status', 'active')
+      .gte('period_end', period)
+      .order('period_start', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   const { data: fallbackSpot } = holderSpot
     ? { data: null }
@@ -303,8 +305,8 @@ export async function POST(request: Request) {
       additionalInfo: `Ranking bid (live auction): ${category}${city ? ` in ${city}` : ''}`,
       // resultUrl = server-to-server status updates from Paynow (webhook);
       // returnUrl = where the payer's browser lands if Paynow opens a page.
-      resultUrl: `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/api/paynow/result`,
-      returnUrl: `${process.env.SITE_URL || 'https://wadirectory.co.zw'}/portal/ranking`,
+      resultUrl: `${SITE_URL}/api/paynow/result`,
+      returnUrl: `${SITE_URL}/portal/ranking`,
     })
     if (init.ok && init.pollUrl) {
       await supabase
@@ -365,7 +367,7 @@ export async function POST(request: Request) {
         currentFee > 0 ? `Outbids current #1 ($${currentFee.toFixed(2)})` : 'Spot was open',
         `Payer EcoCash: +${payerClean}`,
         '',
-        `Review: ${process.env.SITE_URL || 'https://wadirectory.co.zw'}/admin`,
+        `Review: ${SITE_URL}/admin`,
       ].join('\n')
     ).catch(() => {})
   }

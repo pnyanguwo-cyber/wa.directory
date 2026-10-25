@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
+import { digitsOnly } from '@/lib/phone'
 
 export async function POST(request: Request) {
   try {
@@ -18,10 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No listing id(s) provided' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     // Fetch contact details before deletion so owners can be notified.
     const { data: doomed } = await supabase
@@ -40,7 +38,7 @@ export async function POST(request: Request) {
 
     // Best-effort removal notice to each owner (non-blocking).
     for (const b of doomed || []) {
-      const digits = (b.phone || '').replace(/\D/g, '')
+      const digits = digitsOnly(b.phone || '')
       if (!digits) continue
       sendWhatsAppMessage(
         '+' + digits,

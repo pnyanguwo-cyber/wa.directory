@@ -1,6 +1,7 @@
 import { getBusinessId } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import type { Business } from '@/types'
+import { slugify } from '@/lib/utils'
 
 export type PortalActor =
   | { role: 'business'; business: Business }
@@ -68,16 +69,6 @@ export async function resolveActingBusinessId(
     .maybeSingle()
 
   return data?.id || actor.business.id
-}
-
-/** Branch ids (including the HQ listing itself) the actor may act upon. */
-export async function listAccessibleBusinessIds(actor: PortalActor): Promise<string[]> {
-  if (actor.role !== 'org-hq') return [actor.business.id]
-  const { data } = await getSupabase()
-    .from('businesses')
-    .select('id')
-    .eq('org_id', actor.orgId)
-  return (data || []).map(b => b.id)
 }
 
 /** All listings in the actor's org, HQ first, for dashboards/switchers. */
@@ -223,7 +214,7 @@ export async function createOrgBranch(input: {
 
   if (error || !created) return { error: error?.message || 'Could not create the branch' }
 
-  const slug = `${displayName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').slice(0, 50) || 'branch'}-${created.id.slice(0, 8)}`
+  const slug = `${slugify(displayName, 50) || 'branch'}-${created.id.slice(0, 8)}`
   await supabase.from('businesses').update({ slug }).eq('id', created.id)
 
   return { id: created.id, slug, editToken }

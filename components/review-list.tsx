@@ -1,18 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-
 interface Review {
   id: string
   name: string
   rating: number
   comment: string
   created_at: string
-}
-
-interface ReviewListProps {
-  businessId: string
-  initialReviews?: Review[]
 }
 
 function Stars({ rating }: { rating: number }) {
@@ -32,11 +25,6 @@ function Stars({ rating }: { rating: number }) {
   )
 }
 
-function maskPhone(phone: string): string {
-  if (!phone || phone.length < 4) return 'Anonymous'
-  return phone.slice(0, 3) + '•••' + phone.slice(-3)
-}
-
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
   const now = new Date()
@@ -49,62 +37,7 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-ZW', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export default function ReviewList({ businessId, initialReviews = [] }: ReviewListProps) {
-  const [reviews, setReviews] = useState<Review[]>(initialReviews)
-  const [loading, setLoading] = useState(initialReviews.length === 0)
-
-  useEffect(() => {
-    if (initialReviews.length > 0) return
-    async function fetchReviews() {
-      try {
-        const res = await fetch(`/api/reviews?business_id=${businessId}`)
-        const data = await res.json()
-        if (data.reviews) setReviews(data.reviews)
-      } catch {}
-      setLoading(false)
-    }
-    fetchReviews()
-  }, [businessId, initialReviews.length])
-
-  function handleNewReview(review: Review) {
-    setReviews(prev => [review, ...prev])
-  }
-
-  if (loading) {
-    return (
-      <div className="space-y-3">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="animate-pulse">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-full bg-gray-200" />
-              <div className="space-y-1">
-                <div className="h-3 w-20 bg-gray-200 rounded" />
-                <div className="h-2 w-16 bg-gray-200/60 rounded" />
-              </div>
-            </div>
-            <div className="h-3 w-full bg-gray-200/60 rounded" />
-          </div>
-        ))}
-      </div>
-    )
-  }
-
-  return { reviews, handleNewReview, Stars, formatDate }
-}
-
 export function ReviewListDisplay({ reviews }: { reviews: Review[] }) {
-  function formatDate(dateStr: string): string {
-    const d = new Date(dateStr)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-    return d.toLocaleDateString('en-ZW', { month: 'short', day: 'numeric', year: 'numeric' })
-  }
-
   if (reviews.length === 0) {
     return (
       <div className="text-center py-6">

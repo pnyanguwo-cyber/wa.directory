@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { activateListingSubscription } from '@/lib/listing-activation'
-
-function getSupabase() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-}
+import { adminGuard } from '@/lib/admin-auth'
+import { SITE_URL } from '@/lib/site-url'
+import { fetchBusinessesByIds } from '@/lib/business-select'
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date)
@@ -18,7 +14,8 @@ function addDays(date: Date, days: number): Date {
 }
 
 export async function GET() {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   const supabase = getSupabase()
 
@@ -30,9 +27,7 @@ export async function GET() {
     .limit(300)
 
   const ids = [...new Set((subs || []).map(s => s.business_id))]
-  const { data: businesses } = ids.length
-    ? await supabase.from('businesses').select('id, name, slug, phone').in('id', ids)
-    : { data: [] }
+  const businesses = await fetchBusinessesByIds(supabase, ids, 'id, name, slug, phone')
 
   const bizById = new Map((businesses || []).map(b => [b.id, b]))
 
@@ -45,11 +40,21 @@ export async function GET() {
     .limit(300)
 
   const listingIds = [...new Set((listingSubs || []).map(s => s.business_id))]
-  const { data: listingBusinesses } = listingIds.length
-    ? await supabase.from('businesses').select('id, name, slug, phone, business_id, username, city, payment_status').in('id', listingIds)
-    : { data: [] }
+  const listingBusinesses = await fetchBusinessesByIds(supabase, listingIds, 'id, name, slug, phone, business_id, username, city, payment_status')
 
   const listingBizById = new Map((listingBusinesses || []).map(b => [b.id, b]))
+
+  // Support subscriptions
+  const { data: supportSubs } = await supabase
+    .from('support_subscriptions')
+    .select('id, biz_id, tier, price_usd, status, current_period_start, current_period_end, external_subscription_id, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(300)
+
+  const supportIds = [...new Set((supportSubs || []).map(s => s.biz_id))]
+  const supportBusinesses = await fetchBusinessesByIds(supabase, supportIds, 'id, name, slug, phone, business_id, username, city, payment_status')
+
+  const supportBizById = new Map((supportBusinesses || []).map(b => [b.id, b]))
 
   return NextResponse.json({
     subscriptions: (subs || []).map(s => ({ ...s, business: bizById.get(s.business_id) || null })),
@@ -57,11 +62,16 @@ export async function GET() {
       ...s,
       business: listingBizById.get(s.business_id) || null,
     })),
+    supportSubscriptions: (supportSubs || []).map(s => ({
+      ...s,
+      business: supportBizById.get(s.biz_id) || null,
+    })),
   })
 }
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const body = await request.json()
@@ -108,7 +118,7 @@ export async function POST(request: Request) {
               '',
               `Enjoy full statistics, conversations, bidding and competitor insights until ${expiresAt.toISOString().slice(0, 10)}.`,
               '',
-              'Open your portal to explore: ' + (process.env.SITE_URL || 'https://wadirectory.co.zw') + '/portal',
+              'Open your portal to explore: ' + (SITE_URL) + '/portal',
             ].join('\n')
           ).catch(() => {})
         }
@@ -225,6 +235,93 @@ export async function POST(request: Request) {
           .eq('id', existing.business_id)
       }
 
+      return NextResponse.json({ success: true })
+    }
+
+    // === IT CONCIERGE SUPPORT SUBSCRIPTION ACTIONS ===
+
+    if (body.action === 'activate_support') {
+      const { subscription_id, amount } = body
+      if (!subscription_id) return NextResponse.json({ error: 'subscription_id is required' }, { status: 400 })
+
+      const { data: existing } = await supabase
+        .from('support_subscriptions')
+        .select('biz_id, tier')
+        .eq('id', subscription_id)
+        .maybeSingle()
+
+      const now = new Date()
+      const expiresAt = addDays(now, 30)
+
+      const { error } = await supabase
+        .from('support_subscriptions')
+        .update({
+          status: 'active',
+          price_usd: Number(amount || 0),
+          current_period_start: now.toISOString(),
+          current_period_end: expiresAt.toISOString(),
+        })
+        .eq('id', subscription_id)
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+      if (existing) {
+        const { data: business } = await supabase
+          .from('businesses')
+          .select('name, phone')
+          .eq('id', existing.biz_id)
+          .maybeSingle()
+        if (business?.phone) {
+          sendWhatsAppMessage(
+            business.phone,
+            [
+              '🎉 *Your IT Concierge support is active!*',
+              '',
+              `Your ${existing.tier} package is active until ${expiresAt.toISOString().slice(0, 10)}.`,
+              '',
+              'Your dedicated concierge will be in touch via WhatsApp shortly.',
+            ].join('\n')
+          ).catch(() => {})
+        }
+      }
+      return NextResponse.json({ success: true })
+    }
+
+    if (body.action === 'extend_support') {
+      const { subscription_id, days } = body
+      if (!subscription_id || !days) return NextResponse.json({ error: 'subscription_id and days are required' }, { status: 400 })
+
+      const { data: existing } = await supabase
+        .from('support_subscriptions')
+        .select('current_period_end')
+        .eq('id', subscription_id)
+        .maybeSingle()
+
+      if (!existing) return NextResponse.json({ error: 'Support subscription not found' }, { status: 404 })
+
+      const base = existing.current_period_end && new Date(existing.current_period_end) > new Date()
+        ? new Date(existing.current_period_end)
+        : new Date()
+      const expiresAt = addDays(base, Number(days))
+
+      const { error } = await supabase
+        .from('support_subscriptions')
+        .update({ status: 'active', current_period_end: expiresAt.toISOString() })
+        .eq('id', subscription_id)
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true })
+    }
+
+    if (body.action === 'cancel_support') {
+      const { subscription_id } = body
+      if (!subscription_id) return NextResponse.json({ error: 'subscription_id is required' }, { status: 400 })
+
+      const { error } = await supabase
+        .from('support_subscriptions')
+        .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+        .eq('id', subscription_id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       return NextResponse.json({ success: true })
     }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 
 // Lightweight payment-status probe used by the /pay confirmation screen and
 // the listing-form splash to auto-detect webhook activation: the client polls
@@ -12,10 +12,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'business_id is required' }, { status: 400 })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const supabase = getSupabase()
 
   const { data: business } = await supabase
     .from('businesses')

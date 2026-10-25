@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import { getInitials } from '@/lib/utils'
 
 export type QrColorTheme = 'emerald' | 'obsidian' | 'royal' | 'rose' | 'cyber' | 'classic' | 'transparent'
 export type FrameStyle = 'luxury-card' | 'minimal' | 'poster' | 'counter-stand' | 'raw-qr'
@@ -221,6 +222,7 @@ export interface QrCardProps {
   fullPage?: boolean
   whatsappNumber?: string
   catalogUrl?: string
+  username?: string
 }
 
 export default function QrCard({
@@ -239,6 +241,7 @@ export default function QrCard({
   fullPage = false,
   whatsappNumber,
   catalogUrl,
+  username,
 }: QrCardProps) {
   const uid = useId().replace(/:/g, '_')
   const qrRef = useRef<HTMLDivElement>(null)
@@ -307,14 +310,7 @@ export default function QrCard({
   const theme = QR_THEMES[currentTheme]
   const displayName = businessName || title || 'Official WhatsApp Business'
   const displayLocation = location || 'Zimbabwe'
-  const initials =
-    displayName
-      .split(' ')
-      .filter(Boolean)
-      .map(w => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) || 'WA'
+  const initials = getInitials(displayName, 'WA')
 
   const fontClass =
     fontStyle === 'serif' ? 'font-serif' : fontStyle === 'mono' ? 'font-mono' : 'font-sans'
@@ -817,7 +813,7 @@ export default function QrCard({
               fontFamily="inherit"
               letterSpacing="0.5"
             >
-              wadirectory.co.zw • No contact saving required
+              {username ? `wa.directory/u/${username}` : 'wadirectory.co.zw'} • No contact saving required
             </text>
           </g>
         )}
@@ -970,7 +966,7 @@ export default function QrCard({
               </g>
 
               <text x="0" y="248" fill={theme.subtextColor} fontSize="10.5" fontWeight="600" fontFamily="inherit">
-                wadirectory.co.zw • Direct Chat
+                {username ? `wa.directory/u/${username}` : 'wadirectory.co.zw'} • Direct Chat
               </text>
             </g>
 

@@ -8,16 +8,11 @@ import CategoryDoodle from '@/components/category-doodle'
 import TrackLink from '@/components/track-link'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio } from '@/lib/utils'
+import { cleanBio, getInitials } from '@/lib/utils'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, whatsappHref, callHref } from '@/components/contact'
 
 function LogoInitials({ name, url }: { name: string; url?: string }) {
-  const initials = name
-    .split(' ')
-    .map(w => w[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  const initials = getInitials(name)
 
   if (url) {
     return (
@@ -112,6 +107,12 @@ export default function BusinessCard({ business }: { business: Business }) {
                 <p className="text-xs text-whatsapp-600 font-medium items-center gap-1 mt-0.5 hidden sm:flex">
                   @{business.whatsapp_username}
                   <span className="text-text-secondary text-[10px] font-normal">Business Username on WhatsApp</span>
+                </p>
+              )}
+              {business.username && (
+                <p className="text-xs text-whatsapp-600 font-medium items-center gap-1 mt-0.5 hidden sm:flex">
+                  <span className="text-text-secondary text-[10px] font-normal">Short URL:</span>
+                  <a href={`/u/${business.username}`} className="underline hover:text-whatsapp-700">wa.directory/u/{business.username}</a>
                 </p>
               )}
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">

@@ -6,6 +6,9 @@
 // in search instantly.
 
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { SITE_URL } from '@/lib/site-url'
+import { getBotSetting } from '@/lib/bot-settings'
+import { renderChannelPitch } from '@/lib/bot-templates'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -14,7 +17,7 @@ export async function activateListingSubscription(
 ): Promise<{ ok: boolean; error?: string; businessId?: string }> {
   const { data: sub } = await supabase
     .from('listing_subscriptions')
-    .select('id, business_id, plan, pro_assistance, amount')
+    .select('id, business_id, plan, pro_assistance, amount, payer_phone')
     .eq('id', subscriptionId)
     .maybeSingle()
 
@@ -69,7 +72,7 @@ export async function activateListingSubscription(
       .maybeSingle()
 
     if (business?.phone) {
-      const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+      const siteUrl = SITE_URL
       sendWhatsAppMessage(
         business.phone,
         [
@@ -79,6 +82,38 @@ export async function activateListingSubscription(
           `Active until ${expiresAt.toISOString().slice(0, 10)}.`,
           '',
           `Renew anytime: ${siteUrl}/pay`,
+        ].join('\n')
+      ).catch(() => {})
+
+      // Channel pitch: now that the supplier is live, tell them where buyer
+      // leads surface (free-form while the session window is open).
+      const chOverride = await getBotSetting('channel_link')
+      const chLink = (chOverride || process.env.CHANNEL_LINK || '').trim()
+      if (chLink) {
+        sendWhatsAppMessage(business.phone, renderChannelPitch(chLink)).catch(() => {})
+      }
+    }
+
+    // When someone pays for a business other than their own, the payer should
+    // also hear the confirmation (the owner notify above targets the listing
+    // phone). payer_phone is stored in 07… format; WhatsApp needs 263….
+    const payerPhone = (sub as { payer_phone?: string | null }).payer_phone
+    const payerWa = payerPhone
+      ? payerPhone.startsWith('263')
+        ? payerPhone
+        : payerPhone.startsWith('0')
+          ? `263${payerPhone.slice(1)}`
+          : null
+      : null
+    if (payerWa && business?.phone !== payerWa) {
+      sendWhatsAppMessage(
+        payerWa,
+        [
+          '🎉 *Payment received!*',
+          '',
+          `${business?.name || 'The listing'} is paid and active until ${expiresAt.toISOString().slice(0, 10)}.`,
+          '',
+          'Thank you for supporting the directory!',
         ].join('\n')
       ).catch(() => {})
     }

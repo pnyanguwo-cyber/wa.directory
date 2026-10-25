@@ -32,6 +32,8 @@ const config: Config = {
         xl: '14px',
         '2xl': '18px',
         '3xl': '24px',
+        '4xl': '32px',
+        pill: '9999px',
       },
       boxShadow: {
         card: '0 2px 8px -2px rgba(11,20,26,0.06), 0 1px 4px -1px rgba(11,20,26,0.04)',
@@ -42,15 +44,30 @@ const config: Config = {
         'neo-flat': '5px 5px 12px #d1d5db, -5px -5px 12px #ffffff',
         'neo-inset': 'inset 2px 2px 5px rgba(0,0,0,0.06), inset -2px -2px 5px rgba(255,255,255,0.9)',
         'glass-lift': '0 10px 32px 0 rgba(11, 20, 26, 0.08)',
+        sheen: '0 0 0 1px rgba(255,255,255,0.18) inset, 0 1px 2px 0 rgba(0,0,0,0.05)',
+        'card-premium': '0 1px 3px rgba(0,0,0,0.03), 0 8px 24px -4px rgba(17,27,33,0.06)',
+        'card-lift': '0 2px 8px rgba(0,0,0,0.04), 0 20px 40px -10px rgba(17,27,33,0.12)',
+        'pill-sheen': 'inset 0 1px 0 0 rgba(255,255,255,0.35), 0 2px 8px rgba(0,0,0,0.08)',
+        'glow-subtle': '0 0 32px -4px rgba(37,211,102,0.20)',
+      },
+      letterSpacing: {
+        'tighter-hero': '-0.035em',
+        'tight-title': '-0.025em',
+        eyebrow: '0.14em',
       },
       animation: {
         'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         shimmer: 'shimmer 1.5s infinite',
+        'float-slow': 'floatSlow 4s ease-in-out infinite',
       },
       keyframes: {
         shimmer: {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
+        },
+        floatSlow: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-6px)' },
         },
       },
     },

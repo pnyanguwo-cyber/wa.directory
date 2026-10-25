@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { isAdmin } from '@/lib/admin-auth'
+import { getSupabase } from '@/lib/supabase-server'
+import { adminGuard } from '@/lib/admin-auth'
 
 const ALLOWED = new Set(['active', 'pending', 'expired', 'unpaid'])
 
 export async function POST(request: Request) {
-  if (!isAdmin()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const denied = adminGuard()
+  if (denied) return denied
 
   try {
     const { id, payment_status } = await request.json()
@@ -14,10 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Valid id and payment_status (active/pending/expired/unpaid) are required.' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { error } = await supabase
       .from('businesses')

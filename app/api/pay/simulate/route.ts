@@ -7,6 +7,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { paymentSimulationApiEnabled } from '@/lib/pay-simulation'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import type { PlanType } from '@/types'
+import { SITE_URL } from '@/lib/site-url'
 
 // DEV-ONLY payment simulation: confirms a payment exactly the way a real
 // EcoCash payment is confirmed — same shared activation helpers as the
@@ -294,7 +295,7 @@ async function simulatePremium(supabase: Supabase, body: Record<string, unknown>
         '',
         `Enjoy full statistics, conversations, bidding and competitor insights until ${expiresAt.toISOString().slice(0, 10)}.`,
         '',
-        'Open your portal to explore: ' + (process.env.SITE_URL || 'https://wadirectory.co.zw') + '/portal',
+        'Open your portal to explore: ' + (SITE_URL) + '/portal',
       ].join('\n')
     ).catch(() => {})
   }

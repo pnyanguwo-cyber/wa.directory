@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPortalActor, createOrgBranch, listPendingBranchInvites } from '@/lib/org-auth'
 import { toFullPhone } from '@/lib/phone'
 import { getSupabase } from '@/lib/supabase-server'
+import { SITE_URL } from '@/lib/site-url'
 
 // HQ-only branch self-service:
 //   GET  — pending branch invites (created, awaiting manager setup / approval)
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
   // Account-setup invite to the branch manager's WhatsApp. The manager proves
   // ownership by possessing this private link + their listed number, then
   // sets their own password. Best-effort, non-blocking.
-  const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+  const siteUrl = SITE_URL
   const setupLink = `${siteUrl}/account-setup?token=${result.editToken}`
   const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
   sendWhatsAppMessage(
@@ -194,7 +195,7 @@ export async function PATCH(request: Request) {
     .eq('id', branchId)
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
-  const siteUrl = process.env.SITE_URL || 'https://wadirectory.co.zw'
+  const siteUrl = SITE_URL
   const setupLink = `${siteUrl}/account-setup?token=${newToken}`
   const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
   sendWhatsAppMessage(

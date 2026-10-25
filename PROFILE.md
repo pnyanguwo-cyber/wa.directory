@@ -15,7 +15,7 @@ Live: `https://wadirectory.vercel.app` (also `https://wadirectory.co.zw`)
 | Database | Supabase (PostgreSQL) |
 | ORM/Client | `@supabase/supabase-js` (service-role on server, anon on client) |
 | WhatsApp | Meta WhatsApp Cloud API (webhook + templates + interactive messages) |
-| AI | Google Gemini 2.0 Flash (`gemini-2.0-flash`) for auto-generated descriptions and smart search fallback |
+| AI | Google Gemini Flash (`gemini-3.8-flash`, overridable via `GEMINI_MODEL`) for SEO blurbs, search expansion, voice-note/photo perception in the bot |
 | Auth | Signed token in HttpOnly cookie (HMAC-SHA256, own implementation, no external provider) |
 | QR codes | `qrcode.react` + server-side `/qr/[slug]` redirect route |
 | OG images | `@vercel/og` |

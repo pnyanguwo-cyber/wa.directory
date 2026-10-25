@@ -1,17 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import './globals.css'
-import dynamic from 'next/dynamic'
-import Navbar from '@/components/navbar'
-import Footer from '@/components/footer'
-import BannerStrip from '@/components/banner-strip'
-import WhatsAppSupportButton from '@/components/whatsapp-support-button'
-import Image from 'next/image'
-
-const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
-const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
-const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
-const MobileFloatingActions = dynamic(() => import('@/components/mobile-floating-actions'), { ssr: false })
+import { SITE_URL } from '@/lib/site-url'
 
 // Self-hosted Inter variable font (weights 100-900, latin subset).
 // No network dependency at build/dev time — Google Fonts being briefly
@@ -26,7 +16,7 @@ const inter = localFont({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.SITE_URL || 'https://wadirectory.co.zw'),
+  metadataBase: new URL(SITE_URL),
   title: 'WA Directory - Find any business on WhatsApp',
   description: 'AI finds shops, services, prices instantly',
   manifest: '/manifest.webmanifest',
@@ -57,42 +47,14 @@ export const viewport: Viewport = {
   themeColor: '#25D366',
 }
 
+// Root layout is deliberately bare: fonts, metadata and globals only.
+// The WA Directory chrome (navbar, footer, wallpaper) lives in the
+// (directory) route group so auto-generated business websites (/site/*)
+// render full-bleed with their own branded header/footer.
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} min-h-screen font-sans`}>
-        <SiteSplash />
-        <Navbar />
-          <BannerStrip />
-          <PWARegistration />
-          <InstallPWA />
-        <MobileFloatingActions />
-        {/* Global Floor / Background Wallpaper */}
-          <div
-            aria-hidden="true"
-            className="fixed inset-0 -z-30 pointer-events-none select-none"
-          >
-            <Image
-              src="/wadbody.webp"
-              alt=""
-              fill
-              sizes="100vw"
-              className="object-cover opacity-90 transition-opacity duration-500"
-            />
-          </div>
-          {/* Translucent overlay for crisp card contrast */}
-          <div
-            aria-hidden="true"
-            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-20 bg-white/40 backdrop-blur-[0.5px]"
-          />
-          {/* Ambient radial accent lighting */}
-          <div
-            aria-hidden="true"
-            className="fixed inset-0 h-full w-full pointer-events-none select-none -z-10 bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(37,211,102,0.12),transparent)]"
-          />
-        <main className="relative pb-16 md:pb-0">{children}</main>
-        <Footer />
-      </body>
+      <body className={`${inter.variable} min-h-screen font-sans`}>{children}</body>
     </html>
   )
 }

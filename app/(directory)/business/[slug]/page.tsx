@@ -1,0 +1,848 @@
+import { getSupabase } from '@/lib/supabase-server'
+import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
+import Link from 'next/link'
+import Image from 'next/image'
+import { notFound } from 'next/navigation'
+import dynamic from 'next/dynamic'
+import type { Metadata } from 'next'
+import WhatsAppButton from '@/components/whatsapp-button'
+import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, callHref } from '@/components/contact'
+import { CartProvider, AddToCartChip } from '@/components/order/cart'
+import ShareButton from '@/components/share-button'
+import StatsPing from '@/components/stats-ping'
+import TrackLink from '@/components/track-link'
+import BusinessCard from '@/components/business-card'
+import LogoImage from '@/components/logo-image'
+import BusinessCardPrint from '@/components/business-card-print'
+import { Suspense } from 'react'
+import { SkeletonProfile } from '@/components/skeleton-card'
+import type { Business, BusinessItem } from '@/types'
+import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
+import { isYellowPages } from '@/lib/category-style'
+import { getCategoryImage } from '@/data/category-images'
+import { cleanBio, getInitials, formatPrice } from '@/lib/utils'
+import CategoryDoodle from '@/components/category-doodle'
+import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
+import { SITE_URL } from '@/lib/site-url'
+import { digitsOnly } from '@/lib/phone'
+
+// Lazy: qrcode.react + the QR studio stay out of the profile page's main chunk;
+// the QR renders lower on the page inside the contact grid.
+const QrCard = dynamic(() => import('@/components/qr-card'))
+
+import ReviewSection from '@/components/review-section'
+
+export const revalidate = 3600
+export const dynamicParams = true
+
+export async function generateStaticParams() {
+  const { data } = await getSupabase()
+    .from('businesses')
+    .select('slug, id')
+
+  return (data || []).map(b => ({ slug: b.slug || b.id }))
+}
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const { data } = await getSupabase()
+    .from('businesses')
+    .select('name, bio, city')
+    .eq('slug', params.slug)
+    .single() as { data: { name: string; bio: string; city: string } | null }
+
+  if (!data) return {}
+
+  return {
+    title: `${data.name} | WA Directory`,
+    description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp in ${data.city || 'Zimbabwe'}.`,
+    openGraph: {
+      title: `${data.name} | WA Directory`,
+      description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp.`,
+      siteName: 'WA Directory',
+      locale: 'en_ZW',
+      type: 'profile',
+    },
+  }
+}
+
+function Stars({ rating }: { rating: number }) {
+  const stars = Math.round(rating)
+  return (
+    <div className="flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <svg
+          key={i}
+          className={`w-5 h-5 ${i <= stars ? 'text-yellow-500' : 'text-gray-300'}`}
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+      ))}
+    </div>
+  )
+}
+
+function LogoDisplay({ name, url }: { name: string; url?: string }) {
+  const initials = getInitials(name)
+
+  if (url) {
+    return (
+      <LogoImage
+        src={url}
+        alt={name}
+        width={80}
+        height={80}
+        sizes="(max-width: 640px) 56px, 80px"
+        className="w-14 h-14 sm:w-20 sm:h-20 rounded-full object-cover border-4 border-white -mt-7 sm:-mt-10 relative z-10"
+      />
+    )
+  }
+
+  return (
+    <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-whatsapp-100 border-4 border-white -mt-7 sm:-mt-10 relative z-10 flex items-center justify-center">
+      <span className="text-whatsapp-700 font-bold text-base sm:text-xl">{initials}</span>
+    </div>
+  )
+}
+
+function CatalogItems({ catalogLink }: { catalogLink: string }) {
+  return (
+    <div className="space-y-3">
+      <a
+        href={catalogLink}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="card p-4 flex items-center justify-between hover:scale-[1.01] transition-all duration-150"
+      >
+        <div>
+          <p className="font-medium text-text-primary">View Full Catalog</p>
+          <p className="text-sm text-text-secondary">Browse all products and services</p>
+        </div>
+        <svg className="w-5 h-5 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        </svg>
+      </a>
+    </div>
+  )
+}
+
+async function BusinessContent({ slug }: { slug: string }) {
+  let { data: business } = await getSupabase()
+    .from('businesses')
+    .select(BUSINESS_PROFILE_COLUMNS)
+    .eq('slug', slug)
+    .single() as { data: Business | null }
+
+  if (!business) {
+    const { data: fallback } = await getSupabase()
+      .from('businesses')
+      .select(BUSINESS_PROFILE_COLUMNS)
+      .eq('id', slug)
+      .single() as { data: Business | null }
+    business = fallback
+  }
+
+  if (!business) notFound()
+
+  // Social profiles linked by the business (only set platforms are rendered).
+  const socialLinks = getSocialLinks(business.site_socials)
+
+  // Organization (multi-branch) context: org identity + sibling locations.
+  // Single-location businesses have no org_id — the queries below are skipped.
+  let org: { id: string; name: string; slug: string | null } | null = null
+  let orgLocations: { id: string; name: string; slug: string | null; city: string; isHq: boolean; branchLabel: string }[] = []
+  if (business.org_id) {
+    const [orgRes, locRes] = await Promise.all([
+      getSupabase().from('organizations').select('id, name, slug').eq('id', business.org_id).maybeSingle(),
+      getSupabase()
+        .from('businesses')
+        .select('id, name, slug, city, is_hq, branch_label, verified')
+        .eq('org_id', business.org_id)
+        .eq('verified', true)
+        .order('is_hq', { ascending: false })
+        .order('branch_label', { ascending: true })
+        .limit(50),
+    ])
+    org = orgRes.data || null
+    orgLocations = (locRes.data || []).map(l => ({
+      id: l.id,
+      name: l.name,
+      slug: l.slug,
+      city: l.city || '',
+      isHq: l.is_hq === true,
+      branchLabel: l.branch_label || '',
+    }))
+  }
+
+  const [approvedCategoryNames, approvedAreaNames, statsRes, similarRes, ratingsRes, itemsRes] = await Promise.all([
+    getApprovedCategoryNames(),
+    getApprovedAreaNames(business.city || ''),
+    getSupabase()
+      .from('daily_stats')
+      .select('count')
+      .eq('business_id', business.id)
+      .eq('type', 'profile_view')
+      .gte('date', new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)),
+    getSupabase()
+      .from('businesses')
+      .select(BUSINESS_PROFILE_COLUMNS)
+      .eq('verified', true)
+      .neq('id', business.id)
+      .contains('category', business.category.slice(0, 1))
+      .order('rating', { ascending: false })
+      .limit(6),
+    getSupabase()
+      .from('ratings')
+      .select('id, name, customer_phone, rating, comment, created_at')
+      .eq('business_id', business.id)
+      .order('created_at', { ascending: false })
+      .limit(50),
+    getSupabase()
+      .from('business_items')
+      .select('id, business_id, name, slug, price, image_url, is_active')
+      .eq('business_id', business.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(24),
+  ])
+
+  const monthlyViews = (statsRes.data || []).reduce((a, r) => a + Number(r.count), 0)
+  const similar = similarRes.data || []
+  const ratings = ratingsRes.data || []
+  const shopItems = (((itemsRes.data || []) as unknown) as BusinessItem[]) || []
+
+  const businessAreas = business.areas?.length
+    ? business.areas
+    : business.area
+      ? [business.area]
+      : []
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: business.name,
+    telephone: business.phone ? `+${business.phone.replace(/[^0-9]/g, '')}` : undefined,
+    address: {
+      '@type': 'PostalAddress',
+      addressLocality: business.city || 'Zimbabwe',
+    },
+    description: business.bio,
+    ...(business.rating > 0 ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: business.rating,
+        reviewCount: business.review_count,
+      },
+    } : {}),
+    ...(org ? { parentOrganization: { '@type': 'Organization', name: org.name } } : {}),
+  }
+
+  const shareSlug = business.slug || business.id
+  const phoneClean = digitsOnly(business.phone || '')
+  const yellow = isYellowPages(business.category)
+  // Voice listings (landlines & hotlines) have no WhatsApp chat — a Call button replaces it.
+  const voice = business.phone_type === 'voice'
+  // S18 order handoff digits: prefer the WhatsApp channel's own wa.me number
+  // (voice listings may still carry one), else the regular phone digits.
+  const waLinkDigits = /wa\.me\/(\d+)/.exec(business.whatsapp_link || '')?.[1] || null
+  const orderDigits = !voice && phoneClean ? phoneClean : waLinkDigits || ''
+  const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
+  // Voice-only listings get a one-tap dial QR instead of a chat QR.
+  const qrUrl = voice
+    ? (callHref(voiceNumber(business)) || business.whatsapp_link || '')
+    : phoneClean
+      ? `https://wa.me/${phoneClean}?text=${qrMessage}`
+      : (business.whatsapp_link || '')
+  // One-tap turn-by-turn directions when the address was Google-verified;
+  // falls back to a text search otherwise.
+  const hasCoords = typeof business.lat === 'number' && typeof business.lng === 'number'
+  const directionsHref = hasCoords
+    ? `https://www.google.com/maps/dir/?api=1&destination=${business.lat},${business.lng}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(business.address + ', ' + (business.city || 'Zimbabwe') + ', Zimbabwe')}`
+  const areaDirectionsHref = hasCoords
+    ? directionsHref
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((businessAreas.length ? businessAreas[0] + ', ' : '') + (business.city || 'Zimbabwe'))}`
+
+  return (
+    <>
+      <CartProvider
+        business={{
+          slug: shareSlug,
+          name: business.name,
+          city: business.city,
+          whatsappDigits: orderDigits,
+        }}
+      >
+      <StatsPing businessId={business.id} type="profile_view" category={business.category[0] || ''} city={business.city || ''} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
+        <div className={`bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border shadow-soft-lift p-3 sm:p-6 ${
+          yellow
+            ? 'from-amber-50/90 via-amber-50/70 to-amber-100/30 border-amber-300/60'
+            : 'from-white/85 via-white/80 to-whatsapp-50/20 border-white/70'
+        }`}>
+          <div className="flex items-center justify-between mb-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-4 py-2 text-sm font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              Back
+            </Link>
+            <ShareButton businessSlug={shareSlug} businessName={business.name} businessId={business.id} username={(business as { username?: string }).username} />
+          </div>
+
+          <div className="card overflow-hidden">
+            <div className="h-20 sm:h-40 relative overflow-hidden">
+              {getCategoryImage(business.category) ? (
+                <Image
+                  src={getCategoryImage(business.category)!}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 100vw, 768px"
+                  className="object-cover"
+                />
+              ) : (
+                <div className={`w-full h-full bg-gradient-to-r ${
+                  yellow
+                    ? 'from-amber-100 via-amber-200 to-yellow-200'
+                    : 'from-whatsapp-100 to-whatsapp-200'
+                }`} />
+              )}
+              <CategoryDoodle
+                categories={business.category}
+                strokeWidth={0.9}
+                className={`absolute right-3 bottom-0 translate-y-3 w-24 h-24 sm:w-40 sm:h-40 ${
+                  yellow
+                    ? 'text-amber-700/40'
+                    : 'text-whatsapp-700/20'
+                }`}
+              />
+              {yellow && (
+                <span className="badge-yellow-pages absolute left-3 top-3">★ Yellow Pages</span>
+              )}
+            </div>
+
+            <div className="px-4 sm:px-6">
+              <LogoDisplay name={business.name} url={business.logo_url} />
+            </div>
+
+            <div className="p-3 sm:p-6 pt-2 sm:pt-3 pb-20 sm:pb-6">
+              <div className="flex items-center gap-2 sm:gap-3 mb-1.5 sm:mb-2 flex-wrap">
+                <h1 className="text-xl sm:text-3xl font-bold text-text-primary">{business.name}</h1>
+                {business.verified && (
+                  <span className="badge-verified">
+                    <svg viewBox="0 0 24 24" fill="none">
+                      <path d="M23 12L21.2 14.5L21.5 17.5L18.7 18.7L17.5 21.5L14.5 21.2L12 23L9.5 21.2L6.5 21.5L5.3 18.7L2.5 17.5L2.8 14.5L1 12L2.8 9.5L2.5 6.5L5.3 5.3L6.5 2.5L9.5 2.8L12 1L14.5 2.8L17.5 2.5L18.7 5.3L21.5 6.5L21.2 9.5Z" fill="#0095F6" stroke="white" strokeWidth="0.8" />
+                      <path d="M9.5 15.5L7 13L5.5 14.5L9.5 18.5L18.5 9.5L17 8L9.5 15.5Z" fill="white" />
+                    </svg>
+                  </span>
+                )}
+              </div>
+              {(business as { username?: string }).username && (
+                <p className="text-xs sm:text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-1">
+                  @{(business as { username: string }).username}
+                  <span className="text-text-secondary text-[10px] font-normal">WA Directory handle</span>
+                </p>
+              )}
+              {(business as { business_id?: string }).business_id && (
+                <p className="text-[10px] sm:text-xs text-text-secondary font-mono mb-1.5">
+                  Business ID: {(business as { business_id: string }).business_id}
+                </p>
+              )}
+              {business.whatsapp_username && (
+                <p className="text-xs sm:text-sm text-whatsapp-600 font-medium flex items-center gap-1.5 mb-1.5 sm:mb-2">
+                  @{business.whatsapp_username}
+                  <span className="text-text-secondary text-[10px] sm:text-xs font-normal">Business Username on WhatsApp</span>
+                </p>
+              )}
+
+              <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-4">
+                <Stars rating={business.rating} />
+                <span className="text-text-secondary text-xs sm:text-sm">
+                  ({business.review_count} review{business.review_count !== 1 ? 's' : ''})
+                </span>
+              </div>
+
+              {org && orgLocations.length > 1 && (() => {
+                const others = orgLocations.filter(l => l.id !== business.id)
+                if (others.length === 0) return null
+                return (
+                  <div className="bg-gradient-to-r from-whatsapp-50 to-transparent border border-whatsapp-200 rounded-2xl p-3.5 mb-3 sm:mb-4">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-whatsapp-700 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                      </svg>
+                      Part of {org.name}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {others.slice(0, 8).map(l => (
+                        <Link
+                          key={l.id}
+                          href={`/business/${l.slug || l.id}`}
+                          className="inline-flex items-center gap-1 bg-white border border-whatsapp-200 rounded-full px-2.5 py-1 text-[11px] font-semibold text-whatsapp-800 hover:bg-whatsapp-50 transition-colors"
+                        >
+                          {l.isHq ? '📍 HQ' : l.branchLabel || l.city || l.name}
+                        </Link>
+                      ))}
+                      {others.length > 8 && (
+                        <span className="text-[11px] text-text-secondary self-center">+{others.length - 8} more</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {monthlyViews > 0 && (
+                <div className="mb-2 sm:mb-4">
+                  <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+                    <span className="text-[10px] sm:text-xs font-semibold text-text-secondary">Popularity</span>
+                    <span className="text-[10px] sm:text-xs font-bold text-whatsapp-700">{monthlyViews} profile views this month</span>
+                  </div>
+                  <div className="h-1.5 sm:h-2 bg-surface rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-whatsapp-400 to-whatsapp-600 rounded-full"
+                      style={{ width: `${Math.min(100, 15 + monthlyViews * 0.85)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4 flex-wrap">
+                {businessAreas.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
+                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-text-secondary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {businessAreas.map((a, i) => {
+                      const isPending = !approvedAreaNames.has(a)
+                      return (
+                        <span
+                          key={a}
+                          className={`inline-flex items-center gap-0.5 sm:gap-1 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-0.5 text-[10px] sm:text-xs font-medium border ${
+                            i === 0
+                              ? 'bg-orange-50 text-orange-800 border-orange-300'
+                              : isPending
+                                ? 'bg-gray-100 text-gray-500 border-gray-200'
+                                : 'bg-surface text-text-secondary border-gray-200'
+                          }`}
+                        >
+                          {i === 0 && (
+                            <>
+                              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" aria-hidden="true" />
+                              <span className="font-semibold">Primary</span>
+                            </>
+                          )}
+                          {a}
+                          {isPending && <span className="text-[10px] font-semibold uppercase tracking-wide">Pending</span>}
+                        </span>
+                      )
+                    })}
+                    {business.city && (
+                      <span className="text-text-secondary text-sm">{business.city}</span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-text-secondary text-sm flex items-center gap-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    {[business.city, 'Zimbabwe'].filter(Boolean).join(', ') || business.location}
+                  </p>
+                )}
+                {business.price_range && (
+                  <span className="bg-surface text-text-secondary text-xs sm:text-sm px-2 py-0.5 sm:px-2.5 sm:py-0.5 rounded flex items-center gap-1">
+                    <span>{business.price_range.startsWith('$') ? '' : '$'}</span>
+                    {business.price_range}
+                  </span>
+                )}
+                {business.website && (
+                  <TrackLink
+                    href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
+                    businessId={business.id}
+                    type="click_website"
+                    className="text-whatsapp-700 text-xs sm:text-sm flex items-center gap-1 hover:underline"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 010 5.656l-4 4a4 4 0 01-5.656-5.656l1.707-1.707M10.172 13.828a4 4 0 010-5.656l4-4a4 4 0 015.656 5.656l-1.707 1.707" />
+                    </svg>
+                    {business.website.replace(/^https?:\/\//, '')}
+                  </TrackLink>
+                )}
+              </div>
+
+              {business.bio && (
+                <div className="mb-3 sm:mb-6">
+                  <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-1.5 sm:mb-2">About</h2>
+                  <p className="text-text-secondary leading-relaxed text-xs sm:text-sm">{cleanBio(business.bio)}</p>
+                </div>
+              )}
+
+              {business.category.length > 0 && (
+                <div className="mb-3 sm:mb-6">
+                  <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-1.5 sm:mb-2">Categories</h2>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                    {business.category.map((cat, i) => {
+                      const isPending = !approvedCategoryNames.has(cat)
+                      return (
+                        <span
+                          key={i}
+                          className={`inline-flex items-center gap-1 sm:gap-1.5 rounded-full px-2 py-0.5 sm:px-3 sm:py-1 text-xs sm:text-sm border ${
+                            isPending
+                              ? 'bg-gray-100 text-gray-500 border-gray-200'
+                              : isYellowPages([cat])
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
+                          }`}
+                        >
+                          {cat}
+                          {isPending && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">Pending</span>
+                          )}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {business.category.some(c => !approvedCategoryNames.has(c)) && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      Greyed categories are awaiting admin approval and will appear in search once approved.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6 items-start">
+                {(qrUrl || business.whatsapp_link) && (
+                  <div className="w-full md:w-[280px] lg:w-[310px] shrink-0">
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">{voice ? 'Scan to call' : 'Scan to chat'}</h2>
+                    <QrCard
+                      value={qrUrl}
+                      businessName={business.name}
+                      businessSlug={business.slug || business.id}
+                      location={[businessAreas.length ? businessAreas[0] : '', business.city, 'Zimbabwe'].filter(Boolean).join(', ')}
+                      verified={business.verified}
+                      title={voice ? 'Scan to call' : 'Scan to chat'}
+                      subtitle={voice ? 'Scan with your phone camera to call the business' : 'Scan with your phone camera to start a chat'}
+                      downloadName={`${business.slug || 'business'}-qr.png`}
+                      size={200}
+                      interactive={true}
+                      username={(business as { username?: string }).username}
+                    />
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-0 w-full space-y-4 sm:space-y-5">
+                  {/* Quick Contact */}
+                  <div>
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Quick Contact</h2>
+                    <div className="flex flex-wrap gap-2">
+                      {hasWhatsAppChannel(business) && (
+                        <a
+                          href={business.whatsapp_link || `https://wa.me/${phoneClean}?text=${qrMessage}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91C21.95 6.45 17.5 2 12.04 2z" />
+                          </svg>
+                          WhatsApp
+                        </a>
+                      )}
+                      {hasVoiceChannel(business) && (
+                        <a
+                          href={callHref(voiceNumber(business))}
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                            <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                          </svg>
+                          Call
+                        </a>
+                      )}
+                      {business.website && (
+                        <a
+                          href={business.website.startsWith('http') ? business.website : `https://${business.website}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5a17.92 17.92 0 01-8.716-2.247m0 0A8.966 8.966 0 013 12c0-1.632.523-3.14 1.412-4.378" />
+                          </svg>
+                          Website
+                        </a>
+                      )}
+                      {business.generate_site && (
+                        <a
+                          href={`/site/${business.slug || business.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 2a10 10 0 1 0 10 10c0-5.5-4.5-10-10-10Z" />
+                          </svg>
+                          My Website
+                        </a>
+                      )}
+                      {business.catalog_link && (
+                        <a
+                          href={business.catalog_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.251 2.251 0 014.5 9v.878m13.5-3A2.251 2.251 0 0019.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122" />
+                          </svg>
+                          Catalog
+                        </a>
+                      )}
+                    </div>
+                    {socialLinks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary mb-2">Follow us</p>
+                        <div className="flex flex-wrap gap-2">
+                          {socialLinks.map(s => (
+                            <a
+                              key={s.key}
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={SOCIAL_META[s.key].label}
+                              title={SOCIAL_META[s.key].label}
+                              className="w-9 h-9 rounded-xl bg-surface border border-gray-200/80 flex items-center justify-center text-text-secondary hover:text-whatsapp-700 hover:border-whatsapp-300 transition-colors"
+                            >
+                              <SocialIcon platform={s.key} className="w-4 h-4" />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Location & Directions */}
+                  <div>
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Location & Directions</h2>
+                    <div className="space-y-2">
+                      <div className="rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
+                        <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z" />
+                          </svg>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider leading-none mb-1">Location</p>
+                          <p className="text-xs sm:text-sm font-bold text-text-primary truncate">
+                            {businessAreas.length ? businessAreas[0] : ''}{business.city ? (businessAreas.length ? `, ${business.city}` : business.city) : ' Zimbabwe'}
+                          </p>
+                        </div>
+                      </div>
+                      {business.address && business.show_location !== false && (
+                        <div className="rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 flex items-center gap-3 shadow-xs">
+                          <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider leading-none mb-1">
+                              Address{business.address_verified ? ' · Map-verified' : ''}
+                            </p>
+                            <p className="text-xs sm:text-sm font-bold text-text-primary truncate">{business.address}</p>
+                          </div>
+                          <a
+                            href={directionsHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 h-8 px-3 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all shadow-xs"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                            </svg>
+                            Directions
+                          </a>
+                        </div>
+                      )}
+                      {!business.address && business.show_location !== false && (
+                        <a
+                          href={areaDirectionsHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded-2xl bg-surface/90 border border-gray-200/80 p-3 sm:p-3.5 shadow-xs hover:bg-gray-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-whatsapp-50 border border-whatsapp-200/60 flex items-center justify-center text-whatsapp-600 shrink-0">
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 3.498l4.875-2.437c.381-.19.622-.58.622-1.006V4.82c0-.836-.88-1.38-1.628-1.006l-3.869 1.934c-.317.159-.69.159-1.006 0L9.503 3.252a1.125 1.125 0 00-1.006 0L3.622 5.689C3.24 5.88 3 6.27 3 6.695V19.18c0 .836.88 1.38 1.628 1.006l3.869-1.934c.317-.159.69-.159 1.006 0l4.994 2.497c.317.158.69.158 1.006 0z" />
+                              </svg>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider leading-none mb-1">Address</p>
+                              <p className="text-xs sm:text-sm font-bold text-text-primary truncate">
+                                {businessAreas.length ? businessAreas[0] : ''}{business.city ? (businessAreas.length ? `, ${business.city}` : business.city) : ''}
+                              </p>
+                            </div>
+                            <span className="text-xs text-whatsapp-600 font-semibold shrink-0">Directions</span>
+                          </div>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Business Stats & Reviews */}
+                  <ReviewSection
+                    businessId={business.id}
+                    initialReviews={ratings}
+                    totalReviews={business.review_count || 0}
+                    rating={business.rating || 0}
+                  />
+                </div>
+              </div>
+
+              {business.catalog_link && (
+                <div className="mb-3 sm:mb-6">
+                  <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">Catalog</h2>
+                  <CatalogItems catalogLink={business.catalog_link} />
+                </div>
+              )}
+
+              {shopItems.length > 0 && (
+                <div id="shop" className="mb-4 sm:mb-8 scroll-mt-6">
+                  <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary">Shop</h2>
+                    {business.generate_site && business.payment_status === 'active' && business.slug && (
+                      <Link href={`/site/${business.slug}`} className="text-xs font-semibold text-whatsapp-600 hover:underline shrink-0">
+                        View full website &rarr;
+                      </Link>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {shopItems.map(item => (
+                      <div key={item.id} className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 min-w-0">
+                          {item.image_url ? (
+                            <div className="w-11 h-11 rounded-xl border border-gray-200/80 overflow-hidden bg-surface shrink-0">
+                              <Image src={item.image_url} alt={item.name} width={44} height={44} className="w-11 h-11 object-cover" unoptimized />
+                            </div>
+                          ) : (
+                            <div className="w-11 h-11 rounded-xl border border-dashed border-gray-300 bg-surface flex items-center justify-center shrink-0">
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M18 6h.008v.008H18V6Zm2.25 12H3.75A1.5 1.5 0 0 1 2.25 16.5v-9A1.5 1.5 0 0 1 3.75 6h16.5A1.5 1.5 0 0 1 21.75 7.5v9a1.5 1.5 0 0 1-1.5 1.5Z" />
+                              </svg>
+                            </div>
+                          )}
+                          <p className="font-semibold text-text-primary text-sm break-words">{item.name}</p>
+                        </div>
+                        <div className="shrink-0 flex flex-col items-end gap-2">
+                          <span className="inline-flex items-center rounded-full bg-whatsapp-50 border border-whatsapp-200 px-2.5 py-1 text-xs font-bold text-whatsapp-800">
+                            {formatPrice(item.price)}
+                          </span>
+                          <AddToCartChip item={{ id: item.id, name: item.name, price: item.price }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div id="business-card" className="mb-4 sm:mb-8 pt-5 border-t border-gray-100 scroll-mt-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-base sm:text-lg font-bold text-text-primary">Official Business Card</h2>
+                      <span className="inline-flex items-center gap-1 bg-whatsapp-50 border border-whatsapp-200 text-whatsapp-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-whatsapp-500 animate-pulse" />
+                        World Standard · 3.5″ × 2.0″
+                      </span>
+                    </div>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      Interactive 3D digital card with instant WhatsApp QR code & 300 DPI print-ready specifications.
+                    </p>
+                  </div>
+                </div>
+                <BusinessCardPrint business={business} />
+              </div>
+
+              <div className="hidden sm:flex flex-col gap-2">
+                {hasWhatsAppChannel(business) && (
+                  <WhatsAppButton phone={business.phone} businessId={business.id} />
+                )}
+                {hasVoiceChannel(business) && (
+                  <TrackLink
+                    href={callHref(voiceNumber(business))}
+                    businessId={business.id}
+                    type="click_call"
+                    className="inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-xs sm:text-sm font-semibold transition-all shadow-xs"
+                  >
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                    </svg>
+                    Call {business.name}
+                  </TrackLink>
+                )}
+              </div>
+
+              <div className="mt-4 text-center">
+                <a
+                  href={`mailto:wadirectory@proton.me?subject=${encodeURIComponent(`Report business: ${business.name}`)}`}
+                  className="text-xs text-text-secondary hover:text-danger transition-colors"
+                >
+                  Report this business
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {similar.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-lg font-bold text-text-primary mb-3">Similar businesses</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {similar.map(b => (
+                  <BusinessCard key={b.id} business={b} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-white border-t border-gray-200 sm:hidden z-40 flex flex-col gap-2">
+            {hasWhatsAppChannel(business) && (
+              <WhatsAppButton phone={business.phone} businessId={business.id} />
+            )}
+            {hasVoiceChannel(business) && (
+              <TrackLink
+                href={callHref(voiceNumber(business))}
+                businessId={business.id}
+                type="click_call"
+                className="inline-flex w-full items-center justify-center gap-2 py-3.5 rounded-full bg-whatsapp-700 hover:bg-whatsapp-800 text-white text-[16px] font-semibold transition-all shadow-xs"
+              >
+                <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M1.5 4.5a3 3 0 0 1 3-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 0 1-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 0 0 6.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 0 1 1.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 0 1-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5Z" />
+                </svg>
+                Call {business.name}
+              </TrackLink>
+            )}
+          </div>
+        </div>
+      </div>
+      </CartProvider>
+    </>
+  )
+}
+
+export default function BusinessProfilePage({ params }: { params: { slug: string } }) {
+  return (
+    <Suspense fallback={<SkeletonProfile />}>
+      <BusinessContent slug={params.slug} />
+    </Suspense>
+  )
+}

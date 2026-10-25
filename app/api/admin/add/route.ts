@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
+import { slugify } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -15,15 +16,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name, category, and phone are required' }, { status: 400 })
     }
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
+    const slug = slugify(name)
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { data, error } = await supabase
       .from('businesses')

@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import type { Business } from '@/types'
+import { getInitials } from '@/lib/utils'
 
 // International / US Standard Business Card dimensions (3.5" x 2.0" @ 300 DPI ratio = 7:4)
 const CARD_W = 1050
@@ -1356,14 +1357,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
     }
   }, [business.logo_url])
 
-  const initials =
-    business.name
-      .split(' ')
-      .filter(Boolean)
-      .map(w => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2) || 'WA'
+  const initials = getInitials(business.name, 'WA')
 
   const locationText = [business.area, business.city, 'Zimbabwe'].filter(Boolean).join(', ')
   const profileUrl = `wadirectory.co.zw/business/${business.slug || business.id}`

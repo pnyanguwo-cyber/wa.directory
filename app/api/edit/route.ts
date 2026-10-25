@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabase } from '@/lib/supabase-server'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
+import { slugify } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -15,10 +16,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Name and phone are required' }, { status: 400 })
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = getSupabase()
 
     const { data: existing, error: findError } = await supabase
       .from('businesses')
@@ -30,10 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid or expired edit token' }, { status: 401 })
     }
 
-    const slug = name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
+    const slug = slugify(name)
 
     // Voice listings (landlines & hotlines) keep national format + Call button.
     const isVoice = phone_type === 'voice'

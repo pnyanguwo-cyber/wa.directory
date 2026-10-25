@@ -3,16 +3,20 @@
 import { useState } from 'react'
 import { trackEvent } from '@/lib/track'
 
-export default function ShareButton({ businessSlug, businessName, businessId }: {
+export default function ShareButton({ businessSlug, businessName, businessId, username }: {
   businessSlug: string
   businessName: string
   businessId?: string
+  username?: string
 }) {
   const [copied, setCopied] = useState(false)
 
   async function handleShare() {
     if (businessId) trackEvent(businessId, 'share_web')
-    const url = `${window.location.origin}/business/${businessSlug}`
+    // Use short URL with username if available, otherwise fall back to full slug
+    const url = username
+      ? `${window.location.origin}/u/${username}`
+      : `${window.location.origin}/business/${businessSlug}`
     const text = `Check out ${businessName} on WA Directory\n\n${url}\n\nFind any business on WhatsApp`
 
     try {
