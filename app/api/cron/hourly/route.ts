@@ -4,6 +4,7 @@ import { sendWhatsAppMessage, sendInteractiveButtons } from '@/lib/whatsapp'
 import { CEREMONY_IDLE_HOURS, listNeedQuotes, fmtHarare } from '@/lib/needs'
 import { logBotMessage, pruneBotMessages } from '@/lib/bot-log'
 import { sweepStaleOrders } from '@/lib/orders'
+import { releaseDueCasts } from '@/lib/casts'
 
 function authorized(request: Request): boolean {
   if (request.headers.get('x-vercel-cron') === '1') return true
@@ -113,6 +114,14 @@ export async function GET(request: Request) {
     console.error('[cron-hourly] order sweep failed:', err)
   }
 
+  // ── Casts: release scheduled + continue in-flight (100 per run) ───────
+  let castsAdvanced = 0
+  try {
+    castsAdvanced = await releaseDueCasts()
+  } catch (err) {
+    console.error('[cron-hourly] cast release failed:', err)
+  }
+
   // ── Transcript hygiene (60-day trim) ───────────────────────────────────
   await pruneBotMessages()
 
@@ -122,5 +131,6 @@ export async function GET(request: Request) {
     ceremonies,
     dealAsks,
     ordersSwept,
+    castsAdvanced,
   })
 }

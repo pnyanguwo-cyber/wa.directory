@@ -63,6 +63,12 @@ export interface MediaSense {
   city?: string
   category?: string
   description?: string
+  // Signboard / registration extras (photos only, best-effort):
+  business_name?: string
+  phone?: string
+  price_range?: string
+  website?: string
+  catalog?: string
 }
 
 // Meta sends mimes with codec params ("audio/ogg; codecs=opus") — normalize to
@@ -95,7 +101,7 @@ export async function perceiveMedia(
   const instruction =
     kind === 'audio'
       ? `This is a WhatsApp voice note from a Zimbabwe customer. Transcribe the speech, then distill what product, service or business they are looking for${captionLine}. Reply ONLY with a JSON object: {"transcript":"<full transcription>","term":"<1-3 word search term>","city":"<Zimbabwe town in English, or empty>"}. Ignore greetings and filler. If the note is not asking for something, reply with an empty term. No markdown.`
-      : `This is a picture from a Zimbabwe customer on WhatsApp. Guess what product, service or business they are looking for${captionLine}. Reply ONLY with a JSON object: {"term":"<1-3 word search term>","city":"<Zimbabwe town if identifiable, or empty>","category":"<likely business category, e.g. Plumbing, Bakery, or empty>","description":"<one plain-sentence line describing the business or item>"} No markdown.`
+      : `This is a picture from a Zimbabwe customer on WhatsApp. Guess what product, service or business they are looking for${captionLine}. Also read any registration details visible on signs, boards or labels. Reply ONLY with a JSON object: {"term":"<1-3 word search term>","city":"<Zimbabwe town if identifiable, or empty>","category":"<likely business category, e.g. Plumbing, Bakery, or empty>","description":"<one plain-sentence line describing the business or item>","business_name":"<business name visible on a signboard or label, or empty>","phone":"<phone number visible in the image, or empty>","price_range":"<prices visible, cheapest to most expensive e.g. $5 - $40, or empty>","website":"<website visible, or empty>","catalog":"<WhatsApp catalog link visible, or empty>"} No markdown.`
 
   const parts: GeminiPart[] = [
     { text: instruction },
@@ -115,6 +121,11 @@ export async function perceiveMedia(
       city: str('city'),
       category: str('category'),
       description: str('description'),
+      business_name: str('business_name'),
+      phone: str('phone'),
+      price_range: str('price_range'),
+      website: str('website'),
+      catalog: str('catalog'),
     }
   } catch {
     return null

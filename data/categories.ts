@@ -95,9 +95,9 @@ export const categories: Category[] = [
   },
   {
     name: 'Real Estate',
-    keywords: ['property', 'rent', 'housing', 'agent', 'estate', 'imba', 'nzvimbo', 'roja', 'apartment', 'land', 'commercial', 'buy', 'sell', 'lease', 'valuation'],
+    keywords: ['property', 'real estate', 'housing', 'estate', 'imba', 'nzvimbo', 'roja', 'apartment', 'lease', 'valuation', 'mortgage', 'stand for sale', 'plots'],
     icon: '🏠',
-    hint: 'Property, rent, housing, agent, land, apartment, buy, sell',
+    hint: 'Property, rent, housing, estate, apartment, lease',
   },
   {
     name: 'Financial Services',

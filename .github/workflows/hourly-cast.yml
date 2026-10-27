@@ -1,0 +1,15 @@
+name: hourly-cast
+on:
+  schedule:
+    # Vercel Hobby only allows once-daily crons, so the hourly duty lives here.
+    - cron: '0 * * * *'
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping hourly cron endpoint
+        run: |
+          code=$(curl -fsS "${{ secrets.PROD_URL }}/api/cron/hourly" -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" -o /dev/null -w "%{http_code}") || code=failed
+          echo "HTTP $code"
+          test "$code" = 200

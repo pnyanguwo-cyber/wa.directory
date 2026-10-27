@@ -29,16 +29,23 @@ import { upsertBotContact, markBotContactOptOut, setBotContactOptIn, hasSeenCont
 import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
 import { createListing } from '@/lib/listing-create'
 import { uploadLogoImage } from '@/lib/image-storage'
-import { fetchWhatsAppMedia, perceiveMedia, mediaRateOk, type MediaKind } from '@/lib/bot-sense'
+import { fetchWhatsAppMedia, perceiveMedia, mediaRateOk, type MediaKind, type MediaSense } from '@/lib/bot-sense'
 import {
   parseListingMessage,
   renderListingForm,
   renderMissingRequiredList,
   missingRequired,
   findListingCity,
+  applyListingFields,
+  isSinglePriceRange,
+  needsAIPass,
   LIST_INTRO,
   type ListingFormState,
 } from '@/lib/listing-intake'
+import { aiPatchListing } from '@/lib/listing-ai'
+import { findBusinessesByName, activateListingForDays, notifyBusinessLive, bestNameSimilarity, type VerifyCandidate } from '@/lib/admin-verify'
+import { imageLuminanceFromUrl } from '@/lib/image-luminance'
+import { slugify } from '@/lib/utils'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
 import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@/lib/approved-data'
@@ -49,6 +56,7 @@ import { PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
+import { listEmergencyContacts, addEmergencyContact, deleteEmergencyContact, clearEmergencyContacts, findEmergencyNear, parseEmergencyAdd, emergencyWaLink, categoryIcon, VALID_CATEGORIES } from '@/lib/emergency'
 import {
   CHAT_OPEN_MARKER,
   renderResultsListBody,
@@ -105,6 +113,17 @@ import {
   reopenNeed,
   setPrioritySwitch,
 } from '@/lib/needs'
+import {
+  parseCastSpec,
+  resolveCastAudience,
+  enqueueCast,
+  sendCastChunk,
+  renderCastsList,
+  cancelCast,
+  SYNC_MAX_SENDS,
+  MAX_AUDIENCE,
+  type CastSpec,
+} from '@/lib/casts'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
@@ -354,36 +373,6 @@ function csvForChats(rows: ChatCsvRow[]): string {
     ['name', 'phone', 'first_seen', 'last_seen', 'notes', 'last_step', 'opted_out'],
     rows.map(r => [r.name || '', r.phone, r.first_seen || '', r.last_seen || '', r.message_count ?? 0, r.last_step || '', r.opted_out ? 'true' : 'false'])
   )
-}
-
-// Broadcast v1 audience: numbers with an inbound message in the last 24h
-// (Meta session window is open, so replies are free-form and free), minus
-// opted-out contacts and bot admins.
-async function broadcastAudience(): Promise<string[]> {
-  try {
-    const since = new Date(Date.now() - 24 * 3600000).toISOString()
-    const { data } = await getSupabase()
-      .from('bot_messages')
-      .select('phone')
-      .eq('dir', 'in')
-      .gte('created_at', since)
-      .limit(2000)
-    const phones = [...new Set(((data as { phone: string }[]) || []).map(r => r.phone).filter(Boolean))]
-    if (!phones.length) return []
-    const { data: contacts } = await getSupabase()
-      .from('bot_contacts')
-      .select('phone, opted_out')
-      .in('phone', phones)
-    const optedOut = new Set(
-      ((contacts as { phone: string; opted_out: boolean }[]) || [])
-        .filter(c => c.opted_out)
-        .map(c => c.phone)
-    )
-    const admins = new Set(await adminNumbers())
-    return phones.filter(p => !optedOut.has(p) && !admins.has(digitsOnly(p)))
-  } catch {
-    return []
-  }
 }
 
 // ── Transcript-logging send wrappers (S16) ────────────────────────────────
@@ -1155,25 +1144,169 @@ async function tryPublishForm(from: string, session: ChatSession, msgId?: string
 async function handleListFormText(from: string, session: ChatSession, text: string) {
   const before = session.data.list || {}
   const beforeMissing = missingRequired(before).length
-  const { state } = parseListingMessage(text, from, before)
+  const parsed = parseListingMessage(text, from, before)
+  let state = parsed.state
+  // Rules first (free); the AI pass only fires when the parser stalled or
+  // left a label word inside a value.
+  if (needsAIPass(text, before, state)) {
+    state = await aiPatchListing(text, state, from)
+  }
   await saveSession(from, 'list_form', { list: state } as ChatSessionData)
   const missing = missingRequired(state)
   const filledAny =
     missing.length < beforeMissing ||
-    ['name', 'categories', 'city', 'area', 'phone', 'price_range', 'website', 'address', 'description', 'username']
+    ['name', 'categories', 'city', 'area', 'phone', 'price_range', 'website', 'catalog', 'address', 'description', 'username']
       .some(k => JSON.stringify((state as Record<string, unknown>)[k]) !== JSON.stringify((before as Record<string, unknown>)[k]))
   const tail = !filledAny
     ? "I couldn't match that to a field yet — send e.g. *name …*, *city …*, *phone …*, or a description."
     : missing.length === 0
       ? 'All mandatory fields are set — tap ↗ Publish to submit.'
       : `${missing.length} mandatory field${missing.length > 1 ? 's' : ''} still missing: ${missing.join(', ')}.`
-  await sendFormUpdate(from, state, tail)
+  const priceNudge =
+    filledAny && isSinglePriceRange(state.price_range)
+      ? `💵 Is ${state.price_range} your cheapest or priciest item? Send the other end to complete the range, e.g. *prices ${state.price_range} - $500*.`
+      : ''
+  await sendFormUpdate(from, state, [tail, priceNudge].filter(Boolean).join('\n'))
 }
 
 // ── Bot perception: voice notes and photos ────────────────────────────────
 // Media becomes intent: a search outside registration, or form fields/logo
 // while the user is mid-registration. Every failure answers with a text
 // fallback so nothing silently dies.
+
+// Live, active listings linked to a sender number (post-activation shelf).
+interface ShelfBiz { id: string; name: string; slug: string | null }
+
+async function findActiveListingsForPhone(phone: string): Promise<ShelfBiz[]> {
+  try {
+    const { data } = await getSupabase()
+      .from('businesses')
+      .select('id, name, slug, category')
+      .eq('phone', phone)
+      .eq('payment_status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(10)
+    const rows = (data as Array<{ id: string; name: string; slug: string | null; category: string[] | null }>) || []
+    return rows.filter(r => !(r.category || []).includes('Personal Contact'))
+  } catch {
+    return []
+  }
+}
+
+// "bread $2", "bread 2.50", "2kg cement 7" → product spec. Pure numbers and
+// orders ("order 2 bread") don't parse.
+function parseItemSpec(text: string): { name: string; price: number } | null {
+  const t = text.trim()
+  if (!t || t.length > 80) return null
+  const m = t.match(/^(.+?)\s*(?:usd\s*)?\$?\s*(\d+(?:[.,]\d+)?)$/i)
+  if (!m) return null
+  const name = m[1].replace(/[-–:,\s]+$/, '').trim()
+  const price = Number(m[2].replace(',', '.'))
+  if (name.length < 2 || !Number.isFinite(price) || price <= 0) return null
+  return { name, price }
+}
+
+async function insertShelfItem(
+  bizId: string,
+  spec: { name: string; price: number },
+  imageUrl: string
+): Promise<boolean> {
+  const image_luminance = imageUrl ? await imageLuminanceFromUrl(imageUrl) : null
+  const { error } = await getSupabase()
+    .from('business_items')
+    .insert({
+      business_id: bizId,
+      name: spec.name,
+      slug: slugify(spec.name) || `item-${Date.now()}`,
+      price: spec.price,
+      image_url: imageUrl,
+      image_luminance: image_luminance,
+      is_active: true,
+    })
+  return !error
+}
+
+// One live shop → save the photo and ask for name+price (caption may carry
+// both, then it stocks directly). Several shops → pick list first.
+async function startShelfItem(
+  from: string,
+  bizList: ShelfBiz[],
+  mediaId: string,
+  caption: string,
+  mediaMsgId: string
+) {
+  void markRead(mediaMsgId, true).catch(() => {})
+  const media = await fetchWhatsAppMedia(mediaId)
+  const imageUrl = media ? (await uploadLogoImage(new Uint8Array(media.buffer))) || '' : ''
+  const spec = caption ? parseItemSpec(caption) : null
+
+  if (spec && bizList.length === 1) {
+    const biz = bizList[0]
+    const ok = await insertShelfItem(biz.id, spec, imageUrl)
+    await clearSession(from)
+    if (!ok) {
+      await sendWhatsAppMessage(from, '❌ Could not save that item — try again.', mediaMsgId)
+      return
+    }
+    await sendWhatsAppMessage(
+      from,
+      `🧺 *${spec.name}* at $${spec.price} stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`,
+      mediaMsgId
+    )
+    return
+  }
+
+  if (bizList.length > 1 && imageUrl) {
+    await saveSession(from, 'item_pick', { pendingItemImage: imageUrl } as ChatSessionData)
+    await sendInteractiveButtons(
+      from,
+      '🧺 Which shop is this product for?',
+      bizList.slice(0, 3).map(b => ({ id: `itembiz_${b.id}`, title: b.name }))
+    )
+    return
+  }
+
+  await saveSession(from, 'item_photo', {
+    pendingItemImage: imageUrl || undefined,
+    pendingItemBiz: { id: bizList[0].id, name: bizList[0].name },
+  } as ChatSessionData)
+  await sendWhatsAppMessage(
+    from,
+    (imageUrl ? '📷 Photo saved. ' : '') +
+      'Reply with the product name and price to stock it on your shop shelf, e.g. *bread $2*. Reply *skip* to not add it.',
+    mediaMsgId
+  )
+}
+
+// Text for the item_photo step: "bread $2" → business_items row.
+async function handleItemSpecText(from: string, session: ChatSession, text: string) {
+  const lower = text.trim().toLowerCase()
+  if (lower === 'skip' || lower === 'cancel') {
+    await clearSession(from)
+    await sendWhatsAppMessage(from, 'Skipped — the photo was not added to the shelf.')
+    return
+  }
+  const spec = parseItemSpec(text)
+  const biz = session.data.pendingItemBiz
+  if (!spec || !biz) {
+    await sendWhatsAppMessage(
+      from,
+      'Reply with the product name and price, e.g. *bread $2* — or *skip* to not add it.'
+    )
+    return
+  }
+  const imageUrl = session.data.pendingItemImage || ''
+  const ok = await insertShelfItem(biz.id, spec, imageUrl)
+  await clearSession(from)
+  if (!ok) {
+    await sendWhatsAppMessage(from, '❌ Could not save that item — try again, e.g. *bread $2*.')
+    return
+  }
+  await sendWhatsAppMessage(
+    from,
+    `🧺 *${spec.name}* at $${spec.price} stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`
+  )
+}
 
 async function handleBotMedia(
   from: string,
@@ -1185,6 +1318,17 @@ async function handleBotMedia(
   const blob = message[kind] as { id?: string; caption?: string } | undefined
   const mediaId = blob?.id || ''
   const caption = typeof blob?.caption === 'string' ? blob.caption : ''
+
+  // Post-activation shelf: a live business owner sending a photo with no flow
+  // in progress is most likely stocking their website shop shelf — no AI pass
+  // needed, just storage.
+  if (kind === 'image' && !session) {
+    const bizList = await findActiveListingsForPhone(from)
+    if (bizList.length > 0) {
+      await startShelfItem(from, bizList, mediaId, caption, mediaMsgId)
+      return
+    }
+  }
 
   if (!mediaRateOk(from)) {
     await sendWhatsAppMessage(
@@ -1280,7 +1424,7 @@ async function handleListFormMedia(
   from: string,
   session: ChatSession,
   kind: MediaKind,
-  sense: { transcript?: string; term?: string; city?: string; category?: string; description?: string },
+  sense: MediaSense,
   buffer: Buffer
 ) {
   const before = session.data.list || {}
@@ -1291,13 +1435,25 @@ async function handleListFormMedia(
     return
   }
 
-  // Photo: description + (matched) category fill the form; bytes off to storage.
-  const state: ListingFormState = { ...before }
+  // Photo: legible registration details fill the form (validated exactly like
+  // typed text); the bytes queue themselves as the listing logo.
+  let state = applyListingFields(before, {
+    name: sense.business_name,
+    phone: sense.phone,
+    price_range: sense.price_range,
+    website: sense.website,
+    catalog: sense.catalog,
+    description: sense.description ? sense.description.slice(0, 400) : undefined,
+  }, from)
+
   const changed: string[] = []
-  if (sense.description) {
-    state.description = sense.description.slice(0, 400)
-    changed.push('description')
+  for (const k of ['name', 'phone', 'price_range', 'website', 'catalog'] as const) {
+    if (JSON.stringify((state as Record<string, unknown>)[k] ?? null) !== JSON.stringify(before[k] ?? null)) {
+      changed.push(k)
+    }
   }
+  if (state.description !== before.description) changed.push('description')
+
   if (sense.category) {
     const cats = state.categories?.length ? [...state.categories] : []
     const approved = await getApprovedCategories()
@@ -2031,6 +2187,117 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
+  if (lower === 'emergency' || lower.startsWith('emergency ')) {
+    const admin = await isBotAdmin(from)
+    if (!admin) {
+      await sendWhatsAppMessage(from, '🔒 This command is for administrators only.')
+      return true
+    }
+    const adminClean = clean.slice(9).trim()
+    const adminLower = adminClean.toLowerCase()
+
+        // near <city>
+    const nearMatch = adminClean.match(/^near\\s+(.+)$/i)
+    if (nearMatch) {
+      const city = nearMatch[1].trim()
+      const results = await findEmergencyNear(city)
+      if (results.length === 0) {
+        await sendWhatsAppMessage(from, `No emergency contacts found near "${city}".`)
+      } else {
+        await sendWhatsAppMessage(from, `🆘 Nearest emergency contacts near "${city}":`)
+        for (const c of results) {
+          const wa = emergencyWaLink(c.phone)
+          const where = [c.suburb, c.city].filter(Boolean).join(', ')
+          await sendWhatsAppMessage(from, `${categoryIcon(c.category)} ${c.category.toUpperCase()} · ${where || '—'} · 📞 ${c.phone}${wa ? ` · ${wa}` : ''}`)
+        }
+      }
+      return true
+    }
+
+    // add <phone> [category] <suburb…> <city> — owner spec: contact, suburb,
+    // city (multi-word suburbs ok; category optional, defaults to police).
+    if (adminLower.startsWith('add ')) {
+      const parsed = parseEmergencyAdd(adminClean.slice(4).trim())
+      if (!parsed.ok || !parsed.contact) {
+        await sendWhatsAppMessage(from, parsed.error || 'Could not read that — try the *emergency* help.')
+        return true
+      }
+      const c = parsed.contact
+      const ok = await addEmergencyContact(c)
+      if (!ok) {
+        await sendWhatsAppMessage(from, '⚠️ Already saved: same number + category in that city.')
+        return true
+      }
+      const wa = emergencyWaLink(c.phone)
+      await sendWhatsAppMessage(
+        from,
+        [
+          '✅ Emergency contact saved.',
+          '',
+          `${categoryIcon(c.category)} ${c.category.toUpperCase()}`,
+          `📞 ${c.phone}` + (wa ? `\n💬 ${wa}` : ''),
+          `📍 ${c.suburb}, ${c.city.toUpperCase()}`,
+          '',
+          `Test it: reply *emergency near ${c.city}*.`,
+        ].join('\n')
+      )
+      return true
+    }
+
+    // del <phone> — narrow by optional city word when two cities share a line.
+    if (adminLower.startsWith('del ')) {
+      const delParts = adminClean.slice(4).trim().split(/\s+/)
+      const removed = await deleteEmergencyContact(delParts[0] || '', delParts[1])
+      await sendWhatsAppMessage(
+        from,
+        removed > 0 ? `🗑️ Removed ${removed} contact${removed === 1 ? '' : 's'}.` : 'No match — check the number: *emergency list*.'
+      )
+      return true
+    }
+
+    // list
+    if (adminLower === 'list') {
+      const contacts = await listEmergencyContacts()
+      if (contacts.length === 0) {
+        await sendWhatsAppMessage(from, '📭 No emergency contacts seeded yet. Add one: *add 263771234567 police CBD Harare*.')
+      } else {
+        await sendWhatsAppMessage(from, `📋 Emergency contacts (${contacts.length}):`)
+        for (const c of contacts) {
+          const wa = emergencyWaLink(c.phone)
+          const where = [c.suburb, c.city].filter(Boolean).join(', ')
+          await sendWhatsAppMessage(
+            from,
+            [
+              `${categoryIcon(c.category)} ${c.category.toUpperCase()} · ${where || '—'}`,
+              `📞 ${c.phone}${wa ? ` · ${wa}` : ''}` + (c.name ? `\n${c.name}` : ''),
+            ].join('\n')
+          )
+        }
+      }
+      return true
+    }
+
+    // clear
+    if (adminLower === 'clear') {
+      const ok = await clearEmergencyContacts()
+      await sendWhatsAppMessage(from, ok ? '✅ Emergency contacts cleared.' : '❌ Failed to clear contacts')
+      return true
+    }
+
+    // fallback help
+    await sendWhatsAppMessage(from, [
+      'Emergency contact tools:',
+      '*emergency add <phone> [category] <suburb> <city>* — save one (e.g. *add 263771234567 ambulance Waterford Bulawayo*)',
+      '*emergency del <phone> [city-word]* — remove one',
+      '*emergency list* — everything saved',
+      '*emergency near <city>* — what buyers would get there',
+      '*emergency clear* — wipe the whole list',
+      '',
+      `Categories: ${[...VALID_CATEGORIES].join(' | ')} (default: police).`,
+    ].join('\n'))
+    return true
+  }
+
   if (lower.startsWith('close ')) {
     const rqId = canonicalRq(clean.slice(6))
     if (!rqId) {
@@ -2171,7 +2438,7 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     const lines = ['👥 *Bot admins*', '']
     for (const n of list) lines.push(`${fmtAdminNumber(n)}${n === root ? ' · owner' : ''}`)
     lines.push('', 'Owner can add/remove: *admin add 263…* / *admin del 263…*')
-    lines.push('Broadcast: *cast your message* (24h-active contacts only)')
+    lines.push('Broadcast: *cast owners/buyers/all <msg> [today 15:30]* · *casts*')
     lines.push('Needs by day: *needs 22-10-2026* (or today / yesterday) · Listings: *listings*')
     await sendWhatsAppMessage(from, lines.join('\n'))
     return true
@@ -2332,90 +2599,201 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
       await sendWhatsAppMessage(from, 'No unverified businesses right now. ✅')
       return true
     }
-    await saveSession(from, 'admin_pending', { pendingBiz: bus.map(b => b.id) })
+    await saveSession(from, 'admin_pending', { pendingBiz: bus.map(b => b.id) } as ChatSessionData)
     const lines = ['🕵️ *Unverified businesses*', '']
     bus.forEach((b, i) => {
       lines.push(`${i + 1}. ${b.name} · ${(b.city || '—').toUpperCase()} · ${fmtHarare(b.created_at, true)}${b.phone ? ` · +${digitsOnly(b.phone)}` : ''}`)
     })
-    lines.push('', 'Reply *verify 1* to approve (the business gets a ✅ notice), or *unverify 1*.')
+    lines.push(
+      '',
+      'Reply *verify 1* to approve 30 days, *verify 1 90* for custom days, or *unverify 1*.',
+      'Or skip the list: *verify Diamond tradings 30* matches by name (typo-friendly).'
+    )
     await sendWhatsAppMessage(from, lines.join('\n'))
     return true
   }
 
-  const verifyCmd = clean.match(/^(verify|unverify)\s+(\d{1,2})$/i)
+  // verify/unverify — a number picks from the pending list; anything else is
+  // a fuzzy business-name match with an optional day-grant in the same line:
+  //   verify Diamond tradings 30   ·   verify 1   ·   unverify 2
+  const verifyCmd = clean.match(/^(verify|unverify)(?:\s+([\s\S]+))?$/i)
   if (verifyCmd) {
-    const sess = await getSession(from)
-    const ids = sess?.data.pendingBiz || []
-    const idx = Number(verifyCmd[2]) - 1
-    if (idx < 0 || idx >= ids.length) {
-      await sendWhatsAppMessage(from, 'Run *pending* first, then reply *verify 1* with the list number.')
+    let op: 'verify' | 'unverify' = verifyCmd[1].toLowerCase() === 'verify' ? 'verify' : 'unverify'
+    const arg = (verifyCmd[2] || '').trim()
+    if (!arg) {
+      await sendWhatsAppMessage(
+        from,
+        `Use *${op} <number>* after *pending*, or match by name: *${op} <business name> [days]* — e.g. *${op} Diamond tradings 30*.`
+      )
       return true
     }
-    const bizId = ids[idx]
-    const { data: biz } = await getSupabase()
-      .from('businesses')
-      .select('id, name, phone, slug, verified, payment_status')
-      .eq('id', bizId)
-      .maybeSingle()
+
+    // Trailing day-count on the same line: "… 30" or "… 30 days" (max 360).
+    // Numbers 1-29 are more often part of a name ("Shop 24") than a grant;
+    // 30+, or an explicit "days" suffix, means duration.
+    let days = 0
+    let rest = arg
+    const trailing = arg.match(/\s+(\d{1,3})(?:\s*(days?))?\s*$/i)
+    if (trailing) {
+      const n = Number(trailing[1])
+      const namePart = arg.slice(0, trailing.index).trim()
+      if (n >= 30 || trailing[2] || namePart.split(/\s+/).length >= 2) {
+        days = n
+        rest = namePart
+      }
+    }
+
+    let biz: VerifyCandidate | null = null
+
+    if (/^\d{1,2}$/.test(rest)) {
+      // Numbered pick from the pending list (or a previous suggestion list).
+      const sess = await getSession(from)
+      const ids = sess?.data.pendingBiz || []
+      const idx = Number(rest) - 1
+      if (idx < 0 || idx >= ids.length) {
+        await sendWhatsAppMessage(from, 'Run *pending* first, then reply *verify 1* with the list number.')
+        return true
+      }
+      // A suggestion pick may carry its own op/days from the previous message.
+      if (sess?.data.pendingOp) op = sess.data.pendingOp
+      if (!days && sess?.data.pendingDays) days = sess.data.pendingDays
+      const { data: row } = await getSupabase()
+        .from('businesses')
+        .select('id, name, phone, slug, username, city, verified, payment_status, created_at')
+        .eq('id', ids[idx])
+        .maybeSingle()
+      biz = (row as VerifyCandidate) || null
+    } else {
+      const matches = await findBusinessesByName(rest)
+      if (!matches.length) {
+        await sendWhatsAppMessage(
+          from,
+          `No business close to *${rest}*. Reply *pending* for the unverified list, or check the spelling.`
+        )
+        return true
+      }
+      // One strong match acts immediately; anything fuzzier shows options.
+      const clear = matches.length === 1 && bestNameSimilarity(rest, matches[0].name) >= 0.82
+      if (!clear) {
+        await saveSession(from, 'admin_pending', {
+          pendingBiz: matches.map(b => b.id),
+          pendingOp: op,
+          ...(days ? { pendingDays: days } : {}),
+        } as ChatSessionData)
+        const lines = [`🤔 Closest matches to *${rest}* — reply *${op} 1* to pick:`, '']
+        matches.forEach((b, i) => {
+          lines.push(
+            `${i + 1}. *${b.name}*${b.city ? ` · ${b.city}` : ''} · ${b.verified ? 'verified' : 'unverified'}`
+          )
+        })
+        await sendWhatsAppMessage(from, lines.join('\n'))
+        return true
+      }
+      biz = matches[0]
+    }
+
     if (!biz) {
       await sendWhatsAppMessage(from, 'That business was not found — run *pending* again.')
       return true
     }
-    const verify = verifyCmd[1].toLowerCase() === 'verify'
-    // Mirror the dashboard approve (app/api/admin/verify): approving a listing
-    // that is not already paid-activates it in the same breath so it shows in
-    // search; un-verifying never re-activates.
-    const activateGoLive = verify && biz.payment_status !== 'active'
-    await getSupabase()
-      .from('businesses')
-      .update(
-        activateGoLive
-          ? { verified: true, payment_status: 'active' }
-          : { verified: verify }
-      )
-      .eq('id', bizId)
-    await sendWhatsAppMessage(from, `${verify ? '✅' : '↩️'} *${biz.name}* is now ${verify ? 'verified' : 'unverified'}.`)
-    if (verify && biz.phone) {
-      const bph = '+' + digitsOnly(biz.phone)
-      if (digitsOnly(biz.phone) !== digitsOnly(from)) {
-        sendWhatsAppTemplate(
-          bph,
-          process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
-          [biz.name, `${SITE_URL}/business/${biz.slug || bizId}`]
-        ).catch(() => {})
-        const chLink = await channelLinkRaw()
-        if (chLink) {
-          await sendWhatsAppMessage(bph, renderChannelPitch(chLink)).catch(() => {})
+
+    if (op === 'verify') {
+      // Mirror the dashboard approve (app/api/admin/verify): approving a
+      // listing activates it with a day-grant (default 30) so it shows in
+      // search; the cron reminder + expiry machinery takes over from here.
+      // An already-active (paid) listing is just verified — never extended
+      // for free unless the admin explicitly typed days.
+      const alreadyActive = biz.payment_status === 'active'
+      if (days || !alreadyActive) {
+        const grant = await activateListingForDays(biz.id, days || 30)
+        if (!grant.ok) {
+          await sendWhatsAppMessage(from, `❌ Could not activate *${biz.name}*: ${grant.error || 'unknown error'}`)
+          return true
         }
+        const until = grant.expiresAt ? grant.expiresAt.slice(0, 10) : ''
+        await sendWhatsAppMessage(
+          from,
+          `✅ *${biz.name}* approved — live in search for ${days || 30} days${until ? ` (until ${until})` : ''}.`
+        )
+        if (biz.phone && digitsOnly(biz.phone) !== digitsOnly(from)) {
+          await notifyBusinessLive(biz)
+        }
+      } else {
+        await getSupabase().from('businesses').update({ verified: true }).eq('id', biz.id)
+        await sendWhatsAppMessage(from, `✅ *${biz.name}* is now verified (already live).`)
       }
+    } else {
+      await getSupabase().from('businesses').update({ verified: false }).eq('id', biz.id)
+      await sendWhatsAppMessage(from, `↩️ *${biz.name}* is now unverified.`)
     }
     return true
   }
 
   const castCmd = clean.match(/^cast(?:\s+([\s\S]+))?$/i)
   if (castCmd) {
-    const body = (castCmd[1] || '').trim()
-    if (!body) {
-      await sendWhatsAppMessage(from, 'Broadcast to recent contacts: *cast your announcement here*.\nOnly numbers active in the last 24h get it.')
+    const arg = (castCmd[1] || '').trim()
+    if (!arg) {
+      await sendWhatsAppMessage(
+        from,
+        [
+          '📣 *Broadcast* — reaches contacts active in the last 24h (opted-out skipped).',
+          '`cast <message>` — everyone',
+          '`cast owners <message>` · `cast buyers <message>`',
+          '`cast owners harare <message>` — city or category filter',
+          '`cast owners today 15:30 <message>` — schedule (Harare time)',
+          '`casts` — recent casts · `cast cancel <id>`',
+        ].join('\n')
+      )
       return true
     }
-    const audience = await broadcastAudience()
-    await saveSession(from, 'admin_cast', { castText: body })
-    await sendInteractiveButtons(
-      from,
-      [
-        '📣 *Broadcast preview*',
-        '',
-        body,
-        '',
-        `Will reach *${audience.length}* contact${audience.length === 1 ? '' : 's'} active in the last 24h (opted-out skipped).`,
-        'Send now?',
-      ].join('\n'),
-      [
-        { id: 'cast_send', title: '✅ Send now' },
-        { id: 'cast_cancel', title: '✖ Cancel' },
-      ]
-    )
+    // Cancel is parsed first so it can never read as a segment/filter/message.
+    const cancelM = arg.match(/^cancel\s+(\d{1,6})$/i)
+    if (cancelM) {
+      const okC = await cancelCast(Number(cancelM[1]))
+      await sendWhatsAppMessage(
+        from,
+        okC
+          ? `✖️ Cast #${cancelM[1]} cancelled.`
+          : `Cast #${cancelM[1]} could not be cancelled — unknown id or already sent.`
+      )
+      return true
+    }
+    const parsed = parseCastSpec(arg)
+    if (!parsed.spec) {
+      await sendWhatsAppMessage(from, parsed.error || 'Could not read that cast.')
+      return true
+    }
+    const spec = parsed.spec
+    const estimate = await resolveCastAudience(spec)
+    await saveSession(from, 'admin_cast', { castSpec: spec } as ChatSessionData)
+    const segLabel =
+      spec.segment === 'all' ? 'everyone' : `${spec.segment}${spec.filter ? ` (${spec.filter})` : ''}`
+    const previewLines = [
+      '📣 *Broadcast preview*',
+      '',
+      spec.body,
+      '',
+      `👥 Segment: ${segLabel}`,
+      `Estimate: ~${estimate.length} contact${estimate.length === 1 ? '' : 's'} in the last-24h window (capped at ${MAX_AUDIENCE}; final count at send).`,
+    ]
+    if (spec.scheduledFor) previewLines.push(`⏰ Release: ${fmtHarare(spec.scheduledFor, true)} Harare time.`)
+    const buttons = spec.scheduledFor
+      ? [
+          { id: 'cast_sched', title: '⏰ At that time' },
+          { id: 'cast_send', title: '✅ Send now' },
+          { id: 'cast_cancel', title: '✖ Cancel' },
+        ]
+      : [
+          { id: 'cast_send', title: '✅ Send now' },
+          { id: 'cast_cancel', title: '✖ Cancel' },
+        ]
+    await sendInteractiveButtons(from, previewLines.join('\n'), buttons)
+    return true
+  }
+
+  const castsCmd = /^casts$/i.test(clean)
+  if (castsCmd) {
+    await sendWhatsAppMessage(from, await renderCastsList())
     return true
   }
 
@@ -2423,44 +2801,72 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
 }
 
 async function handleAction(from: string, session: ChatSession | null, action: string, msgId?: string) {
-  // Broadcast confirm/cancel (admins only).
-  if (action === 'cast_send' || action === 'cast_cancel') {
+  // Broadcast confirm/schedule/cancel (admins only). Casting is queued in
+  // bot_casts: the first ≤SYNC_MAX_SENDS go out right here, anything larger
+  // continues automatically via the hourly cron.
+  if (action === 'cast_send' || action === 'cast_sched' || action === 'cast_cancel') {
     if (!(await isBotAdmin(from))) {
       await sendWhatsAppMessage(from, 'That button belongs to a broadcast preview.')
       return
     }
+    const spec: CastSpec | undefined = session?.data.castSpec
     if (action === 'cast_cancel') {
       await clearSession(from)
       await sendWhatsAppMessage(from, 'Broadcast cancelled.')
       return
     }
-    const body = (session?.data.castText || '').trim()
-    if (!body) {
+    if (!spec || !spec.body) {
       await sendWhatsAppMessage(from, 'Nothing to send — start with *cast your message*.')
       return
     }
-    const audience = (await broadcastAudience()).slice(0, 200)
-    let sent = 0
-    let failed = 0
-    for (const phone of audience) {
-      try {
-        await sendWhatsAppMessage(phone, body)
-        sent++
-      } catch {
-        failed++
+    const audience = await resolveCastAudience(spec)
+    if (!audience.length) {
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'No contacts in the last-24h window for that segment right now.')
+      return
+    }
+    if (action === 'cast_sched') {
+      if (!spec.scheduledFor) {
+        await clearSession(from)
+        await sendWhatsAppMessage(from, 'No time was set — add one: *cast owners today 15:30 <message>*.')
+        return
       }
+      const castId = await enqueueCast(spec, from, spec.scheduledFor, audience)
+      await clearSession(from)
+      if (!castId) {
+        await sendWhatsAppMessage(from, 'Could not queue the cast — try again shortly.')
+        return
+      }
+      await sendWhatsAppMessage(
+        from,
+        [
+          `⏰ Cast #${castId} scheduled for ${fmtHarare(spec.scheduledFor, true)} Harare time.`,
+          `👥 ~${audience.length} contacts (${spec.segment}${spec.filter ? ` ${spec.filter}` : ''}).`,
+          `Cancel with *cast cancel ${castId}*.`,
+        ].join('\n')
+      )
+      return
+    }
+    // cast_send
+    const castId = await enqueueCast(spec, from, null, audience)
+    if (!castId) {
+      await clearSession(from)
+      await sendWhatsAppMessage(from, 'Could not queue the cast — try again shortly.')
+      return
+    }
+    const chunk = await sendCastChunk(castId, SYNC_MAX_SENDS)
+    if (chunk.done) {
+      await clearSession(from)
+      return
     }
     await clearSession(from)
     await sendWhatsAppMessage(
       from,
       [
-        '📣 *Broadcast done*',
-        `✅ Sent: ${sent}`,
-        failed ? `⚠️ Failed: ${failed}` : '',
-        `👥 Audience: ${audience.length} active in last 24h`,
-        '',
-        'Recipients can reply *stop* to opt out anytime.',
-      ].filter(Boolean).join('\n')
+        `📣 Cast #${castId} started — first ${SYNC_MAX_SENDS} recipients sent.`,
+        `⏳ The remaining ${audience.length - SYNC_MAX_SENDS} continue automatically (100 per hour).`,
+        'Final counts arrive when the cast completes.',
+      ].join('\n')
     )
     return
   }
@@ -2483,6 +2889,32 @@ async function handleAction(from: string, session: ChatSession | null, action: s
   const oclaim = action.match(/^oclaim_(\d+)$/)
   if (oclaim) {
     await handleClaimTap(from, session, Number(oclaim[1]))
+    return
+  }
+
+  // ── Post-activation shelf: product photos → business_items ───────────
+  // The photo was uploaded up-front; the owner tapped which shop it belongs
+  // to, now it needs a name + price.
+  const itemBiz = action.match(/^itembiz_(.+)$/)
+  if (itemBiz) {
+    const img = session?.data.pendingItemImage || ''
+    if (!img) {
+      await sendWhatsAppMessage(from, 'That pick expired — send the product photo again.')
+      return
+    }
+    const { data: row } = await getSupabase()
+      .from('businesses')
+      .select('id, name')
+      .eq('id', itemBiz[1])
+      .maybeSingle()
+    await saveSession(from, 'item_photo', {
+      pendingItemImage: img,
+      pendingItemBiz: { id: itemBiz[1], name: row?.name || 'your shop' },
+    } as ChatSessionData)
+    await sendWhatsAppMessage(
+      from,
+      'Reply with the product name and price, e.g. *bread $2*. Reply *skip* to not add it.'
+    )
     return
   }
 
@@ -3600,6 +4032,7 @@ async function publishBusiness(from: string, session: ChatSession, msgId?: strin
     requestedUsername: data.whatsapp_username || '',
     priceRange: typeof data.price_range === 'string' ? data.price_range : undefined,
     website: typeof data.website === 'string' ? data.website : undefined,
+    catalogLink: typeof data.list?.catalog === 'string' ? data.list.catalog : undefined,
     address: typeof data.address === 'string' ? data.address : undefined,
     phoneType: data.phone_type === 'voice' ? 'voice' : 'whatsapp',
     logoUrl: typeof data.list?.logo === 'string' ? data.list.logo : undefined,
@@ -3663,6 +4096,8 @@ async function publishBusiness(from: string, session: ChatSession, msgId?: strin
       result.pendingPayment
         ? '💵 To go live: pay USD 1 — link: ' + SITE_URL + '/pay (manual confirmation; EcoCash on WhatsApp is coming soon)'
         : '⭐ Public-service listing: our team verifies it fast.',
+      '',
+      '📸 After go-live: send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
       '',
       `✏️ Save this link to edit your listing later:`,
       `${SITE_URL}/edit?token=${token}`,
@@ -4304,6 +4739,22 @@ export async function POST(request: Request) {
             continue
           }
           await handleListFormText(from, session, text)
+          continue
+        }
+
+        // ── Shelf item: photo queued, waiting for "name $price" ────────
+        if (session?.step === 'item_photo') {
+          if (lower === 'cancel' || lower === 'help') {
+            await clearSession(from)
+            await sendWhatsAppMessage(from, await helpText())
+            continue
+          }
+          await handleItemSpecText(from, session, text)
+          continue
+        }
+        if (session?.step === 'item_pick') {
+          await clearSession(from)
+          await sendWhatsAppMessage(from, 'Tap the shop button to pick, or send the product photo again.')
           continue
         }
 

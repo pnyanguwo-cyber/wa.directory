@@ -71,9 +71,12 @@ export interface Business {
     tiktok?: string
     youtube?: string
   } | null
-  // Structured content blocks for the flagship auto-website template.
+    // Structured content blocks for the flagship auto-website template.
   // All fields optional + whitelist-parsed server-side (lib/site-content.ts).
   site_content?: SiteContentBlocks | null
+  // Avg luminance of site_content.gallery[0] (hero cover source). NULL =
+  // unknown → default hero wash tiers.
+  site_cover_luminance?: number | null
 }
 
 // FAQ / hours / gallery blocks owned via the portal Site editor.
@@ -109,6 +112,7 @@ export interface BusinessItem {
   slug: string
   price: number
   image_url?: string
+  image_luminance?: number | null
   is_active: boolean
   created_at: string
   updated_at: string

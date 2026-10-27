@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { slugify } from '@/lib/utils'
+import { imageLuminanceFromUrl } from '@/lib/image-luminance'
 
 // Image URLs must be https links produced by /api/upload (or be empty).
 function sanitizeImageUrl(value: unknown): string {
@@ -22,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     const id = params?.id
     if (!id) return NextResponse.json({ error: 'Item id is required' }, { status: 400 })
 
-    const updates: { name?: string; price?: number; slug?: string; image_url?: string; is_active?: boolean } = {}
+    const updates: { name?: string; price?: number; slug?: string; image_url?: string; image_luminance?: number | null; is_active?: boolean } = {}
     if (typeof body?.name === 'string') {
       const name = body.name.trim()
       if (name.length < 2 || name.length > 80) {
@@ -39,7 +40,11 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       }
       updates.price = price
     }
-    if (body?.image_url !== undefined) updates.image_url = sanitizeImageUrl(body.image_url)
+    if (body?.image_url !== undefined) {
+      updates.image_url = sanitizeImageUrl(body.image_url)
+      // Clearing or replacing the photo drops/re-bases its luminance too.
+      updates.image_luminance = updates.image_url ? await imageLuminanceFromUrl(updates.image_url) : null
+    }
     if (typeof body?.is_active === 'boolean') updates.is_active = body.is_active
 
     if (Object.keys(updates).length === 0) {

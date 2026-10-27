@@ -4,6 +4,7 @@ import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { parseSiteContent, generateSiteSections, generateSiteDesign } from '@/lib/site-content'
 import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
+import { imageLuminanceFromUrl } from '@/lib/image-luminance'
 import type { SiteContentBlocks } from '@/types'
 
 const MAX_TEXT = 2000
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
       site_theme?: Record<ThemeKey, string> | null
       site_socials?: Record<SocialKey, string> | null
       site_content?: SiteContentBlocks | null
+      site_cover_luminance?: number | null
     } = {}
     if (generate_site !== null) updates.generate_site = generate_site
     if (site_hero !== null) updates.site_hero = site_hero
@@ -172,6 +174,10 @@ export async function POST(request: Request) {
         }
       }
       updates.site_content = contentEmpty(finalContent) ? null : finalContent
+      // Hero cover comes from gallery[0]; keep its luminance in lockstep
+      // (cleared gallery → null so the render falls back to the default wash).
+      const galleryUrl = (!contentEmpty(finalContent) ? finalContent.gallery?.[0] : '') || ''
+      updates.site_cover_luminance = galleryUrl ? await imageLuminanceFromUrl(galleryUrl) : null
     }
 
     if (Object.keys(updates).length === 0) {

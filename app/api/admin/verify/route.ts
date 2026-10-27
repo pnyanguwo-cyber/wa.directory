@@ -4,8 +4,7 @@ import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { isAdmin } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
-import { getBotSetting } from '@/lib/bot-settings'
-import { renderChannelPitch } from '@/lib/bot-templates'
+import { activateListingForDays, notifyBusinessLive } from '@/lib/admin-verify'
 
 export async function POST(request: Request) {
   try {
@@ -19,40 +18,39 @@ export async function POST(request: Request) {
 
     const { data: business } = await supabase
       .from('businesses')
-      .select('phone, name, slug, edit_token, payment_status')
+      .select('id, name, phone, slug, username, edit_token, payment_status')
       .eq('id', id)
       .single()
 
     // Approving a business makes it live: search only shows listings with
-    // payment_status = 'active', so a pending/expired listing must be
-    // activated here too or the Approve button alone leaves it invisible.
+    // payment_status = 'active'. Mirror the bot `verify` command: a fresh
+    // approval grants 30 days (the cron reminder + expiry machinery takes
+    // over); an already-active (paid) listing is just verified, never
+    // extended for free.
     const paidThrough = business?.payment_status !== 'active'
-    const { error } = await supabase
-      .from('businesses')
-      .update(verified && paidThrough ? { verified, payment_status: 'active' } : { verified })
-      .eq('id', id)
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (verified && paidThrough) {
+      const grant = await activateListingForDays(String(id), 30)
+      if (grant.error) {
+        return NextResponse.json({ error: grant.error }, { status: 500 })
+      }
+    } else {
+      const { error } = await supabase
+        .from('businesses')
+        .update({ verified })
+        .eq('id', id)
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
     }
 
     if (verified && business?.phone) {
-      const to = '+' + digitsOnly(business.phone)
-      const link = `${SITE_URL}/business/${business.slug || id}`
-      sendWhatsAppTemplate(
-        to,
-        process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
-        [business.name, link]
-      ).catch(err => console.error('[verify] notification failed:', err))
-
-      // Channel pitch best-effort right after the live template (free-form
-      // only lands while the 24h window is open; fails silently otherwise).
-      getBotSetting('channel_link')
-        .then(stored => {
-          const chLink = (stored || process.env.CHANNEL_LINK || '').trim()
-          if (chLink) return sendWhatsAppMessage(to, renderChannelPitch(chLink))
-        })
-        .catch(() => {})
+      await notifyBusinessLive({
+        name: business.name,
+        phone: business.phone,
+        slug: business.slug,
+        id: String(id),
+        username: business.username ?? null,
+      })
     }
 
     // Rejected / unverified: tell the owner why (optional admin note) and

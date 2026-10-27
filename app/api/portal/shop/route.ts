@@ -3,8 +3,9 @@ import { revalidatePath } from 'next/cache'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { slugify } from '@/lib/utils'
+import { imageLuminanceFromUrl } from '@/lib/image-luminance'
 
-const ITEM_COLUMNS = 'id, business_id, name, slug, price, image_url, is_active, created_at, updated_at'
+const ITEM_COLUMNS = 'id, business_id, name, slug, price, image_url, image_luminance, is_active, created_at, updated_at'
 
 // Image URLs must be https links produced by /api/upload (or be empty).
 function sanitizeImageUrl(value: unknown): string {
@@ -51,6 +52,9 @@ export async function POST(request: Request) {
     }
 
     const supabase = getSupabase()
+    // Luminance is computed at save-time so the site hero knows its scrim
+    // tier instantly (never decoded at render time).
+    const imageLuminance = image_url ? await imageLuminanceFromUrl(image_url) : null
     const { data, error } = await supabase
       .from('business_items')
       .insert({
@@ -59,6 +63,7 @@ export async function POST(request: Request) {
         slug: slugify(name) || `item-${Date.now()}`,
         price,
         image_url,
+        image_luminance: imageLuminance,
         is_active,
       })
       .select(ITEM_COLUMNS)

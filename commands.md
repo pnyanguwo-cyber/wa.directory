@@ -1,6 +1,6 @@
 # WA Directory — WhatsApp bot command reference
 
-Last updated: 2026-10-25 · Bot number +263716150206 · Web app wadirectory.co.zw
+Last updated: 2026-10-27 · Bot number +263716150206 · Web app wadirectory.co.zw
 Everything below works in plain WhatsApp text. Bold = a literal word.
 
 ## Customer commands (anyone)
@@ -67,7 +67,8 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 |---|---|
 | `listings` | Newest 10 businesses with verify + payment state and date |
 | `pending` | Numbered list of unverified businesses |
-| `verify 2` / `unverify 2` | Number from `pending`. `verify` now mirrors the dashboard: re-verifies payment and puts the listing live, sends you_are_live template + channel pitch |
+| `verify 2` / `unverify 2` | Number from `pending`. `verify` grants **30 days by default**: creates an active listing subscription (cron reminders + expiry take over automatically), then sends the owner the you_are_live template + links (profile · auto-website · portal) + channel pitch. `verify 2 90` sets a custom day-grant |
+| `verify Diamond tradings 30` / `unverify Diamond tradings` | Fuzzy business-name match — typo-friendly. One strong match acts immediately; several close matches return a numbered suggestion list to pick from. Day count sits in the same line; default 30 days |
 | `switch` | Show the priority supplier switch |
 | `switch on` / `switch off` / `switch price $3/month` | Flip or reprice the push-template switch |
 
@@ -75,7 +76,12 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 
 | Command | What it does |
 |---|---|
-| `cast your message` | Preview → confirm → send to everyone active in the 24h window (opted-out and admins excluded, 200 cap) |
+| `cast your message` | Preview → confirm → send to everyone active in the 24h window (opted-out and admins excluded) |
+| `cast owners <message>` / `cast buyers <message>` | Segment the broadcast: business owners (phone on a listing) or buyers (non-owners) |
+| `cast owners harare <message>` | City or category filter on a segmented cast — e.g. `cast owners jewellery ...` |
+| `cast owners today 15:30 <message>` / `cast buyers tomorrow 9am <message>` | Schedule a cast for a set time (Harare time); the hourly cron releases it and messages you the final counts |
+| `casts` | Recent casts with status, segment and sent/failed counts |
+| `cast cancel <id>` | Cancel a scheduled or in-flight cast |
 | `channel` / `channel status` | Show the live channel link (settings or env) |
 | `channel set https://…` / `channel clear` | Override or clear the stored link (falls back to `CHANNEL_LINK` env) |
 
@@ -92,6 +98,7 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 
 - Welcome (first contact: full starter kit + channel link + menu; returning contacts get a named welcome-back)
 - Closing ceremony check at 07:00 Harare — needs silent for 22h get their closure, winner recap + quotes to the buyer
+- Casts every hour: scheduled casts release at their set time, in-flight casts continue (100 recipients per run)
 - Daily store report at 04:00 Harare (stats rollup)
 - Idle nudges only during an active search/order step (replaceable "End search" button)
 - Registration/payment confirmations + channel pitches to business owners
@@ -100,4 +107,8 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 
 - Admin commands only answer admin numbers; everyone else flows through the storefront.
 - The 24h WhatsApp window: free-form replies only work inside it (any incoming message refreshes it); templates cover outside-the-window sends (`you_are_live`, digest copies).
+- Casts: audience capped at 1000, first ≤400 recipients send immediately in the same request, the rest continues automatically (100 per hourly cron run) — segments can only narrow the 24h window, never widen it.
 - CSV exports never include expired listings; expired rows live on the Subscriptions tab.
+- **Approvals expire** — approving (bot or dashboard) grants 30 days by default; a typed day count (`verify <name> 90`) overrides. When the grant lapses, the existing cron hides the listing and pings the owner to renew.
+- **Registration fields** (living form, N/10): name, category, city, phone, area, description, prices (cheapest item → most expensive), website, catalog (`wa.me/c/…`), address. Photos/voice notes sent mid-registration are read into the form; a photo doubles as the queued logo.
+- **After go-live**, an owner can send a product photo and reply `name price` (e.g. `bread $2`) — the bot stocks it on the auto-website's shop shelf (`business_items`), no portal needed.

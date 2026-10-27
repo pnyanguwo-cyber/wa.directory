@@ -63,16 +63,26 @@ export async function activateListingSubscription(
 
   if (bizError) return { ok: false, error: bizError.message }
 
-  // Best-effort owner notification for auto-confirmed payments.
-  if (opts.autoConfirmed) {
+  // Owner onboarding notification — fires for auto-confirmed payments AND
+  // admin manual confirmations alike: the moment money lands or the admin
+  // activates, the owner gets their confirmation + every link.
+  {
     const { data: business } = await supabase
       .from('businesses')
-      .select('name, phone, username')
+      .select('name, phone, username, slug')
       .eq('id', sub.business_id)
       .maybeSingle()
 
     if (business?.phone) {
       const siteUrl = SITE_URL
+      // Throw the owner their links immediately: listing, auto-website,
+      // portal — the paying moment is the best onboarding window we get.
+      const bizSlug = business.slug || business.username || ''
+      const links = [
+        `🏢 Profile: ${siteUrl}/business/${bizSlug}`,
+        `🌐 Website: ${siteUrl}/site/${bizSlug}`,
+        `🔑 Portal: ${siteUrl}/portal (log in with @${business.username || 'N/A'})`,
+      ].filter(l => !l.includes('/N/A')) // no usernames on file → skip that line
       sendWhatsAppMessage(
         business.phone,
         [
@@ -81,7 +91,10 @@ export async function activateListingSubscription(
           `${business.name} (@${business.username || 'N/A'}) is now visible on WA Directory.`,
           `Active until ${expiresAt.toISOString().slice(0, 10)}.`,
           '',
+          ...links,
+          '',
           `Renew anytime: ${siteUrl}/pay`,
+          '📸 After go-live: send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
         ].join('\n')
       ).catch(() => {})
 

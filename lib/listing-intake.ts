@@ -15,6 +15,7 @@ export interface ListingFormState {
   username?: string
   price_range?: string
   website?: string
+  catalog?: string
   address?: string
   description?: string
   whole_country?: boolean
@@ -93,23 +94,41 @@ function manualCategory(lower: string): string | null {
 
 const PHONE_RE = /(?:\+?263|0)\s?7[\d\s.\-]{8,11}(?!\d)/
 const NATION_RE = /(whole country|country ?wide|nation ?wide|everywhere|anywhere|across zimbabwe|all over zimbabwe|entire zimbabwe|\bwhole zimbabwe\b|\bzimbabwe\b)/i
-const URL_RE = /\b(?:(?:http|https):\/\/|www\.)[^\s]+|\b[\w-]+\.(?:co\.zw|com|org|net|biz|site|online|shop|store|africa|co|zw)\b/i
+// Scheme'd/www URLs consume to end of token; bare domains (incl. wa.me catalog
+// links) match the TLD plus an optional /path so "wa.me/c/263…" stays whole.
+const URL_RE = /\b(?:(?:http|https):\/\/|www\.)[^\s]*|\b[\w-]+\.(?:co\.zw|com|org|net|biz|site|online|shop|store|africa|co|zw|me)(?:\/[^\s]*)?/i
+const CATALOG_RE = /(?:https?:\/\/)?(?:www\.)?wa\.me\/c\/[\w\-]+/i
+
+// URLs written in chat often carry trailing sentence punctuation.
+function trimUrl(url: string): string {
+  return url.replace(/[.,;:!?)\]]+$/, '')
+}
+
+function normalizeCatalogLink(link: string): string {
+  return /^https?:\/\//i.test(link) ? link : `https://${link}`
+}
 const USERNAME_RE = /@([a-zA-Z0-9_]{3,})/
 const PRICE_RE = /\$?\s?(\d+(?:[.,]\d+)?)\s?(?:-|–|—|to)\s?\$?\s?(\d+(?:[.,]\d+)?)/i
 const ME_RE = /^(me|mine|my number|this number|use mine)\b/i
 const VOICE_RE = /\b(voice|hotline|landline|call only)\b/i
 
+// A labeled line is "<label> <separator-or-space> <value>" — the separator is
+// optional so bare "Name Diamond tradings", "City Harare" or "Price 100-200"
+// parse just like "name: …". Values that start with a continuation word
+// ("name of the business is X") get the stopword stripped in the handler.
 const LABELS: { re: RegExp; field: string }[] = [
-  { re: /^\s*(?:business\s+)?name\s*[:\-–]\s*/i, field: 'name' },
-  { re: /^\s*city\s*[:\-–]\s*/i, field: 'city' },
-  { re: /^\s*town\s*[:\-–]\s*/i, field: 'city' },
-  { re: /^\s*(?:area|suburb)\s*[:\-–]\s*/i, field: 'area' },
-  { re: /^\s*(?:phone|number|cell|contact)\s*[:\-–]\s*/i, field: 'phone' },
-  { re: /^\s*price[s]?\s*[:\-–]\s*/i, field: 'price' },
-  { re: /^\s*desc(?:ription)?\s*[:\-–]\s*/i, field: 'description' },
-  { re: /^\s*about\s*[:\-–]\s*/i, field: 'description' },
-  { re: /^\s*(?:website|web|site)\s*[:\-–]\s*/i, field: 'website' },
-  { re: /^\s*(?:address|located?)\s*[:\-–]\s*/i, field: 'address' },
+  { re: /^\s*(?:business\s+)?name\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'name' },
+  { re: /^\s*categ(?:ory|ies|s)?\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'category' },
+  { re: /^\s*city\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'city' },
+  { re: /^\s*town\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'city' },
+  { re: /^\s*(?:area|suburb)\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'area' },
+  { re: /^\s*(?:phone|number|cell|contact)\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'phone' },
+  { re: /^\s*price[s]?\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'price' },
+  { re: /^\s*desc(?:ription)?\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'description' },
+  { re: /^\s*about\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'description' },
+  { re: /^\s*(?:website|web|site)\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'website' },
+  { re: /^\s*catalo?g(?:ue)?\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'catalog' },
+  { re: /^\s*(?:address|located?)\b(?:\s*[:\-–]\s*|\s+)(?=\S)/i, field: 'address' },
   { re: /^\s*(?:username|handle)\s+(?=@)/i, field: 'username' },
   { re: /^\s*(?:username|handle)\s*[:\-–]\s*/i, field: 'username' },
 ]
@@ -127,9 +146,29 @@ function setCtxField(ctx: Ctx, field: string, value: string): boolean {
     return true
   }
   switch (field) {
-    case 'name':
-      if (value.length < 2) return false
+    case 'name': {
+      // "name of the business is X" → strip the continuation words so the
+      // value is the business itself, not the connective sentence.
+      const clean = value.replace(/^(?:of|for|is|it\s+is|my\s+business\s+is)\s+/i, '').trim()
+      if (clean.length < 2) return false
       return apply()
+    }
+    case 'category': {
+      // Multiple categories in one value ("jewellery, watches") all apply.
+      const parts = value.split(/\s*[/&,]\s*/).filter(Boolean)
+      let any = false
+      for (const part of parts) {
+        const cat = guessCategory(part)
+        if (!cat) continue
+        const cats = s.categories ? [...s.categories] : []
+        if (!cats.includes(cat) && cats.length < 4) {
+          cats.push(cat)
+          s.categories = cats
+          any = true
+        }
+      }
+      return any
+    }
     case 'city': {
       const city = findListingCity(value)
       if (city) {
@@ -179,7 +218,20 @@ function setCtxField(ctx: Ctx, field: string, value: string): boolean {
     case 'website': {
       const url = value.match(URL_RE)?.[0]
       if (!url) return false
-      s.website = url
+      s.website = trimUrl(url)
+      return true
+    }
+    case 'catalog': {
+      // WhatsApp catalogs are shared as wa.me/c/… links (with or without
+      // https://); any other URL is accepted as a catalog link too.
+      const cat = value.match(CATALOG_RE)?.[0]
+      if (cat) {
+        s.catalog = normalizeCatalogLink(cat)
+        return true
+      }
+      const url = value.match(URL_RE)?.[0]
+      if (!url) return false
+      s.catalog = trimUrl(url)
       return true
     }
     case 'address':
@@ -207,7 +259,7 @@ function recordPrice(line: string): string | null {
     const hi = Math.max(a, b)
     return `$${lo} - $${hi}`
   }
-  const single = line.match(/\$\s?(\d+(?:[.,]\d+)?)/)
+  const single = line.match(/\$?\s?(\d+(?:[.,]\d+)?)/)
   if (!single) return null
   const a = Number(single[1].replace(',', '.'))
   return Number.isFinite(a) && a > 0 ? `$${a}` : null
@@ -283,10 +335,14 @@ export function parseListingMessage(
     // 3) Extract everything from a possibly compound line:
     //    "Job Moyo Hardware 077123 4567 Harare $5-40 selling tools"
     let rem = line
-    if (URL_RE.test(rem)) {
+    const catLink = rem.match(CATALOG_RE)?.[0]
+    if (catLink) {
+      rem = rem.replace(catLink, ' ').trim()
+      void ctx.set('catalog', catLink, { onlyIfEmpty: true })
+    } else if (URL_RE.test(rem)) {
       const m = rem.match(URL_RE)!
       rem = rem.replace(m[0], ' ').trim()
-      void ctx.set('website', m[0], { onlyIfEmpty: true })
+      void ctx.set('website', trimUrl(m[0]), { onlyIfEmpty: true })
     }
     const handle = rem.match(USERNAME_RE)?.[1]
     if (handle && rem.replace(USERNAME_RE, '').trim().length <= 3) {
@@ -438,8 +494,24 @@ function fieldLines(state: ListingFormState, senderPhone: string): string[] {
     state.description || '',
     'optional — what you offer, in one line'
   )
-  push(!!state.price_range, 'Prices', state.price_range || '', 'optional — e.g. $5 - $40')
-  push(!!state.website, 'Website', state.website || '', 'optional — link or site name')
+  push(
+    !!state.price_range,
+    'Prices',
+    state.price_range || '',
+    'optional — cheapest item to most expensive, e.g. $5 - $40'
+  )
+  push(
+    !!state.website,
+    'Website',
+    state.website || '',
+    'optional but important — if you have one, send it (e.g. www.myshop.co.zw)'
+  )
+  push(
+    !!state.catalog,
+    'Catalog',
+    state.catalog || '',
+    'optional — WhatsApp catalog link (wa.me/c/…)'
+  )
   push(!!state.address, 'Address', state.address || '', 'optional — street / stand number')
   return lines
 }
@@ -454,10 +526,11 @@ export function renderListingForm(state: ListingFormState, senderPhone: string):
     (state.description ? 1 : 0) +
     (state.price_range ? 1 : 0) +
     (state.website ? 1 : 0) +
+    (state.catalog ? 1 : 0) +
     (state.address ? 1 : 0)
 
   return [
-    `🏪 *Your listing* — ${filledCount}/9 ready`,
+    `🏪 *Your listing* — ${filledCount}/10 ready`,
     '',
     ...fieldLines(state, senderPhone),
     '',
@@ -490,10 +563,108 @@ export function renderMissingRequiredList(state: ListingFormState): string {
 export const LIST_INTRO = (): string => [
   "Let's list your business on WA Directory — send a quick line or a full paragraph, and I'll fill the form.",
   '',
-  'Fields I pick from your text: name, category, city, phone, prices, description, website, address.',
+  'Fields I pick from your text: name, category, city, phone, prices, description, website, catalog, address.',
   '',
   'Example:',
   'Bread Machine Store in Harare, contact 077123 4567, sells bread from $1',
+  'Catalog: https://wa.me/c/263771234567',
+  '',
+  'Prices work best as a range — your cheapest item to your most expensive.',
   '',
   'Reply *cancel* to stop anytime.',
 ].join('\n')
+
+// ── Field-patch application (AI fallback + photo perception share this) ───
+// Every external source of field values funnels through the same validators,
+// so garbage from any source is rejected exactly like typed text.
+
+export interface ListingFieldPatch {
+  name?: string
+  categories?: string[]
+  city?: string
+  area?: string
+  phone?: string
+  phone_type?: 'whatsapp' | 'voice'
+  price_range?: string
+  website?: string
+  catalog?: string
+  address?: string
+  description?: string
+  whole_country?: boolean
+}
+
+export function applyListingFields(
+  base: ListingFormState,
+  patch: ListingFieldPatch,
+  senderPhone: string
+): ListingFormState {
+  const state: ListingFormState = { ...base }
+  const ctx: Ctx = {
+    patch: state,
+    sender: senderPhone,
+    set: (k, v, opts) => {
+      const cur = state[k]
+      if (opts?.onlyIfEmpty && cur) return
+      if (Array.isArray(cur) && Array.isArray(v)) {
+        for (const item of v) {
+          if (!cur.includes(item)) cur.push(item)
+        }
+        return
+      }
+      if (cur === v) return
+      ;(state as Record<string, unknown>)[k] = v
+    },
+  }
+
+  // whole_country pairs with city: an explicit city wins over a nation flag.
+  if (patch.city !== undefined) setCtxField(ctx, 'city', patch.city)
+  if (patch.area !== undefined) setCtxField(ctx, 'area', patch.area)
+  if (patch.whole_country === true && patch.city === undefined) {
+    state.city = undefined
+    state.whole_country = true
+  }
+  if (patch.name !== undefined) setCtxField(ctx, 'name', patch.name)
+  if (patch.categories?.length) setCtxField(ctx, 'category', patch.categories.join(', '))
+  if (patch.phone !== undefined) setCtxField(ctx, 'phone', patch.phone)
+  if (patch.phone_type === 'voice' && state.phone) state.phone_type = 'voice'
+  if (patch.price_range !== undefined) setCtxField(ctx, 'price', patch.price_range)
+  if (patch.website !== undefined) setCtxField(ctx, 'website', patch.website)
+  if (patch.catalog !== undefined) setCtxField(ctx, 'catalog', patch.catalog)
+  if (patch.address !== undefined) setCtxField(ctx, 'address', patch.address)
+  if (patch.description !== undefined) {
+    // Never shrink a description that rules already wrote.
+    if (!state.description || patch.description.length > state.description.length) {
+      setCtxField(ctx, 'description', patch.description)
+    }
+  }
+  return state
+}
+
+// A price with no range end ("$100") — the bot should ask for the other end.
+export function isSinglePriceRange(price?: string): boolean {
+  return !!price && /^\$\s?\d+(?:[.,]\d+)?$/.test(price.trim())
+}
+
+// Heuristic for the AI pass: the rule parser stalled (nothing changed) or it
+// left a label word inside the business name. Cheap and deterministic.
+export function needsAIPass(
+  text: string,
+  before: ListingFormState,
+  after: ListingFormState
+): boolean {
+  const changed = ([
+    'name', 'categories', 'city', 'area', 'phone', 'phone_type',
+    'price_range', 'website', 'catalog', 'address', 'username',
+    'description', 'whole_country',
+  ] as (keyof ListingFormState)[]).some(k =>
+    JSON.stringify(before[k] ?? null) !== JSON.stringify((after as Record<string, unknown>)[k] ?? null)
+  )
+  if (
+    changed &&
+    /^\s*(?:business\s+)?name\b/i.test(after.name || '') &&
+    !/^\s*(?:business\s+)?name\b/i.test(before.name || '')
+  ) {
+    return true
+  }
+  return !changed && text.trim().length >= 6
+}

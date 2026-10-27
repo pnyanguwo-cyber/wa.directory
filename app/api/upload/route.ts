@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { sniffImage, uploadLogoImage, MAX_LOGO_BYTES } from '@/lib/image-storage'
+import { imageLuminanceFromBytes } from '@/lib/image-luminance'
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,7 +30,9 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Upload failed' }, { status: 500 })
     }
 
-    return Response.json({ url })
+    // Clients can persist this alongside the URL (hero scrim tiering).
+    const luminance = await imageLuminanceFromBytes(bytes)
+    return Response.json({ url, luminance })
   } catch (err) {
     console.error('Upload error:', err)
     return Response.json({ error: 'Upload failed' }, { status: 500 })

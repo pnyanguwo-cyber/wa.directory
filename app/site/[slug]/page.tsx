@@ -11,6 +11,7 @@ import { digitsOnly } from '@/lib/phone'
 import { formatPrice, getInitials } from '@/lib/utils'
 import { accentFor } from '@/lib/category-style'
 import { getPreset } from '@/lib/site-design'
+import { washForLuminance } from '@/lib/image-luminance'
 import { getFontPair } from '@/lib/site-fonts'
 
 import Reveal from '@/components/site/reveal'
@@ -34,7 +35,7 @@ export async function generateStaticParams() {
 }
 
 const SITE_SELECT =
-  'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme, site_socials, site_content, created_at, rating, review_count, website, address, lat, lng, show_location, business_id'
+  'id, name, slug, bio, category, phone, phone_type, voice_phone, whatsapp_link, logo_url, city, area, areas, payment_status, generate_site, site_hero, site_services, site_contact_email, site_theme, site_socials, site_content, site_cover_luminance, created_at, rating, review_count, website, address, lat, lng, show_location, business_id'
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
   const { data } = (await getSupabase()
@@ -102,7 +103,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   const [itemsRes, ratingsRes] = await Promise.all([
     getSupabase()
       .from('business_items')
-      .select('id, business_id, name, slug, price, image_url, is_active, created_at, updated_at')
+      .select('id, business_id, name, slug, price, image_url, image_luminance, is_active, created_at, updated_at')
       .eq('business_id', business.id)
       .eq('is_active', true)
       .order('created_at', { ascending: true }),
@@ -223,6 +224,14 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   // Automatic "dark hero" mode when a photographic cover image is present,
   // or when heroBg is explicitly dark, or when accent is dark
   const isHeroDark = coverImage ? true : (heroBg ? isDark(heroBg) : accentDark)
+
+  // Auto-contrast: the scrim deepens on bright covers, eases on dark ones.
+  // Luminance mirrors whichever source supplied the cover (gallery[0] first,
+  // then the first active item photo); unknown → default wash tiers.
+  const heroLuminance = blocks.gallery?.[0]
+    ? (business.site_cover_luminance ?? null)
+    : (itemList.find((i) => i.image_url)?.image_luminance ?? null)
+  const heroWash = washForLuminance(heroLuminance)
 
   // Derived color tokens via color-mix()
   const accentSoftBg = `color-mix(in srgb, ${accent} 10%, transparent)`
@@ -377,7 +386,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
             <div
               className="absolute inset-0"
               style={{
-                backgroundImage: `radial-gradient(ellipse 80% 85% at 85% 15%, color-mix(in srgb, ${accent} 40%, transparent), transparent 65%), linear-gradient(to right, rgba(2, 6, 23, 0.65) 0%, rgba(2, 6, 23, 0.45) 40%, rgba(2, 6, 23, 0) 62%), linear-gradient(to bottom, transparent 62%, rgba(2, 6, 23, 0.5) 100%)`,
+                backgroundImage: `radial-gradient(ellipse 80% 85% at 85% 15%, color-mix(in srgb, ${accent} 40%, transparent), transparent 65%), linear-gradient(to right, rgba(2, 6, 23, ${heroWash.scrimL}) 0%, rgba(2, 6, 23, ${heroWash.scrimM}) 40%, rgba(2, 6, 23, 0) 62%), linear-gradient(to bottom, transparent 62%, rgba(2, 6, 23, ${heroWash.scrimB}) 100%)`,
               }}
             />
             {/* Scrim Layer 3: Tactile SVG noise grain overlay */}

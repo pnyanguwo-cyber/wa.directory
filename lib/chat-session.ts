@@ -61,8 +61,15 @@ export interface ChatSessionData {
   // ── Admin commands over WhatsApp ──────────────────────────────────
   // Last `pending` listing: business ids in display order for verify N.
   pendingBiz?: string[]
-  // Broadcast preview body waiting for the ✅ confirm tap.
-  castText?: string
+  // Fuzzy-match suggestions: op + day-grant carried through the pick.
+  pendingOp?: 'verify' | 'unverify'
+  pendingDays?: number
+  // Pending product photo (item_photo flow): uploaded URL awaiting name+price.
+  pendingItemImage?: string
+  pendingItemBiz?: { id: string; name: string }
+  // Broadcast draft (admin_cast step): segment + filter + body + optional
+  // release time, waiting on the ✅/⏰ confirm tap.
+  castSpec?: import('./casts').CastSpec
   // ── Typed customer order (S18.2) ─────────────────────────────────────
   // Draft of the order being verified: parsed "2 bread 1 cake" matched
   // against shelves, grouped per supplier. Committed on the ✅ tap.
