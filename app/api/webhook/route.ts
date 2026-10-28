@@ -15,11 +15,22 @@ import {
 import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
 import { logBotMessage, logBotSearch } from '@/lib/bot-log'
 import { orderSearchResults } from '@/lib/ranking'
-import { expandSearchQuery } from '@/lib/gemini'
+import { expandSearchQuery, classifyIntent } from '@/lib/gemini'
 import type { Business } from '@/types'
-import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData, type PendingGroup, type PendingOrder } from '@/lib/chat-session'
+import {
+  getSession,
+  saveSession,
+  clearSession,
+  PAUSE_TTL_MS,
+  type ChatSession,
+  type ChatSessionData,
+  type PausedDraft,
+  type PendingGroup,
+  type PendingOrder,
+} from '@/lib/chat-session'
 import { compileOrderText } from '@/lib/order-message'
 import { parseOrderLine, matchOrder, type ShelfSupplier, type OrderPair, type MatchResult } from '@/lib/order-intake'
+import { DATA_ENTRY_STEPS, detectPivot, familyOf, pivotCandidateForIntent } from '@/lib/intent-pivot'
 import {
   createSupplyOrder, recordOrderOpen, claimSupplyOrder, getSupplyOrderById, listOrdersForBusiness,
   listOrdersForBuyer, orderStats, type SupplyOrderRow,
@@ -859,6 +870,278 @@ async function startRegister(from: string, initialText: string = '') {
   const { state } = parseListingMessage(initialText, from)
   await saveSession(from, 'list_form', { list: state } as ChatSessionData)
   await sendFormUpdate(from, state, LIST_INTRO())
+}
+
+// The shelved flow, while it is still fresh enough to resume.
+function pausedDraft(session: ChatSession | null): PausedDraft | null {
+  const p = session?.data?.paused
+  if (!p?.step) return null
+  const at = Date.parse(p.at || '')
+  if (!Number.isFinite(at) || Date.now() - at > PAUSE_TTL_MS) return null
+  return p
+}
+
+// True when the session actually holds something worth shelving.
+function hasProgress(data: ChatSessionData): boolean {
+  return Object.entries(data).some(
+    ([k, v]) =>
+      k !== 'paused' &&
+      v != null &&
+      v !== '' &&
+      !(Array.isArray(v) && v.length === 0) &&
+      !(typeof v === 'object' && Object.keys(v as object).length === 0)
+  )
+}
+
+// Park a flow so it survives the one that is opening now. The row may have
+// been cleared by the new flow's start, hence the 'idle' placeholder step —
+// the dispatch treats it as "no active step".
+async function stashPaused(from: string, draft: PausedDraft) {
+  const cur = await getSession(from)
+  await saveSession(from, cur?.step || 'idle', { ...(cur?.data || {}), paused: draft })
+}
+
+/**
+ * Follow a stated change of direction mid-flow. Returns true when the message
+ * was a pivot and has been handled (the old flow is shelved, the new one is
+ * open); false hands the message back to the normal step handling.
+ */
+async function handleIntentPivot(
+  from: string,
+  session: ChatSession | null,
+  text: string
+): Promise<boolean> {
+  if (!session?.step || session.step === 'idle') return false
+  const step = session.step
+  let kind = detectPivot(text, step)
+  if (!kind) {
+    if (DATA_ENTRY_STEPS.has(step) || !pivotCandidateForIntent(text)) return false
+    // A plain town name in the location step is the answer, not a plan change.
+    if (
+      step === 'search_loc' &&
+      zimbabweCities.some(c => c.name.toLowerCase() === text.trim().toLowerCase())
+    ) {
+      return false
+    }
+    const hinted = await classifyIntent(text, step)
+    if (!hinted || hinted === 'continue' || hinted === familyOf(step)) return false
+    kind = hinted
+  }
+
+  const shelvedFresh = pausedDraft(session)
+  const kept: PausedDraft =
+    shelvedFresh ??
+    ({ step: session.step, data: session.data, at: new Date().toISOString() } as PausedDraft)
+  const hadDraft = hasProgress(session.data)
+  const ack = hadDraft
+    ? "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+    : ''
+  const say = async (line: string) => {
+    if (line) await sendWhatsAppMessage(from, line)
+  }
+
+  switch (kind) {
+    case 'register': {
+      // Re-entering a registration that was shelved earlier: offer it back
+      // instead of silently starting a second one.
+      if (shelvedFresh && familyOf(shelvedFresh.step) === 'register') {
+        await sendWhatsAppMessage(
+          from,
+          'No problem — plans have changed 👍\n\nYou left a registration part-way through. Continue it, or start over?'
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'resume_paused', title: '▶ Continue my draft' },
+          { id: 'reg_restart', title: '✎ Start over' },
+          { id: 'cancel', title: '✖ Cancel' },
+        ])
+        break
+      }
+      await say(
+        ack
+          ? `${ack}\nOpen the list below and select Register business 👇`
+          : "Sounds like our plans have changed 👍\nOpen the list below and select Register business 👇"
+      )
+      await sendRegisterChoice(from)
+      break
+    }
+    case 'pay':
+      await say(`${ack}${ack ? '\n' : ''}Let's sort out payment then.`)
+      await startPayChoice(from)
+      break
+    case 'need':
+      await say(`${ack}${ack ? '\n' : ''}Let's post your need instead 👇`)
+      await startNeedIntake(from)
+      break
+    case 'order': {
+      const tail = text.trim().replace(/^order\b[,;:]?\s*/i, '')
+      await say(ack)
+      await typedOrderFromText(from, session, tail || 'order')
+      break
+    }
+    case 'search': {
+      // Strip the framing words so the search reads as they meant it:
+      // "wait, let me find a plumber" → "find a plumber".
+      const q = text
+        .trim()
+        .replace(
+          /^(?:(?:actually|wait|hold on(?: a (?:sec|moment))?|scratch that|never ?mind|let me|i (?:want|need|would like) to|i'd like to|can i|could i|how (?:do|can) i|how to|help me(?: out)?|instead|rather|ok(?:ay)?|so)[\s,]+)+/i,
+          ''
+        )
+      await say(ack)
+      await clearSession(from)
+      await dispatchSearch(from, q || text)
+      break
+    }
+    case 'menu':
+      await say(`${ack}${ack ? '\n' : ''}Open the list below and choose what you'd like to do 👇`)
+      await sendMainMenu(from)
+      break
+  }
+
+  await stashPaused(from, kept)
+  return true
+}
+
+/** Restore the flow an earlier direction change shelved. */
+async function resumePaused(from: string, session: ChatSession | null): Promise<boolean> {
+  const draft = pausedDraft(session)
+  if (!draft) return false
+  const { step, data } = draft
+  // The stash is live again — drop it from the session.
+  await saveSession(from, step, { ...data, paused: undefined })
+
+  const head = '✍️ Picking up where you left off.'
+  switch (step) {
+    case 'list_form':
+      await sendFormUpdate(from, data.list || ({} as ListingFormState), head)
+      return true
+    case 'reg_contact':
+      await sendWhatsAppMessage(
+        from,
+        [
+          head,
+          '',
+          "Send the contact's name + phone (+ city, socials optional), e.g.",
+          '*Tendai Ncube 0771 234 567 Harare*',
+        ].join('\n')
+      )
+      return true
+    case 'confirm':
+      await sendWhatsAppMessage(from, head)
+      await sendConfirmation(from, data)
+      return true
+    case 'name':
+      await sendWhatsAppMessage(from, `${head} What is your business name?`)
+      return true
+    case 'username':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Your *WhatsApp username* (the one shown on your WhatsApp Business profile).`
+      )
+      return true
+    case 'phone':
+      await sendWhatsAppMessage(from, `${head} Your *phone number* (e.g. 712345678).`)
+      return true
+    case 'category':
+      await sendWhatsAppMessage(
+        from,
+        `${head} What do you sell? e.g. *phones, plumbing, catering, magetsi, salon*…`
+      )
+      return true
+    case 'description':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Describe your business in one or two sentences (what you offer):`
+      )
+      return true
+    case 'city':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Which town or city are you based in? (or type *whole country*)`
+      )
+      return true
+    case 'area':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Which area in *${data.city || 'your town'}*? (or type *skip*)`
+      )
+      return true
+    case 'search_loc':
+      await sendAskTown(from, data.pending_search_term || '', false, true)
+      return true
+    case 'search_term':
+      await sendAskTerm(from, data.pending_city || null)
+      return true
+    case 'browse': {
+      const cards = data.results || []
+      if (cards.length) {
+        await sendWhatsAppMessage(from, head)
+        await sendResultsListPage(
+          from,
+          cards,
+          data.page || 0,
+          data.lastTerm || 'search',
+          data.lastCity ?? null,
+          !!data.nearby
+        )
+      } else {
+        await startFreshSearchPrompt(from)
+      }
+      return true
+    }
+    case 'need_form':
+      if (data.need?.item) {
+        await sendWhatsAppMessage(from, head)
+        await showNeedConfirm(from, data.need)
+      } else {
+        await sendWhatsAppMessage(from, head)
+        await startNeedIntake(from)
+      }
+      return true
+    case 'order':
+      if (data.pendingOrder?.groups?.length) {
+        await sendWhatsAppMessage(
+          from,
+          [head, renderOrderVerify(data.pendingOrder.groups), '', 'Reply *yes* to send, *no* to edit, or *back* to pause.'].join(
+            '\n'
+          )
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'osend', title: '✅ Send order' },
+          { id: 'oedit', title: '✎ Re-type' },
+        ])
+      } else {
+        await sendWhatsAppMessage(from, `${head} Send your order again — e.g. *order 2 bread, 1 cake*.`)
+      }
+      return true
+    case 'rating':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Rate your experience *1* to *5* (1 = poor, 5 = excellent), add a short comment if you like, or reply *skip*.`
+      )
+      return true
+    case 'pay_plan':
+      await sendWhatsAppMessage(from, `${head} Reply *1*, *6* or *12* to pick your plan.`)
+      return true
+    case 'pay_ecocash':
+      await sendWhatsAppMessage(from, `${head} Enter your EcoCash number (e.g. 0771234567):`)
+      return true
+    case 'pay_search':
+      await sendWhatsAppMessage(from, `${head} Which business do you want to pay for? Type its name:`)
+      return true
+    case 'pay_pick':
+      await sendWhatsAppMessage(from, `${head} Reply a number to pick the listing to pay.`)
+      return true
+    case 'item_photo':
+      await sendWhatsAppMessage(from, `${head} Send the product photo, then *name $price* (e.g. *bread $2*).`)
+      return true
+    case 'item_pick':
+      await sendWhatsAppMessage(from, `${head} Tap the shop button to pick, or send the product photo again.`)
+      return true
+    default:
+      await sendWhatsAppMessage(from, `${head} Send your reply.`)
+      return true
+  }
 }
 
 // ✎ Register opens with the honest price list, then routes to the flow that
@@ -1933,6 +2216,19 @@ async function postBuyerNeed(from: string, session: ChatSession | null) {
     logOut(admin, 'text', adminBody)
   }
   await clearSession(from)
+}
+
+async function pingAdminsSearch(term: string, city: string | null, from: string) {
+  const adminBody = [
+    `🔎 *Buyer searching*`,
+    `• "${term}"${city ? ` · ${city.toUpperCase()}` : ''}`,
+    `👤 From: +${digitsOnly(from)}`,
+  ].join('\n')
+  for (const admin of await adminNumbers()) {
+    if (!admin || admin === digitsOnly(from)) continue
+    await sendWhatsAppText(admin, adminBody)
+    logOut(admin, 'text', adminBody)
+  }
 }
 
 /** Buyer taps ✅ on a quote card: close the need with that winner and
@@ -3049,7 +3345,32 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       }
       return
     }
-    case 'menu_register':
+    case 'menu_register': {
+      // A registration shelved by an earlier direction change gets offered
+      // back before a fresh one starts.
+      const draft = pausedDraft(session || (await getSession(from)))
+      if (draft && familyOf(draft.step) === 'register') {
+        await sendWhatsAppMessage(
+          from,
+          'You left a registration part-way through. Continue it, or start over?'
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'resume_paused', title: '▶ Continue my draft' },
+          { id: 'reg_restart', title: '✎ Start over' },
+          { id: 'cancel', title: '✖ Cancel' },
+        ])
+        return
+      }
+      await sendRegisterChoice(from)
+      return
+    }
+    case 'resume_paused': {
+      if (!(await resumePaused(from, session || (await getSession(from))))) {
+        await sendWhatsAppMessage(from, "That draft has expired — send *register* to start again.")
+      }
+      return
+    }
+    case 'reg_restart':
       await sendRegisterChoice(from)
       return
     case 'reg_business':
@@ -3426,6 +3747,7 @@ async function dispatchSearch(
     // Demand radar: every user query lands in bot_searches, even the ones
     // that never find supply — that's the admin digest's radar section.
     logBotSearch(from, p.term || (p.city ? '(town only)' : '(blank)'), p.city).catch(() => {})
+    pingAdminsSearch(p.term || (p.city ? '(town only)' : '(blank)'), p.city, from).catch(() => {})
 
   // Bare name search with no town: when exactly one verified business is
   // named by the query, show its contact details right away (nationwide)
@@ -4399,9 +4721,13 @@ export async function POST(request: Request) {
           await sendWhatsAppMessage(from, 'Okay 👌 You will not hear from us again. Reply *help* if you ever want to browse again.')
           continue
         } else {
-          await upsertBotContact(from, waName, contactSession?.step || '')
+          await upsertBotContact(from, waName, contactSession && contactSession.step !== 'idle' ? contactSession.step : '')
         }
         let session = contactSession
+        // 'idle' is the placeholder row a shelved draft sits on when no flow is
+        // open: treat it as no active step — the draft itself is read from the
+        // DB by resumePaused / stashPaused.
+        if (session?.step === 'idle') session = null
 
         // ── Admin command suite (owner + allowlisted numbers) ───────────
         if (await isBotAdmin(from)) {
@@ -4450,6 +4776,22 @@ export async function POST(request: Request) {
         // + logo while filling the listing form.
         if (mediaKind) {
           await handleBotMedia(from, session, message, msgId)
+          continue
+        }
+
+        // Pick up a flow that an earlier direction change shelved (the draft
+        // lives in the session row, which may be the 'idle' placeholder).
+        if (
+          /^(?:resume|continue|pick ?up|carry on)\b/.test(lower) &&
+          (await resumePaused(from, session || (await getSession(from))))
+        ) {
+          continue
+        }
+
+        // Direction change mid-flow: follow the person, not the script.
+        // Structured RQ relays are never a direction change — they always
+        // belong to the quote flow below.
+        if (!/^rq-/i.test(lower) && (await handleIntentPivot(from, session, text))) {
           continue
         }
 

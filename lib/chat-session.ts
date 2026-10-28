@@ -77,7 +77,23 @@ export interface ChatSessionData {
   // Last business whose detail card was opened — lets a bare `order …` line
   // prefer that shop's shelf first.
   lastBizId?: string
+  // ── Direction change (intent pivot) ─────────────────────────────────
+  // The flow the user was mid-way through when they said something that
+  // opened a different one ("shopping → actually, register my business").
+  // Set aside rather than deleted, so *resume* can restore it.
+  paused?: PausedDraft
 }
+
+// One shelved flow: the step it was on plus the data it had collected.
+export interface PausedDraft {
+  step: string
+  data: ChatSessionData
+  at: string
+}
+
+// How long a shelved flow stays resumable before it is ignored (and then
+// dropped by the next save).
+export const PAUSE_TTL_MS = 24 * 60 * 60 * 1000
 
 // One supplier slice of a pending order.
 export interface PendingGroup {
@@ -116,9 +132,25 @@ export async function getSession(phone: string): Promise<ChatSession | null> {
 
 export async function saveSession(phone: string, step: string, data: ChatSessionData) {
   try {
-    await getSupabase()
+    const supabase = getSupabase()
+    let out = data
+    // A flow shelved by an intent pivot survives every later save unless the
+    // caller explicitly drops it (`paused: undefined`), so moving to another
+    // flow never silently throws the half-finished one away.
+    if (!('paused' in data)) {
+      const { data: row } = await supabase
+        .from('chat_sessions')
+        .select('data')
+        .eq('phone', phone)
+        .maybeSingle()
+      const paused = row?.data?.paused as PausedDraft | undefined
+      if (paused?.step && Date.now() - Date.parse(paused.at || '') < PAUSE_TTL_MS) {
+        out = { ...data, paused }
+      }
+    }
+    await supabase
       .from('chat_sessions')
-      .upsert({ phone, step, data, updated_at: new Date().toISOString() }, { onConflict: 'phone' })
+      .upsert({ phone, step, data: out, updated_at: new Date().toISOString() }, { onConflict: 'phone' })
   } catch (err) {
     console.error('[chat-session] save failed:', err)
   }
