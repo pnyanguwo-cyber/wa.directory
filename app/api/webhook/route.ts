@@ -135,6 +135,19 @@ import {
   MAX_AUDIENCE,
   type CastSpec,
 } from '@/lib/casts'
+// S18.5 Supplier Demand Radar — lib/radar.ts helpers (fail-open by design).
+import {
+  emitDemandSearch,
+  getDemandSub,
+  recordDemandSub,
+  findClaimableDemandEvent,
+  claimDemandEvent,
+  unclaimDemandEvent,
+  setDemandEventRq,
+  getDemandEventById,
+  consumeClaim,
+  verifiedListingFor,
+} from '@/lib/radar'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
@@ -2231,6 +2244,179 @@ async function pingAdminsSearch(term: string, city: string | null, from: string)
   }
 }
 
+// ── S18.5 Supplier Demand Radar ─────────────────────────────────────────────
+// Verified suppliers subscribe (radar on / radar all / radar off), get
+// anonymized pings of real buyer searches, and can `claim` the newest
+// matching lead. Consent gates everything buyer-facing: the buyer taps ✅
+// before a need is opened, and numbers still only move via quote acceptance.
+
+async function handleRadarCommand(from: string, lower: string): Promise<void> {
+  const arg = lower.replace(/^radar\b/, '').trim()
+
+  if (arg === 'claim') {
+    const biz = await verifiedListingFor(from)
+    if (!biz) {
+      await sendWhatsAppMessage(
+        from,
+        'Radar leads are for *verified* suppliers — reply `verify` to get the green tick first.'
+      )
+      return
+    }
+    const subCity = await getDemandSub(from)
+    if (!subCity) {
+      await sendWhatsAppMessage(
+        from,
+        'Your radar is off, so there\'s nothing to claim — reply `radar on` first.'
+      )
+      return
+    }
+    const ev = await findClaimableDemandEvent(from, subCity)
+    if (!ev) {
+      await sendWhatsAppMessage(
+        from,
+        'No open leads on the radar right now — I\'ll ping you the moment a matching search lands.'
+      )
+      return
+    }
+    if (!(await claimDemandEvent(ev.id, from))) {
+      await sendWhatsAppMessage(
+        from,
+        'Someone just grabbed that lead — try `claim` again in a minute.'
+      )
+      return
+    }
+    await sendWhatsAppMessage(
+      from,
+      `🎯 Lead taken — "${ev.term}"${ev.city ? ` in ${ev.city}` : ''} (${ev.result_count} result${ev.result_count === 1 ? '' : 's'}).`
+    )
+    const buyerDigits = digitsOnly(ev.buyer)
+    await sendInteractiveButtons(
+      buyerDigits,
+      `👋 A supplier on wa.directory is offering help with "${ev.term}"${ev.city ? ` in ${ev.city}` : ''}. Share your number with them?`,
+      [
+        { id: `claim_yes_${ev.id}`, title: '✅ Yes, share it' },
+        { id: `claim_no_${ev.id}`, title: '🚫 No thanks' },
+      ]
+    )
+    return
+  }
+
+  if (arg === 'on' || arg === 'all') {
+    const biz = await verifiedListingFor(from)
+    if (!biz) {
+      await sendWhatsAppMessage(
+        from,
+        'Radar is for *verified* suppliers — reply `verify` to get the green tick first.'
+      )
+      return
+    }
+    const city = arg === 'all' ? 'all' : biz.city || 'all'
+    await recordDemandSub(from, city)
+    await sendWhatsAppMessage(
+      from,
+      city === 'all'
+        ? '📡 Radar on — nationwide. I\'ll ping you for matching searches anywhere in Zimbabwe. Reply `radar off` anytime.'
+        : `📡 Radar on — I'll ping you when buyers search for what you sell in ${biz.city}. Reply \`radar off\` anytime.`
+    )
+    return
+  }
+
+  if (arg === 'off') {
+    await recordDemandSub(from, '')
+    await sendWhatsAppMessage(
+      from,
+      '📡 Radar off — no more pings. Your quotes and listings keep working as usual.'
+    )
+    return
+  }
+
+  const subCity = await getDemandSub(from)
+  await sendWhatsAppMessage(
+    from,
+    subCity
+      ? `📡 Your radar is ${subCity === 'all' ? 'on, nationwide' : `on for ${subCity}`} — I ping you when matching buyer searches land. \`claim\` takes the newest lead, \`radar off\` stops pings.`
+      : '📡 *Supplier Radar*\nI ping you when buyers search for what you sell. Verified suppliers only — reply `verify` first, then `radar on` (your city) or `radar all` (nationwide).'
+  )
+}
+
+async function handleClaimConsent(
+  from: string,
+  yes: boolean,
+  eventId: number
+): Promise<void> {
+  const ev = await getDemandEventById(eventId)
+  if (!ev || digitsOnly(ev.buyer) !== digitsOnly(from)) return
+
+  const supplierDigits = digitsOnly(ev.claimed_by || '')
+  if (!supplierDigits) {
+    await unclaimDemandEvent(ev.id)
+    await sendWhatsAppMessage(
+      from,
+      'That offer is no longer active — nothing was shared.'
+    )
+    return
+  }
+
+  if (!yes) {
+    await unclaimDemandEvent(ev.id, supplierDigits)
+    await sendWhatsAppMessage(from, 'No problem — nothing was shared.')
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `The buyer for "${ev.term}"${ev.city ? ` in ${ev.city}` : ''} declined to share their number. Lead closed.`
+    )
+    return
+  }
+
+  const evFresh = await consumeClaim(ev.id, supplierDigits)
+  if (!evFresh) {
+    await unclaimDemandEvent(ev.id, supplierDigits)
+    await sendWhatsAppMessage(
+      from,
+      'That offer expired before you replied — nothing was shared.'
+    )
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `The "${ev.term}" lead expired before the buyer replied. Reply \`claim\` to try the next one.`
+    )
+    return
+  }
+
+  const need = await createNeed({
+    buyer_phone: from,
+    item: evFresh.term,
+    qty: '',
+    budget: '',
+    city: evFresh.city || '',
+  })
+  if (!need) {
+    await unclaimDemandEvent(evFresh.id, supplierDigits)
+    await sendWhatsAppMessage(
+      from,
+      'Couldn\'t open the need right now — nothing was shared.'
+    )
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `Couldn't open the "${evFresh.term}" lead right now. Reply \`claim\` to try again later.`
+    )
+    return
+  }
+
+  await sendWhatsAppMessage(
+    from,
+    renderNeedPosted(need.rq_id, {
+      item: evFresh.term,
+      qty: '',
+      budget: '',
+      city: evFresh.city || '',
+    })
+  )
+  await setDemandEventRq(evFresh.id, need.rq_id)
+  await sendWhatsAppMessage(
+    supplierDigits,
+    `✅ Buyer approved for "${evFresh.term}" — the need is live as *${need.rq_id}*.\nReply \`quotes ${need.rq_id} <price>\` and they'll see your quote right here.`
+  )
+}
+
 /** Buyer taps ✅ on a quote card: close the need with that winner and
  * hand both sides a bare WhatsApp number each — one tap to save. */
 async function pickQuoteForBuyer(buyerPhone: string, quoteId: number) {
@@ -3247,6 +3433,12 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     return
   }
 
+  const claim = action.match(/^claim_(yes|no)_(\d+)$/)
+  if (claim) {
+    await handleClaimConsent(from, claim[1] === 'yes', Number(claim[2]))
+    return
+  }
+
   const sel = action.match(/^sel_([1-9][0-9]?)$/)
   if (sel) {
     if (session?.step === 'browse') {
@@ -3714,6 +3906,9 @@ async function runSearchAndReply(
         return
       }
     }
+    // S18.5 demand radar: this failed search is a live lead for subscribed
+    // suppliers (masked/sensitive terms never reach demand_events).
+    emitDemandSearch({ term: missTerm, city: city || '', resultCount: 0, buyer: from }).catch(() => {})
     await sendInteractiveButtons(
       from,
       `${renderEmptyResults(missTerm)}\n\n🛒 Or let suppliers find it: I post this exact need and they quote you right here.`,
@@ -3736,6 +3931,9 @@ async function runSearchAndReply(
     page: 0,
   })
   await sendResultsListPage(from, cards, 0, termDisplay, fromOrigin ? 'Near you' : city, fromOrigin, opts?.replyTo)
+  // S18.5 demand radar: this search found supply (buyer stored digits-only;
+  // consent is required before anything buyer-identifying moves).
+  emitDemandSearch({ term: termDisplay, city: fromOrigin ? '' : city || '', resultCount: results.length, buyer: from }).catch(() => {})
   recordBotEvents(results.map(r => r.biz)).catch(() => {})
 }
 
@@ -4803,6 +5001,12 @@ export async function POST(request: Request) {
             continue
           }
           await handleNeedFormText(from, session, text)
+          continue
+        }
+
+        // 📡 Radar: verified suppliers manage pings or claim the newest lead.
+        if (/^radar\b/.test(lower) || /^claim\s*$/.test(lower)) {
+          await handleRadarCommand(from, lower)
           continue
         }
 
