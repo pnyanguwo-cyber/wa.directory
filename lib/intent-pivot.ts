@@ -126,6 +126,23 @@ const PIVOT_STARTERS: [RegExp, PivotKind][] = [
   [/\b(?:i need|we need|looking for suppliers?|suppliers (?:to|can)|quote)\b/i, 'need'],
 ]
 
+// ── Goal words that double as search terms ────────────────────────────
+// "pay" opens the pay flow, but businesses are called Paymore / Payless too 
+// — same for "register" and "order". When a typed word is BOTH a menu goal
+// and a plausible search term, the bot asks which was meant instead of
+// guessing (route.ts wires the two-way prompt; the flow button shelving is
+// the same stashPaused/resume engine the stored pivots use).
+export type GoalAskKind = 'register' | 'pay' | 'order'
+
+export function goalKindForWord(term: string): GoalAskKind | null {
+  const t = term.trim().replace(/\s+/g, ' ').toLowerCase()
+  if (!t) return null
+  if (/^(?:pay(?:ment|ments)?|renew(?:al)?|ecocash|top ?up)$/.test(t)) return 'pay'
+  if (/^(?:register|registration|sign ?up)$/.test(t)) return 'register'
+  if (/^(?:order|orders)$/.test(t)) return 'order'
+  return null
+}
+
 export function detectPivot(text: string, step: string | null): PivotKind | null {
   const t = text.trim().replace(/\s+/g, ' ').toLowerCase()
   if (!t || t.length > 400) return null

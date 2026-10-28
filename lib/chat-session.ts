@@ -82,6 +82,10 @@ export interface ChatSessionData {
   // opened a different one ("shopping → actually, register my business").
   // Set aside rather than deleted, so *resume* can restore it.
   paused?: PausedDraft
+  // ── Goal-word ask (two-way: search vs menu action) ───────────────────
+  // A menu word ("pay", "register", "order") that ALSO matched businesses:
+  // the prompt waiting on the 🔍 / flow picker tap.
+  goal_ask?: { kind: 'register' | 'pay' | 'order'; word: string }
 }
 
 // One shelved flow: the step it was on plus the data it had collected.

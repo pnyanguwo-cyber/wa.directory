@@ -30,7 +30,14 @@ import {
 } from '@/lib/chat-session'
 import { compileOrderText } from '@/lib/order-message'
 import { parseOrderLine, matchOrder, type ShelfSupplier, type OrderPair, type MatchResult } from '@/lib/order-intake'
-import { DATA_ENTRY_STEPS, detectPivot, familyOf, pivotCandidateForIntent } from '@/lib/intent-pivot'
+import {
+  DATA_ENTRY_STEPS,
+  detectPivot,
+  familyOf,
+  pivotCandidateForIntent,
+  goalKindForWord,
+  type GoalAskKind,
+} from '@/lib/intent-pivot'
 import {
   createSupplyOrder, recordOrderOpen, claimSupplyOrder, getSupplyOrderById, listOrdersForBusiness,
   listOrdersForBuyer, orderStats, type SupplyOrderRow,
@@ -776,6 +783,54 @@ async function sendAskTerm(from: string, city: string | null) {
   }
 }
 
+// ── S19 goal-word ask ────────────────────────────────────────────────
+// "pay" can open the pay flow, but verified businesses called Paymore /
+// Payless exist too — the word is BOTH a menu goal and a search term. The
+// bot shows the two ways instead of guessing: 🔍 runs the search (any open
+// flow gets shelved, *resume* brings it back), the flow button opens that
+// flow the same way a stated pivot would.
+const GOAL_ASK_LINE: Record<GoalAskKind, string> = {
+  pay: '💳 Pay for a listing',
+  register: '✎ Register a business',
+  order: '🧺 Start an order',
+}
+
+async function countVerifiedNameMatches(word: string): Promise<number> {
+  try {
+    const { count } = await getSupabase()
+      .from('businesses')
+      .select('id', { count: 'exact', head: true })
+      .eq('verified', true)
+      .ilike('name', `%${word}%`)
+    return count || 0
+  } catch {
+    return 0
+  }
+}
+
+async function saveGoalAsk(from: string, kind: GoalAskKind, word: string) {
+  const cur = await getSession(from)
+  await saveSession(from, cur?.step || 'idle', {
+    ...(cur?.data || {}),
+    goal_ask: { kind, word },
+  })
+}
+
+async function sendGoalAskButtons(from: string, kind: GoalAskKind, word: string, found: number) {
+  await sendInteractiveButtons(
+    from,
+    [
+      `${found} ${found === 1 ? 'business matches' : 'businesses match'} "${word}" here 🤔`,
+      'Search them, or did you mean the menu action?',
+    ].join('\n'),
+    [
+      { id: 'bid_search', title: `🔍 Find "${word}"` },
+      { id: 'bid_flow', title: GOAL_ASK_LINE[kind] },
+      { id: 'cancel', title: '✖ Cancel' },
+    ]
+  )
+}
+
 function bizMatchesQuery(
   b: BotBusinessRow,
   lowerTerm: string,
@@ -939,6 +994,24 @@ async function handleIntentPivot(
     const hinted = await classifyIntent(text, step)
     if (!hinted || hinted === 'continue' || hinted === familyOf(step)) return false
     kind = hinted
+  }
+
+  // S19 goal-word ask: "pay" / "register" / "order" typed mid-flow while
+  // those words ALSO name real businesses — offer the two ways instead of
+  // pivoting silently. Direct-answer steps keep their normal handling (the
+  // word can be the answer they were asked for).
+  if (
+    (kind === 'pay' || kind === 'register' || kind === 'order') &&
+    !DATA_ENTRY_STEPS.has(step)
+  ) {
+    const word = kind === 'pay' ? 'pay' : kind === 'register' ? 'register' : 'order'
+    const named = await countVerifiedNameMatches(word)
+    if (named > 0) {
+      logOut(from, 'goal_ask', `${word} mid-${step} → ${named} named`)
+      await saveGoalAsk(from, kind, word)
+      await sendGoalAskButtons(from, kind, word, named)
+      return true
+    }
   }
 
   const shelvedFresh = pausedDraft(session)
@@ -3509,6 +3582,53 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'menu_order':
       await typedOrderFromText(from, session, 'order')
       return
+    // ── S19 goal-word ask taps ────────────────────────────────────────
+    // The two-way prompt showed "N businesses match \"{word}\" — search
+    // them, or did you mean the menu action?" Either tap behaves like the
+    // pivot engine: an open step is set aside and *resume* brings it back.
+    case 'bid_search': {
+      const ask = session?.data.goal_ask
+      if (!ask?.word) {
+        await startFreshSearchPrompt(from)
+        return
+      }
+      const keptPaused: PausedDraft | null =
+        session && session.step !== 'idle' && hasProgress(session.data)
+          ? { step: session.step, data: session.data, at: new Date().toISOString() }
+          : null
+      if (keptPaused) {
+        await sendWhatsAppMessage(
+          from,
+          "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+        )
+      }
+      await clearSession(from)
+      await dispatchSearch(from, ask.word, { goalAskDone: true })
+      if (keptPaused) await stashPaused(from, keptPaused)
+      return
+    }
+    case 'bid_flow': {
+      const ask = session?.data.goal_ask
+      if (!ask || !ask.kind) {
+        await sendWhatsAppMessage(from, await helpText())
+        return
+      }
+      const keptPaused: PausedDraft | null =
+        session && session.step !== 'idle' && hasProgress(session.data)
+          ? { step: session.step, data: session.data, at: new Date().toISOString() }
+          : null
+      if (keptPaused) {
+        await sendWhatsAppMessage(
+          from,
+          "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+        )
+      }
+      if (ask.kind === 'pay') await startPayChoice(from)
+      else if (ask.kind === 'register') await sendRegisterChoice(from)
+      else await typedOrderFromText(from, session, 'order')
+      if (keptPaused) await stashPaused(from, keptPaused)
+      return
+    }
     case 'need_post':
       await postBuyerNeed(from, session)
       return
@@ -3715,7 +3835,7 @@ async function sendResultsListPage(
 async function runSearchAndReply(
   from: string,
   p: ParsedQuery,
-  opts?: { replyTo?: string; aliased?: boolean; nationwideTried?: boolean }
+  opts?: { replyTo?: string; aliased?: boolean; nationwideTried?: boolean; goalAskDone?: boolean }
 ) {
   const supabase = getSupabase()
   const term = p.term.toLowerCase()
@@ -3796,6 +3916,17 @@ async function runSearchAndReply(
 
   results = results.slice(0, MAX_RESULTS)
   const termDisplay = p.term || category.toLowerCase()
+
+  // S19 goal-word ask: the search term IS a menu word (pay / register /
+  // order) AND businesses matched it — offer the two ways instead of
+  // assuming a search. Skipped on the 🔍 replay (goalAskDone).
+  const goalKind = goalKindForWord(termDisplay)
+  if (goalKind && results.length > 0 && !opts?.goalAskDone) {
+    await saveGoalAsk(from, goalKind, termDisplay)
+    logOut(from, 'goal_ask', `${termDisplay} → ${results.length} found`)
+    await sendGoalAskButtons(from, goalKind, termDisplay, results.length)
+    return
+  }
 
   // Name direct hit: a query that names exactly one business shows contact
   // details right away without the intermediate list.
@@ -3940,7 +4071,7 @@ async function runSearchAndReply(
 async function dispatchSearch(
   from: string,
   text: string,
-  opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string }
+  opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string; goalAskDone?: boolean }
 ) {    const p: ParsedQuery = { ...parseQuery(text), origin: opts?.origin ?? null }
     // Demand radar: every user query lands in bot_searches, even the ones
     // that never find supply — that's the admin digest's radar section.
@@ -3987,12 +4118,24 @@ async function dispatchSearch(
   if (!p.nationwide && !p.city) {
     // Product/service only — ask for the town first (plus the share-location
     // fast path that ranks matches by real distance).
+    // S19: unless the word is ALSO a menu goal and real businesses answer to
+    // it — then the two-way ask fires first (replays carry goalAskDone).
+    const goalKind = !opts?.goalAskDone ? goalKindForWord(p.term || '') : null
+    if (goalKind) {
+      const found = await countVerifiedNameMatches(p.term)
+      if (found > 0) {
+        logOut(from, 'goal_ask', `${p.term} → ${found} named nationwide`)
+        await saveGoalAsk(from, goalKind, p.term)
+        await sendGoalAskButtons(from, goalKind, p.term, found)
+        return
+      }
+    }
     await saveSession(from, 'search_loc', { pending_search_term: p.term })
     await sendAskTown(from, p.term, false, true)
     return
   }
 
-  await runSearchAndReply(from, p, { replyTo: opts?.replyTo })
+  await runSearchAndReply(from, p, { replyTo: opts?.replyTo, goalAskDone: opts?.goalAskDone })
 }
 
 // ── S18.2 typed customer orders: the buyer writes "2 bread, 1 cake", the

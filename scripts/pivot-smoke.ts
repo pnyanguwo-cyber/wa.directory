@@ -1,5 +1,6 @@
 import {
   detectPivot,
+  goalKindForWord,
   familyOf,
   pivotCandidateForIntent,
   DATA_ENTRY_STEPS,
@@ -24,6 +25,24 @@ ok(familyOf('name') === 'register' && familyOf('pay_plan') === 'pay', 'step → 
 ok(familyOf('need_form') === 'need' && familyOf('order') === 'order', 'intake steps map right')
 ok(familyOf(null) === 'none' && familyOf(undefined) === 'none' && familyOf('idle') === 'none', 'unknown steps → none')
 ok(DATA_ENTRY_STEPS.size === 13 && DATA_ENTRY_STEPS.has('city') && DATA_ENTRY_STEPS.has('item_pick'), 'data-entry set intact')
+
+// Goal words that double as search terms (S19 two-way ask).
+ok(
+  goalKindForWord('pay') === 'pay' && goalKindForWord('renew') === 'pay' && goalKindForWord('ecocash') === 'pay',
+  'pay-family words map to pay'
+)
+ok(
+  goalKindForWord('register') === 'register' && goalKindForWord('sign up') === 'register',
+  'register-family words map to register'
+)
+ok(
+  goalKindForWord('order') === 'order' && goalKindForWord('orders') === 'order',
+  'order words map to order'
+)
+ok(
+  goalKindForWord('plumber') === null && goalKindForWord('register office') === null && goalKindForWord('') === null,
+  'plain or blocked words are not goals'
+)
 
 // 1 — Bare pivots: the whole message is the request.
 ok(dp('register', 'order') === 'register', 'bare "register" while ordering')
