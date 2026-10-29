@@ -35,8 +35,8 @@ export default function PortalBrandCard({
       <div className="bg-white border border-gray-200/80 rounded-2xl p-4 sm:p-5 shadow-card">
         <div className="flex items-center justify-between gap-2 mb-3">
           <h3 className="text-sm font-bold text-text-primary">Official business card</h3>
-          <Link href={`/business/${key}#business-card`} className="text-xs font-semibold text-whatsapp-600 hover:underline shrink-0">
-            Public view &rarr;
+          <Link href="/portal/card" className="text-xs font-semibold text-whatsapp-600 hover:underline shrink-0">
+            Print &amp; export &rarr;
           </Link>
         </div>
         <BusinessCardPrint business={business} />

@@ -141,6 +141,16 @@ export const PLAN_CONFIG: Record<PlanType, { label: string; months: number; days
   '12m': { label: '12 Months', months: 12, days: 360, price: 20.0, perMonth: 1.67 },
 }
 
+// Personal-contact listings share the same durations as business packages at
+// half the price: USD 1/month, USD 5 / 6 months, USD 10 / year. Same plan keys
+// so listing_subscriptions.plan and activation day counts (30/180/360) carry
+// over untouched; the amount override lives on the payment call.
+export const PERSONAL_PLAN_CONFIG: Record<PlanType, { label: string; months: number; days: number; price: number; perMonth: number }> = {
+  '1m': { label: '1 Month', months: 1, days: 30, price: 1.0, perMonth: 1.0 },
+  '6m': { label: '6 Months', months: 6, days: 180, price: 5.0, perMonth: 0.83 },
+  '12m': { label: '12 Months', months: 12, days: 360, price: 10.0, perMonth: 0.83 },
+}
+
 export const PRO_ASSISTANCE_PRICE = 2.0
 
 // IT Support Packages (Concierge add-on)

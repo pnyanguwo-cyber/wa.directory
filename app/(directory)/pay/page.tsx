@@ -51,6 +51,42 @@ export default function PayPage() {
   // Match-type filter for the "select business" step.
   const [payMatch, setPayMatch] = useState<string>('all')
   const [simulating, setSimulating] = useState(false)
+  // Preselected listing: /pay?business_id=WA-XXXX (used by the go-live CTA
+  // after registration and by the portal billing upgrade links). When set,
+  // choosing a plan jumps straight to the payment step — no search needed.
+  const [preselected, setPreselected] = useState<Business | null>(null)
+
+  // Read the query params on mount (window.location: no Suspense requirement).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const bid = params.get('business_id')
+    if (!bid) return
+    const planParam = params.get('plan')
+    if (planParam && PLAN_CONFIG[planParam as PlanType]) {
+      setPlan(planParam as PlanType)
+      if (planParam !== '12m') setProAssistance(false)
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/pay?q=${encodeURIComponent(bid)}`)
+        const data = await res.json()
+        if (cancelled) return
+        setPaymentsConfigured(data.payments_configured !== false)
+        const list: Business[] = data.businesses || []
+        const match = list.find(b => b.business_id === bid) || list[0]
+        if (match) {
+          setPreselected(match)
+          if (match.payment_status === 'active') setPaidLive(true)
+        }
+      } catch {
+        // Preselect is best-effort; the normal search flow still works.
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Done step + auto payment: poll until the webhook activates the listing.
   useEffect(() => {
@@ -322,7 +358,18 @@ export default function PayPage() {
 
                       {/* Get Started button */}
                       <button
-                        onClick={() => { setPlan(p); if (!is12m) setProAssistance(false); setStep('search') }}
+                        onClick={() => {
+                        setPlan(p)
+                        if (!is12m) setProAssistance(false)
+                        // A preselected listing skips the search — straight
+                        // to the PIN-prompt step.
+                        if (preselected) {
+                          setSelected(preselected)
+                          setStep('pay')
+                        } else {
+                          setStep('search')
+                        }
+                      }}
                         className={`w-full py-3 rounded-xl text-sm font-semibold transition-all duration-150 ${
                           isBest
                             ? 'bg-whatsapp-600 text-white hover:bg-whatsapp-700 shadow-[0_4px_14px_0_rgba(37,211,102,0.39)] hover:shadow-[0_6px_20px_rgba(37,211,102,0.35)]'

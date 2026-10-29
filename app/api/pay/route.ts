@@ -3,7 +3,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import { searchPayBusinesses } from '@/lib/pay-lookup'
 import { createListingPayment } from '@/lib/listing-pay'
 import { paynowConfigured } from '@/lib/paynow'
-import { PLAN_CONFIG } from '@/types'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 
 // Thin wrapper over lib/pay-lookup + lib/listing-pay (shared with the
@@ -27,18 +27,22 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { business_id, payer_phone, plan: rawPlan, hasProAssistance } = body || {}
-    const plan: PlanType = rawPlan && PLAN_CONFIG[rawPlan as PlanType] ? rawPlan : '1m'
+    const { business_id, payer_phone, plan: rawPlan, hasProAssistance, kind } = body || {}
+    const plan: PlanType = rawPlan && PERSONAL_PLAN_CONFIG[rawPlan as PlanType] ? rawPlan : '1m'
 
     if (!business_id || !payer_phone) {
       return NextResponse.json({ error: 'Business ID and payer phone are required' }, { status: 400 })
     }
 
+    // Personal contacts ride the same plan keys/durations at the half-price
+    // personal rates; lives through the same listing_subscriptions engine.
+    const isPersonal = kind === 'personal'
     const result = await createListingPayment({
       businessId: business_id,
       payerPhone: payer_phone,
       plan,
-      hasProAssistance: !!hasProAssistance,
+      hasProAssistance: isPersonal ? false : !!hasProAssistance,
+      amountOverride: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
       request,
     })
 
@@ -51,6 +55,8 @@ export async function POST(request: Request) {
       auto_ecocash: result.autoEcoCash,
       instructions: result.instructions,
       message: result.message,
+      amount: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
+      label: isPersonal ? 'Personal contact' : PLAN_CONFIG[plan].label,
     })
   } catch {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
