@@ -8,11 +8,13 @@ import {
   sendLocationRequest as sendLocationRequestRaw,
   sendReaction as sendReactionRaw,
   sendWhatsAppDocument as sendWhatsAppDocumentRaw,
+  sendWhatsAppImage,
   sendContactCard,
   markRead,
   sendWhatsAppTemplate,
 } from '@/lib/whatsapp'
 import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
+import { monoUSD } from '@/lib/bot-templates'
 import { logBotMessage, logBotSearch } from '@/lib/bot-log'
 import { orderSearchResults } from '@/lib/ranking'
 import { expandSearchQuery, classifyIntent } from '@/lib/gemini'
@@ -27,7 +29,15 @@ import {
   type PausedDraft,
   type PendingGroup,
   type PendingOrder,
+  getCart,
+  addToCart,
+  updateCartQty,
+  removeFromCart,
+  clearCart,
+  getCartSummary,
+  type CartItem,
 } from '@/lib/chat-session'
+import { fetchBusinessItems } from '@/lib/business-select'
 import { compileOrderText } from '@/lib/order-message'
 import { parseOrderLine, matchOrder, type ShelfSupplier, type OrderPair, type MatchResult } from '@/lib/order-intake'
 import {
@@ -505,10 +515,15 @@ interface BotBusinessRow {
   lat: number | null
   lng: number | null
   socials?: string[] | null
+  verified: boolean
+  payment_status: string | null
+  response_time_minutes: number | null
+  orders_fulfilled: number | null
+  escrow_eligible: boolean
 }
 
 const BOT_BIZ_COLUMNS =
-  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials'
+  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials, verified, payment_status, response_time_minutes, orders_fulfilled, escrow_eligible'
 
 interface ParsedQuery {
   term: string
@@ -885,14 +900,22 @@ async function fetchMatchingItems(
 
 // Search-tier result → template card (pruned to what presentation needs).
 function toCard(r: BotResult): ResultCard {
+  const b = r.biz as any
   return {
-    id: r.biz.id,
-    name: r.biz.name,
-    city: r.biz.city,
-    area: r.biz.area,
+    id: b.id,
+    name: b.name,
+    city: b.city,
+    area: b.area,
     km: r.km ?? null,
     item: r.item,
-    priceRange: r.biz.price_range,
+    priceRange: b.price_range,
+    verified: b.verified,
+    paymentStatus: b.payment_status,
+    rating: b.rating,
+    reviewCount: b.review_count,
+    responseTimeMinutes: b.response_time_minutes,
+    ordersFulfilled: b.orders_fulfilled,
+    escrowEligible: b.escrow_eligible,
   }
 }
 
@@ -3030,6 +3053,57 @@ async function handleAdminCommand(from: string, text: string): Promise<boolean> 
     return true
   }
 
+  // Admin: subscribers with expiry dates
+  if (lower === 'subscribers' || lower.startsWith('subscribers ')) {
+    const arg = lower === 'subscribers' ? '' : clean.slice(11).trim().toLowerCase()
+    const supabase = getSupabase()
+    let query = supabase
+      .from('subscriptions')
+      .select('id, business_id, status, amount, started_at, expires_at, businesses(name, phone, city, payment_status, username)')
+      .order('expires_at', { ascending: true })
+
+    if (arg === 'active') {
+      query = query.eq('status', 'active')
+    } else if (arg === 'expired') {
+      query = query.eq('status', 'expired')
+    } else if (arg === 'pending') {
+      query = query.eq('status', 'pending')
+    } else if (arg === 'expiring') {
+      query = query.eq('status', 'active').lte('expires_at', new Date(Date.now() + 7 * 86400000).toISOString())
+    }
+
+    const { data: subs } = await query.limit(50)
+    if (!subs?.length) {
+      await sendWhatsAppMessage(from, arg ? `No ${arg} subscriptions found.` : 'No subscriptions found.')
+      return true
+    }
+
+    const now = Date.now()
+    const lines = [`📋 *Subscriptions${arg ? ` — ${arg}` : ''}* (${subs.length})`, '']
+    for (let i = 0; i < subs.length; i++) {
+      const s = subs[i]
+      const biz = s.businesses as any
+      const exp = s.expires_at ? new Date(s.expires_at).getTime() : 0
+      const diff = exp ? Math.ceil((exp - now) / 86400000) : null
+      let expLine = ''
+      if (!s.expires_at) expLine = ' · no expiry'
+      else if (diff === null || diff < 0) expLine = ` · expired ${Math.abs(diff || 1)}d ago`
+      else if (diff === 0) expLine = ' · expires today'
+      else if (diff === 1) expLine = ' · expires tomorrow'
+      else expLine = ` · ${diff}d left`
+      const statusBadge = s.status === 'active' ? '✅' : s.status === 'pending' ? '⏳' : s.status === 'expired' ? '❌' : '⚠️'
+      lines.push(
+        `${i + 1}. ${statusBadge} *${biz?.name || 'Unknown'}*${expLine}` +
+        (biz?.username ? ` · @${biz.username}` : '') +
+        (biz?.city ? ` · ${biz.city}` : '') +
+        ` · $${s.amount || 0} · ${s.started_at?.slice(0, 10) || '?'}`
+      )
+    }
+    lines.push('', 'Filter: *subscribers active* · *subscribers expired* · *subscribers pending* · *subscribers expiring*')
+    await sendWhatsAppMessage(from, lines.join('\n'))
+    return true
+  }
+
   if (lower === 'contacts' || lower.startsWith('contacts ')) {
     const arg = lower === 'contacts' ? 'all' : clean.slice(9).trim().toLowerCase()
     if (!['all', 'biz', 'businesses', 'people', 'personal', 'chats'].includes(arg)) {
@@ -3663,6 +3737,49 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       return
     }
     await startFreshSearchPrompt(from)
+    return
+  }
+
+  // ── Browse items (shop shelf) ──────────────────────────────────────────
+  const browseItems = action.match(/^browse_items_(.+)_(\d+)$/)
+  if (browseItems) {
+    const businessId = browseItems[1]
+    const page = Number(browseItems[2])
+    await handleBrowseItems(from, session, businessId, page)
+    return
+  }
+
+  // Add item to cross-business cart
+  const addToCartMatch = action.match(/^add_to_cart_(.+)$/)
+  if (addToCartMatch) {
+    const itemId = addToCartMatch[1]
+    await handleAddToCart(from, session, itemId, msgId)
+    return
+  }
+
+  // View cart
+  if (action === 'view_cart') {
+    await handleViewCart(from, session)
+    return
+  }
+
+  // Checkout cart (send orders to suppliers)
+  if (action === 'checkout_cart') {
+    await handleCheckoutCart(from, session)
+    return
+  }
+
+  // Clear cart
+  if (action === 'clear_cart') {
+    await handleClearCart(from, session)
+    return
+  }
+
+  // Browse items from detail card (browse_items_detail_<businessId>)
+  const browseDetail = action.match(/^browse_items_detail_(.+)$/)
+  if (browseDetail) {
+    const businessId = browseDetail[1]
+    await handleBrowseItems(from, session, businessId, 0)
     return
   }
 
@@ -4783,6 +4900,11 @@ async function sendResultDetail(
     phone: b.phone,
     phoneType: b.phone_type,
     socials: Array.isArray(b.socials) ? b.socials : [],
+    verified: b.verified,
+    paymentStatus: b.payment_status || undefined,
+    responseTimeMinutes: b.response_time_minutes || undefined,
+    ordersFulfilled: b.orders_fulfilled || undefined,
+    escrowEligible: b.escrow_eligible,
   })
   await sendWhatsAppMessage(from, msg)
 
@@ -4790,17 +4912,16 @@ async function sendResultDetail(
   // Voice-only listings have nothing to chat with, so they skip it.
   const digits = (b.phone || '').replace(/[^0-9]/g, '')
   if (digits && b.phone_type !== 'voice') {
-    await sendCtaUrl(
-      from,
-      `Start a WhatsApp chat with *${b.name}* — or type a new search anytime.`,
-      '💬 Chat on WhatsApp',
-      chatCtaUrl(b.id, from)
-    )
+    await sendInteractiveButtons(from, renderChatPrompt(b.name), [
+      { id: `browse_items_detail_${b.id}`, title: '🧺 Browse all items' },
+      { id: `cta_chat_${b.id}`, title: '💬 Chat on WhatsApp' },
+    ])
+  } else {
+    // Fallback: just browsing if no chat
+    await sendInteractiveButtons(from, 'Options', [
+      { id: `browse_items_detail_${b.id}`, title: '🧺 Browse all items' },
+    ])
   }
-
-  // S18.2: typed-order affordance lives in the card footer itself
-  // ("🧺 Order from this shop: reply *order 2 bread 1 cake*."), so the card
-  // stays button-light and every entry is one keystroke away.
 
   // Selection analytics — 'bot_select' requires migration 023 to be applied;
   // the insert is best-effort so nothing breaks before then.
@@ -4809,6 +4930,136 @@ async function sendResultDetail(
       .from('stats_events')
       .insert({ business_id: b.id, type: 'bot_select', category: '', city: b.city || '' })
   } catch {}
+}
+
+// ... existing code ...
+
+async function handleBrowseItems(
+  from: string,
+  session: ChatSession | null,
+  businessId: string,
+  page: number
+) {
+  const supabase = getSupabase()
+  const { items, total } = await fetchBusinessItems(supabase, businessId, 5, page * 5)
+
+  if (items.length === 0) {
+    await sendWhatsAppMessage(from, 'No items available at this shop right now.')
+    return
+  }
+
+  // Send items as rich media cards
+  for (const item of items) {
+    const caption = `${item.name}${item.price != null ? ` — ${monoUSD(item.price)}` : ''}\n\n[Add to cart] [Contact supplier]`
+    if (item.image_url) {
+      await sendWhatsAppImage(from, item.image_url, caption)
+    } else {
+      await sendWhatsAppMessage(from, caption)
+    }
+    // Add interactivity for each item
+    await sendInteractiveButtonsRaw(from, 'Options', [
+      { id: `add_to_cart_${item.id}`, title: '🧺 Add to cart' },
+    ])
+  }
+
+  // Pagination / end navigation
+  if ((page + 1) * 5 < total) {
+    await sendInteractiveButtons(from, 'More items?', [
+      { id: `browse_items_${businessId}_${page + 1}`, title: '→ Next page' },
+    ])
+  } else {
+    await sendWhatsAppMessage(from, '✔ End of catalog.')
+  }
+}
+
+async function handleAddToCart(from: string, session: ChatSession | null, itemId: string, msgId?: string) {
+  if (!session) return
+  // Find item details
+  const { data: item } = await getSupabase()
+    .from('business_items')
+    .select('id, name, price, image_url, business_id, businesses(name)')
+    .eq('id', itemId)
+    .single()
+
+  if (!item) {
+    await sendWhatsAppMessage(from, 'Item not found.')
+    return
+  }
+
+  const updatedData = addToCart(session.data, {
+    businessId: item.business_id,
+    businessName: (item.businesses as any)?.name || 'Shop',
+    itemId: item.id,
+    itemName: item.name,
+    price: item.price || 0,
+    qty: 1,
+    imageUrl: item.image_url || undefined,
+  })
+
+  await saveSession(from, session.step, updatedData)
+  await sendInteractiveButtonsRaw(
+    from,
+    `✅ Added *${item.name}* to your cart.`,
+    [
+      { id: 'view_cart', title: '🛒 View cart' },
+      { id: 'new_search', title: '🔍 Search more' },
+    ]
+  )
+}
+
+async function handleViewCart(from: string, session: ChatSession | null) {
+  if (!session) return
+  const summary = getCartSummary(session.data)
+  if (summary.totalItems === 0) {
+    await sendWhatsAppMessage(from, '🛒 Your cart is empty.')
+    return
+  }
+
+  let body = `🛒 *Your Cart* (${summary.totalItems} items)\n\n`
+  for (const group of summary.groups) {
+    body += `🏪 *${group.businessName}* — ${monoUSD(group.subtotal).replace(/`/g, '')}\n`
+    for (const item of group.items) {
+      body += `  • ${item.itemName} ×${item.qty} — ${monoUSD(item.price * item.qty).replace(/`/g, '')}\n`
+    }
+    body += '\n'
+  }
+  body += `*Grand Total: ${monoUSD(summary.grandTotal).replace(/`/g, '')}*`
+
+  await sendInteractiveButtons(from, body, [
+    { id: 'checkout_cart', title: '✅ Send all orders' },
+    { id: 'clear_cart', title: '🗑️ Clear cart' },
+    { id: 'new_search', title: '🔍 Search more' },
+  ])
+}
+
+async function handleCheckoutCart(from: string, session: ChatSession | null) {
+  if (!session) return
+  const summary = getCartSummary(session.data)
+
+  // For each business group, create supply orders (or link existing ones)
+  for (const group of summary.groups) {
+    // Create an order for this business
+    await createSupplyOrder({
+      biz_id: group.businessId,
+      biz_name: group.businessName,
+      buyer_phone: from,
+      lines: group.items.map(i => ({
+        name: i.itemName,
+        qty: i.qty,
+        price: i.price
+      }))
+    })
+  }
+
+  await clearSession(from)
+  await sendWhatsAppMessage(from, `✅ Orders sent to ${summary.groups.length} supplier(s). I will notify you when they confirm.`)
+}
+
+async function handleClearCart(from: string, session: ChatSession | null) {
+  if (!session) return
+  const data = clearCart(session.data)
+  await saveSession(from, session.step, data)
+  await sendWhatsAppMessage(from, '🛒 Cart cleared.')
 }
 
 async function publishBusiness(from: string, session: ChatSession, msgId?: string) {

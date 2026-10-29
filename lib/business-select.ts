@@ -18,3 +18,32 @@ export async function fetchBusinessesByIds(
   const { data } = await supabase.from('businesses').select(columns).in('id', ids)
   return (data as unknown as Record<string, unknown>[]) || []
 }
+
+// Fetches active items for a business, paginated.
+// Used by the WhatsApp bot "Browse items" flow.
+export async function fetchBusinessItems(
+  supabase: SupabaseClient,
+  businessId: string,
+  limit = 9,
+  offset = 0
+): Promise<{ items: { id: string; name: string; price: number; image_url: string | null }[]; total: number }> {
+  // First get the total count for pagination
+  const { count } = await supabase
+    .from('business_items')
+    .select('id', { count: 'exact', head: true })
+    .eq('business_id', businessId)
+    .eq('is_active', true)
+
+  const { data } = await supabase
+    .from('business_items')
+    .select('id, name, price, image_url')
+    .eq('business_id', businessId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1)
+
+  return {
+    items: (data as { id: string; name: string; price: number; image_url: string | null }[]) || [],
+    total: count || 0,
+  }
+}

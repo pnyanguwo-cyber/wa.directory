@@ -35,6 +35,14 @@ export interface ResultCard {
   item: { name: string; price: number | null } | null
   // Business-level price range, only shown when there is no exact product.
   priceRange: string | null
+  // Verification signals for trust badges
+  verified?: boolean
+  paymentStatus?: string
+  rating?: number
+  reviewCount?: number
+  responseTimeMinutes?: number
+  ordersFulfilled?: number
+  escrowEligible?: boolean
 }
 
 export function displayLocation(city: string | null, area?: string | null): string {
@@ -54,7 +62,8 @@ function searchCardPriceLine(card: ResultCard): string | null {
 }
 
 function searchCardLines(card: ResultCard, i: number): string[] {
-  const lines = [`${i + 1}. *${card.name}*`]
+  const badges = buildBadges(card)
+  const lines = [`${i + 1}. *${card.name}*${badges}`]
   lines.push(`📍 ${displayLocation(card.city, card.area)}${card.km != null ? ` (~${Math.round(card.km)} km)` : ''}`)
   const priceLine = searchCardPriceLine(card)
   if (priceLine) lines.push(priceLine)
@@ -121,6 +130,12 @@ export interface DetailData {
   phoneType: string | null
   /** Social links (personal contacts carry these). */
   socials?: string[]
+  // Verification signals
+  verified?: boolean
+  paymentStatus?: string
+  responseTimeMinutes?: number
+  ordersFulfilled?: number
+  escrowEligible?: boolean
 }
 
 /** Readable phone display: +263 772 234 002. */
@@ -151,14 +166,20 @@ export function renderChatPrompt(name: string): string {
  * fall back to the listing page).
  */
 export function renderDetailCard(b: DetailData): string {
+  const badges: string[] = []
+  if (b.verified) badges.push('✅ Verified')
+  if (b.paymentStatus === 'active') badges.push('💎 Active subscriber')
+  if (b.rating > 0 && b.reviewCount && b.reviewCount > 0) {
+    badges.push(`⭐ ${b.rating.toFixed(1)} (${b.reviewCount} review${b.reviewCount === 1 ? '' : 's'})`)
+  }
+  if (b.responseTimeMinutes && b.responseTimeMinutes <= 15) badges.push('⚡ Replies in <15 min')
+  if (b.ordersFulfilled && b.ordersFulfilled >= 10) badges.push(`📦 ${b.ordersFulfilled}+ orders fulfilled`)
+  if (b.escrowEligible) badges.push('🛡️ WA Directory Protected')
+
   const lines = [b.name ? `*${b.name}*` : 'Business details']
   lines.push(`📍 ${displayLocation(b.city, b.area)}`)
+  if (badges.length) lines.push(badges.join(' · '))
   lines.push('')
-
-  const count = b.reviewCount || 0
-  if (b.rating > 0) {
-    lines.push(`⭐ ${b.rating.toFixed(1)} (${count} review${count === 1 ? '' : 's'})`)
-  }
 
   if (b.items.length > 0) {
     lines.push('')
@@ -408,16 +429,31 @@ export function renderResultsListBody(
   return lines.join('\n')
 }
 
+/** Build verification badges string for a result card */
+function buildBadges(card: ResultCard): string {
+  const badges: string[] = []
+  if (card.verified) badges.push('✅')
+  if (card.rating && card.rating > 0 && card.reviewCount && card.reviewCount > 0) {
+    badges.push(`⭐${card.rating.toFixed(1)}(${card.reviewCount})`)
+  }
+  if (card.paymentStatus === 'active') badges.push('💎')
+  if (card.responseTimeMinutes && card.responseTimeMinutes <= 15) badges.push('⚡')
+  if (card.ordersFulfilled && card.ordersFulfilled >= 10) badges.push('📦')
+  if (card.escrowEligible) badges.push('🛡️')
+  return badges.length ? ` ${badges.join(' ')}` : ''
+}
+
 /** Price segment for list rows: same logic as searchCardPriceLine, but rows
  * are plain text (no markdown), so backticks are stripped. */
 function rowPriceLine(card: ResultCard): string {
+  const badges = buildBadges(card)
   if (card.item) {
     return card.item.price != null
-      ? `${card.item.name}: ${monoUSD(card.item.price).replace(/`/g, '')}`
-      : `${card.item.name}: Price not listed`
+      ? `${card.item.name}: ${monoUSD(card.item.price).replace(/`/g, '')}${badges}`
+      : `${card.item.name}: Price not listed${badges}`
   }
   const range = monoPrice(card.priceRange).replace(/`/g, '')
-  return range ? `💰 ${range}` : ''
+  return range ? `💰 ${range}${badges}` : badges
 }
 
 // One WhatsApp list message holds at most 10 rows; one slot is reserved for

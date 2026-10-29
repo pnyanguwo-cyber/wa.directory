@@ -86,6 +86,25 @@ export interface ChatSessionData {
   // A menu word ("pay", "register", "order") that ALSO matched businesses:
   // the prompt waiting on the 🔍 / flow picker tap.
   goal_ask?: { kind: 'register' | 'pay' | 'order'; word: string }
+  // ── Cross-business cart (item browsing flow) ────────────────────────
+  // Persistent cart across searches, grouped by supplier at checkout.
+  cart?: CartItem[]
+  // Optional note attached to the whole cart (delivery instructions, etc.).
+  cartNote?: string
+  // Current item-browsing context: which business + page we're viewing.
+  browseBizId?: string
+  browsePage?: number
+}
+
+// One item in the cross-business chat cart.
+export interface CartItem {
+  businessId: string
+  businessName: string
+  itemId: string
+  itemName: string
+  price: number
+  qty: number
+  imageUrl?: string
 }
 
 // One shelved flow: the step it was on plus the data it had collected.
@@ -166,4 +185,76 @@ export async function clearSession(phone: string) {
   } catch (err) {
     console.error('[chat-session] clear failed:', err)
   }
+}
+
+// ─── Cart helpers (cross-business, persisted in chat_sessions.data.cart) ───
+
+/** Get the current cart from a session's data object (safe default). */
+export function getCart(data: ChatSessionData): CartItem[] {
+  return data.cart || []
+}
+
+/** Add an item to the cart; merges qty if same business+item already present. */
+export function addToCart(data: ChatSessionData, item: CartItem): ChatSessionData {
+  const cart = getCart(data)
+  const existingIdx = cart.findIndex(
+    c => c.businessId === item.businessId && c.itemId === item.itemId
+  )
+  let newCart: CartItem[]
+  if (existingIdx >= 0) {
+    newCart = [...cart]
+    newCart[existingIdx] = { ...newCart[existingIdx], qty: newCart[existingIdx].qty + item.qty }
+  } else {
+    newCart = [...cart, item]
+  }
+  return { ...data, cart: newCart }
+}
+
+/** Update quantity for a specific cart item (by businessId + itemId). Removes if qty <= 0. */
+export function updateCartQty(
+  data: ChatSessionData,
+  businessId: string,
+  itemId: string,
+  qty: number
+): ChatSessionData {
+  const cart = getCart(data)
+  const newCart = cart
+    .map(c => (c.businessId === businessId && c.itemId === itemId ? { ...c, qty } : c))
+    .filter(c => c.qty > 0)
+  return { ...data, cart: newCart }
+}
+
+/** Remove a specific item from cart. */
+export function removeFromCart(data: ChatSessionData, businessId: string, itemId: string): ChatSessionData {
+  const cart = getCart(data).filter(c => !(c.businessId === businessId && c.itemId === itemId))
+  return { ...data, cart }
+}
+
+/** Clear the entire cart. */
+export function clearCart(data: ChatSessionData): ChatSessionData {
+  return { ...data, cart: [] }
+}
+
+/** Grouped summary for checkout: per-supplier totals and a grand total. */
+export function getCartSummary(data: ChatSessionData): {
+  groups: { businessId: string; businessName: string; items: CartItem[]; subtotal: number }[]
+  totalItems: number
+  grandTotal: number
+} {
+  const cart = getCart(data)
+  const byBiz = new Map<string, CartItem[]>()
+  for (const item of cart) {
+    const arr = byBiz.get(item.businessId) || []
+    arr.push(item)
+    byBiz.set(item.businessId, arr)
+  }
+  const groups = [...byBiz.entries()].map(([businessId, items]) => ({
+    businessId,
+    businessName: items[0].businessName,
+    items,
+    subtotal: items.reduce((sum, i) => sum + i.price * i.qty, 0),
+  }))
+  const totalItems = cart.reduce((sum, i) => sum + i.qty, 0)
+  const grandTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0)
+  return { groups, totalItems, grandTotal }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { adminGuard } from '@/lib/admin-auth'
+import { dedupeCategories } from '@/lib/utils'
 
 export async function POST(request: Request) {
   const denied = adminGuard()
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
         phone: fullPhone,
         country_code: country_code || '+263',
         whatsapp_username: whatsapp_username || null,
-        category: Array.isArray(category) ? category : [category].filter(Boolean),
+        category: dedupeCategories(category),
         areas: areaList,
         area: primaryArea,
         city: city || '',

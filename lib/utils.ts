@@ -33,3 +33,26 @@ export function getInitials(name: string, fallback = ''): string {
       .slice(0, 2) || fallback
   )
 }
+
+/** Clean and case-insensitively deduplicate category arrays. */
+export function dedupeCategories(cats: unknown): string[] {
+  if (!Array.isArray(cats)) {
+    if (typeof cats === 'string' && cats.trim()) {
+      return [cats.trim()]
+    }
+    return []
+  }
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const c of cats) {
+    if (typeof c === 'string' && c.trim()) {
+      const trimmed = c.trim()
+      const lower = trimmed.toLowerCase()
+      if (!seen.has(lower)) {
+        seen.add(lower)
+        result.push(trimmed)
+      }
+    }
+  }
+  return result.slice(0, 4)
+}

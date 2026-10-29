@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
-import { slugify } from '@/lib/utils'
+import { slugify, dedupeCategories } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
         slug,
         whatsapp_username: whatsapp_username || null,
         bio: bio || null,
-        category: typeof category === 'string' ? [category] : category,
+        category: dedupeCategories(category),
         phone: fullPhone,
         phone_type: isVoice ? 'voice' : 'whatsapp',
         voice_phone: cleanVoicePhone,

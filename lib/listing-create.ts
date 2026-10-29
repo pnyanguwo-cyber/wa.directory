@@ -6,7 +6,7 @@ import { generateBusinessId } from '@/lib/business-id'
 import { normalizeUsername, suggestUsername } from '@/lib/username'
 import { generateSiteContent } from '@/lib/site-generation'
 import { SITE_URL } from '@/lib/site-url'
-import { slugify } from '@/lib/utils'
+import { slugify, dedupeCategories } from '@/lib/utils'
 
 // Yellow Pages (special public-service) categories get a priority admin alert
 // so councils/police/fire listings are verified fast.
@@ -105,7 +105,7 @@ export async function createListing(body: Partial<ListingInput>): Promise<Listin
     .eq('active', true)
   const approvedCategories = new Set((catRows || []).map((r: { name: string }) => r.name))
 
-  const cleanCategories = [...new Set(body.categories.map((c: string) => c.trim()))]
+  const cleanCategories = dedupeCategories(body.categories)
     .filter(c => approvedCategories.has(c))
   if (cleanCategories.length === 0) {
     return { error: 'Selected categories are not on the approved list.' }

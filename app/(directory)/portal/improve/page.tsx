@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getActingPortalBusiness, getDailyStats, isPaidSubscriber } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
+import { dedupeCategories } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,7 @@ interface Tip {
 
 async function buildTips(businessId: string, business: Record<string, any>, paid: boolean): Promise<{ tips: Tip[]; comparison: { mine: number; median: number; rank: number; count: number } | null }> {
   const tips: Tip[] = []
+  const cleanCats = dedupeCategories(business.category || [])
 
   const bio = (business.bio || '').trim()
   if (!bio) {
@@ -58,7 +60,8 @@ async function buildTips(businessId: string, business: Record<string, any>, paid
 
   if (paid && business.category?.length) {
     const supabase = getSupabase()
-    const mainCat = business.category[0]
+    const cleanCats = dedupeCategories(business.category)
+    const mainCat = cleanCats[0]
     const { data: sameCat } = await supabase
       .from('businesses')
       .select('id')
@@ -95,6 +98,8 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
   if (!session) redirect('/login')
   const business = session.business
 
+  const cleanCats = dedupeCategories(business.category || [])
+
   const paid = await isPaidSubscriber(business.id)
   const { tips, comparison } = await buildTips(business.id, business as unknown as Record<string, any>, paid)
 
@@ -126,7 +131,7 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
         <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
           <p className="text-sm font-bold text-text-primary mb-1">Profile views vs your category</p>
           <p className="text-xs text-text-secondary mb-3">
-            Compared against {comparison.count} verified businesses in “{business.category[0]}”.
+            Compared against {comparison.count} verified businesses in “{cleanCats[0]}”.
           </p>
           <div className="flex items-end gap-3">
             <div className="flex-1">
@@ -171,7 +176,7 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
         <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 text-center">
           <p className="text-sm font-bold text-text-primary">Unlock the full analysis</p>
           <p className="text-xs text-text-secondary mt-1 mb-3">
-            Get all {tips.length} tips plus a live comparison against other {business.category[0]} businesses in your area.
+            Get all {tips.length} tips plus a live comparison against other {cleanCats[0]} businesses in your area.
           </p>
           <a href="/portal/billing" className="btn-primary inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold rounded-2xl">
             Go premium

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
-import { slugify } from '@/lib/utils'
+import { slugify, dedupeCategories } from '@/lib/utils'
 
 export async function POST(request: Request) {
   try {
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
         name,
         slug,
         whatsapp_username: whatsapp_username || null,
-        category: typeof category === 'string' ? [category] : category,
+        category: dedupeCategories(category),
         phone,
         city: city || null,
         area: area || null,

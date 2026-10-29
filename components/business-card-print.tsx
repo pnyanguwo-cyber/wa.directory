@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import type { Business } from '@/types'
-import { getInitials } from '@/lib/utils'
+import { getInitials, dedupeCategories } from '@/lib/utils'
 
 // International / US Standard Business Card dimensions (3.5" x 2.0" @ 300 DPI ratio = 7:4)
 const CARD_W = 1050
@@ -565,12 +565,13 @@ function FrontLandscapeSvg({
 
       {/* MIDDLE SECTION: Dynamic Category Chips with Zero-Overlap */}
       {(() => {
-        if (!business.category || business.category.length === 0) return null
+        const cats = dedupeCategories(business.category)
+        if (!cats.length) return null
         let curX = 0
         const maxTotalWidth = CARD_W - 90 // 960px
         const chips: { cat: string; width: number; x: number }[] = []
 
-        for (const cat of business.category.slice(0, 3)) {
+        for (const cat of cats.slice(0, 3)) {
           const textLen = cat.length
           const chipWidth = Math.max(90, Math.min(textLen * 8.4 + 42, 320))
           if (curX + chipWidth > maxTotalWidth && chips.length > 0) {
@@ -1021,7 +1022,8 @@ function FrontPortraitSvg({
       {business.category && business.category.length > 0 && (
         <g transform="translate(45, 450)">
           {(() => {
-            const firstTwo = business.category.slice(0, 2)
+            const cats = dedupeCategories(business.category)
+            const firstTwo = cats.slice(0, 2)
             if (firstTwo.length === 1) {
               const label = firstTwo[0]
               const width = Math.min(label.length * 9 + 40, PORTRAIT_W - 90)
@@ -1552,7 +1554,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       ...(voiceNum ? [`TEL;TYPE=WORK,VOICE:${voiceNum}`] : []),
       `ADR;TYPE=WORK:;;${business.address || ''};${business.city || 'Harare'};;Zimbabwe`,
       `URL:https://${profileUrl}`,
-      `NOTE:${voiceOnly ? 'Verified business' : 'Verified WhatsApp Business'} on WA Directory Zimbabwe. Category: ${business.category?.join(', ') || 'Business'}`,
+      `NOTE:${voiceOnly ? 'Verified business' : 'Verified WhatsApp Business'} on WA Directory Zimbabwe. Category: ${dedupeCategories(business.category).join(', ') || 'Business'}`,
       ...(voiceOnly ? [] : ['X-SOCIALPROFILE;TYPE=whatsapp:https://wa.me/' + phoneClean]),
       'END:VCARD',
     ].join('\r\n')

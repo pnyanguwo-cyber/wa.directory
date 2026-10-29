@@ -407,3 +407,35 @@ export async function sendWhatsAppDocument(
     return false
   }
 }
+
+/**
+ * Send an image message via WhatsApp Cloud API.
+ * Uses the image URL directly (no upload needed) — accepts public URLs.
+ * Caption supports up to 1024 characters.
+ */
+export async function sendWhatsAppImage(
+  to: string,
+  imageUrl: string,
+  caption: string,
+  replyTo?: string
+): Promise<boolean> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return false
+  }
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(`[whatsapp][dry-run][image] to=${to} ${imageUrl}\n${caption}`)
+    return true
+  }
+
+  return postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'image',
+    image: { link: imageUrl, caption: clip(caption, 1024) },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
+  })
+}

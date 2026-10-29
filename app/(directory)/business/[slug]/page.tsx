@@ -19,7 +19,7 @@ import type { Business, BusinessItem } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio, getInitials, formatPrice } from '@/lib/utils'
+import { cleanBio, getInitials, formatPrice, dedupeCategories } from '@/lib/utils'
 import CategoryDoodle from '@/components/category-doodle'
 import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
 import { SITE_URL } from '@/lib/site-url'
@@ -479,7 +479,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                 <div className="mb-3 sm:mb-6">
                   <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-1.5 sm:mb-2">Categories</h2>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {business.category.map((cat, i) => {
+                    {dedupeCategories(business.category).map((cat, i) => {
                       const isPending = !approvedCategoryNames.has(cat)
                       return (
                         <span
@@ -500,7 +500,7 @@ async function BusinessContent({ slug }: { slug: string }) {
                       )
                     })}
                   </div>
-                  {business.category.some(c => !approvedCategoryNames.has(c)) && (
+                  {dedupeCategories(business.category).some(c => !approvedCategoryNames.has(c)) && (
                     <p className="text-xs text-amber-600 mt-2">
                       Greyed categories are awaiting admin approval and will appear in search once approved.
                     </p>

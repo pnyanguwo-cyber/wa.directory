@@ -8,7 +8,7 @@ import Link from 'next/link'
 import type { Business, BusinessItem } from '@/types'
 import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
 import { digitsOnly } from '@/lib/phone'
-import { formatPrice, getInitials } from '@/lib/utils'
+import { formatPrice, getInitials, dedupeCategories } from '@/lib/utils'
 import { accentFor } from '@/lib/category-style'
 import { getPreset } from '@/lib/site-design'
 import { washForLuminance } from '@/lib/image-luminance'
@@ -124,12 +124,13 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
     .filter((r) => r.comment.trim())
     .slice(0, 6)
 
+  const cleanCats = dedupeCategories(business.category)
   const content =
     business.site_hero && business.site_services
       ? { hero: business.site_hero, services: business.site_services }
       : await generateSiteContent({
           businessName: business.name,
-          category: business.category?.[0] || '',
+          category: cleanCats[0] || '',
           bio: business.bio || '',
           city: business.city || '',
         })
@@ -138,7 +139,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
   // Structured blocks (tagline / faq / hours / gallery)
   const blocks = parseSiteContent(business.site_content)
-  const acCategories = business.category || []
+  const acCategories = cleanCats
   const cat = acCategories[0] || ''
   const tagline =
     blocks.tagline ||
@@ -206,7 +207,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
 
   // Owner override (site_theme.accent) wins; otherwise the category default
   // gives every industry a distinct brand colour.
-  const accent = hex(theme.accent) || accentFor(business.category)
+  const accent = hex(theme.accent) || accentFor(cleanCats)
   const accentDark = isDark(accent)
   const accentCtaText = getContrastColor(accent)
   const headerBg = hex(theme.header)

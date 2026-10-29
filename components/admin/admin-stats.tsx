@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
 import { getEventLabel, STAT_EVENT_COLORS } from '@/lib/stats-format'
+import { dedupeCategories } from '@/lib/utils'
 import {
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -93,7 +94,7 @@ export default function AdminStats() {
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold text-text-primary">{detail.business.name}</h3>
-                <p className="text-xs text-text-secondary">{detail.business.category} {detail.business.city ? `· ${detail.business.city}` : ''}</p>
+                <p className="text-xs text-text-secondary">{dedupeCategories(detail.business.category).join(', ')} {detail.business.city ? `· ${detail.business.city}` : ''}</p>
               </div>
               <button onClick={() => setDetail(null)} className="w-9 h-9 rounded-2xl bg-surface flex items-center justify-center text-text-secondary hover:bg-gray-200 transition-colors">
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>

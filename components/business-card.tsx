@@ -8,7 +8,7 @@ import CategoryDoodle from '@/components/category-doodle'
 import TrackLink from '@/components/track-link'
 import { isYellowPages } from '@/lib/category-style'
 import { getCategoryImage } from '@/data/category-images'
-import { cleanBio, getInitials } from '@/lib/utils'
+import { cleanBio, getInitials, dedupeCategories } from '@/lib/utils'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, whatsappHref, callHref } from '@/components/contact'
 
 function LogoInitials({ name, url }: { name: string; url?: string }) {
@@ -149,7 +149,7 @@ export default function BusinessCard({ business }: { business: Business }) {
             <p className="text-text-secondary text-[11px] sm:text-base mt-1 sm:mt-2.5 mb-0.5 sm:mb-2 line-clamp-2 leading-snug sm:leading-relaxed">{cleanBio(business.bio)}</p>
           )}              {business.category && business.category.length > 0 && (
                 <div className="flex flex-wrap gap-0.5 sm:gap-1.5 my-0.5 sm:my-3">
-                  {business.category.slice(0, 3).map((cat, i) => (
+                  {dedupeCategories(business.category).slice(0, 3).map((cat, i) => (
                     <span key={i} className={`chip text-[9px] sm:text-xs px-2 sm:px-3.5 py-0.5 sm:py-2 ${isYellowPages([cat]) ? 'chip-yellow-pages' : ''}`}>
                       {cat}
                     </span>

@@ -1,5 +1,6 @@
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { categories as staticCategories } from '@/data/categories'
+import { dedupeCategories } from '@/lib/utils'
 
 // WhatsApp listing-intake parser: turns any message (single line, labeled
 // lines, or a full paragraph) into field updates plus a living form card.
@@ -157,15 +158,18 @@ function setCtxField(ctx: Ctx, field: string, value: string): boolean {
       // Multiple categories in one value ("jewellery, watches") all apply.
       const parts = value.split(/\s*[/&,]\s*/).filter(Boolean)
       let any = false
+      const cats = s.categories ? [...s.categories] : []
       for (const part of parts) {
         const cat = guessCategory(part)
         if (!cat) continue
-        const cats = s.categories ? [...s.categories] : []
-        if (!cats.includes(cat) && cats.length < 4) {
+        // Case-insensitive check before pushing
+        if (!cats.some(c => c.toLowerCase() === cat.toLowerCase()) && cats.length < 4) {
           cats.push(cat)
-          s.categories = cats
           any = true
         }
+      }
+      if (any) {
+        s.categories = dedupeCategories(cats)
       }
       return any
     }

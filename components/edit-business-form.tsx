@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Business } from '@/types'
 import { categories as staticCategories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
+import { dedupeCategories } from '@/lib/utils'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import { PasswordStrengthMeter } from '@/components/password-strength'
@@ -42,7 +43,7 @@ export default function EditBusinessForm({
     isPhysical: !isLegacyRemote && !!business.city,
     isRemote: isLegacyRemote,
   })
-  const [categories, setCategories] = useState<string[]>(business.category || [])
+  const [categories, setCategories] = useState<string[]>(dedupeCategories(business.category || []))
   const [areas, setAreas] = useState<string[]>(business.areas?.length ? business.areas : (business.area ? [business.area] : []))
   const [requests, setRequests] = useState<FeatureRequest[]>(
     pendingFeatureNames.map(p => ({ type: p.type as 'category' | 'area', name: p.name, city: p.city }))
