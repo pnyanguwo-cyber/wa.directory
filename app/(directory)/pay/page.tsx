@@ -5,7 +5,7 @@ import Link from 'next/link'
 import LogoImage from '@/components/logo-image'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import type { PlanType } from '@/types'
-import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import { digitsOnly } from '@/lib/phone'
 
 interface Business {
@@ -52,9 +52,18 @@ export default function PayPage() {
   const [payMatch, setPayMatch] = useState<string>('all')
   const [simulating, setSimulating] = useState(false)
   // Preselected listing: /pay?business_id=WA-XXXX (used by the go-live CTA
-  // after registration and by the portal billing upgrade links). When set,
-  // choosing a plan jumps straight to the payment step — no search needed.
+  // and by the daily cron's renewal-reminder links). When set, choosing a
+  // plan jumps straight to the payment step — no search needed.
   const [preselected, setPreselected] = useState<Business | null>(null)
+  // Personal contacts (categories ['Personal Contact']) renew at the personal
+  // packages ($1/$5/$10), never the business ones — the reminder:
+  // cron / pay?business_id flow preselects one, so this flag must also
+  // engage when a search lands on a personal-contact row.
+  const [isPersonal, setIsPersonal] = useState(false)
+
+  function lockPersonal(biz: Business | null | undefined) {
+    setIsPersonal(Array.isArray(biz?.category) && biz!.category.includes('Personal Contact'))
+  }
 
   // Read the query params on mount (window.location: no Suspense requirement).
   useEffect(() => {
@@ -77,6 +86,7 @@ export default function PayPage() {
         const match = list.find(b => b.business_id === bid) || list[0]
         if (match) {
           setPreselected(match)
+          lockPersonal(match)
           if (match.payment_status === 'active') setPaidLive(true)
         }
       } catch {
@@ -135,6 +145,7 @@ export default function PayPage() {
       if (!data.businesses?.length) {
         setError('No businesses found. Try a different search (name, phone, or Business ID like WA-XXXXXX).')
       } else if (data.businesses.length === 1) {
+        lockPersonal(data.businesses[0])
         setSelected(data.businesses[0])
         setStep('pay')
       } else {
@@ -148,6 +159,7 @@ export default function PayPage() {
   }
 
   function handleSelect(biz: Business) {
+    lockPersonal(biz)
     setSelected(biz)
     setStep('pay')
   }
@@ -165,6 +177,7 @@ export default function PayPage() {
           payer_phone: payerPhone.trim(),
           plan,
           hasProAssistance: proAssistance,
+          kind: isPersonal ? 'personal' : undefined,
         }),
       })
       const data = await res.json()
@@ -207,13 +220,15 @@ export default function PayPage() {
     }
   }
 
-  const totalAmount = PLAN_CONFIG[plan].price + (proAssistance ? PRO_ASSISTANCE_PRICE : 0)
+  // Personal contacts ride the same plan keys at half price, no add-ons.
+  const planConfig = isPersonal ? PERSONAL_PLAN_CONFIG : PLAN_CONFIG
+  const totalAmount = planConfig[plan].price + (!isPersonal && proAssistance ? PRO_ASSISTANCE_PRICE : 0)
 
   // Selected plan badge, shown in the header of steps 2-4
   const planBadgeClass = 'shrink-0 inline-flex items-center rounded-full border border-whatsapp-200/70 bg-whatsapp-50 px-3 py-1 text-[11px] font-bold text-whatsapp-700'
   const planBadge = (
     <span className={planBadgeClass}>
-      {PLAN_CONFIG[plan].label} · ${totalAmount.toFixed(2)}
+      {isPersonal ? 'Personal contact' : planConfig[plan].label} · ${totalAmount.toFixed(2)}
     </span>
   )
 
@@ -292,16 +307,23 @@ export default function PayPage() {
             {/* Plan cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-5 mb-8">
               {(['1m', '6m', '12m'] as PlanType[]).map(p => {
-                const cfg = PLAN_CONFIG[p]
+                const cfg = planConfig[p]
                 const isBest = p === '6m'
-                const is12m = p === '12m'
-                const features = [
-                  'Registration, account activation and validation',
-                  `Link to WhatsApp search engine for ${cfg.days} days`,
-                  'Access to portal insights',
-                  'Allowed to bid for promotion in search',
-                  'Auto-generated website included',
-                ]
+                const is12m = p === '12m' && !isPersonal
+                const features = isPersonal
+                  ? [
+                      'Your name, WhatsApp number & socials go live',
+                      `Findable in WhatsApp search for ${cfg.days} days`,
+                      'Up to 3 social links on your page',
+                      'Renew in 30 seconds with an EcoCash PIN',
+                    ]
+                  : [
+                      'Registration, account activation and validation',
+                      `Link to WhatsApp search engine for ${cfg.days} days`,
+                      'Access to portal insights',
+                      'Allowed to bid for promotion in search',
+                      'Auto-generated website included',
+                    ]
                 return (
                   <div
                     key={p}
@@ -384,8 +406,8 @@ export default function PayPage() {
               })}
             </div>
 
-            {/* Pro assistance add-on */}
-            {plan === '12m' && (
+            {/* Pro assistance add-on — business-only; personal flow takes none. */}
+            {!isPersonal && plan === '12m' && (
               <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 animate-fade-in"
                 style={{ boxShadow: '0 2px 8px -2px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
                 <label className="flex items-start gap-3 cursor-pointer">
@@ -407,8 +429,8 @@ export default function PayPage() {
             <div className="rounded-2xl p-4 border border-gray-100 mb-6"
               style={{ backgroundColor: 'rgb(var(--bg-secondary))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.03)' }}>
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-text-primary">{PLAN_CONFIG[plan].label} listing</span>
-                <span className="font-bold text-text-primary tabular-nums">${PLAN_CONFIG[plan].price.toFixed(2)}</span>
+                <span className="font-medium text-text-primary">{isPersonal ? 'Personal contact' : `${planConfig[plan].label} listing`}</span>
+                <span className="font-bold text-text-primary tabular-nums">${planConfig[plan].price.toFixed(2)}</span>
               </div>
               {proAssistance && (
                 <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200/60">
@@ -654,8 +676,8 @@ export default function PayPage() {
               <div className="mt-5 rounded-2xl p-4 border border-gray-100"
                 style={{ backgroundColor: 'rgb(var(--bg-secondary))', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 1px 3px rgba(0,0,0,0.03)' }}>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-text-primary">{PLAN_CONFIG[plan].label} listing</span>
-                  <span className="font-bold text-text-primary tabular-nums">${PLAN_CONFIG[plan].price.toFixed(2)}</span>
+                  <span className="font-medium text-text-primary">{isPersonal ? 'Personal contact' : `${planConfig[plan].label} listing`}</span>
+                  <span className="font-bold text-text-primary tabular-nums">${planConfig[plan].price.toFixed(2)}</span>
                 </div>
                 {proAssistance && (
                   <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-200/60">
@@ -669,8 +691,8 @@ export default function PayPage() {
                 </div>
                 <p className="text-xs text-text-secondary mt-2 leading-relaxed">
                   {paymentsConfigured
-                    ? `Covers your listing for ${PLAN_CONFIG[plan].label.toLowerCase()}. Your listing activates automatically once the EcoCash payment succeeds.`
-                    : `Covers your listing for ${PLAN_CONFIG[plan].label.toLowerCase()}. Admin will verify the EcoCash transaction.`}
+                    ? `Covers your ${isPersonal ? 'personal contact' : 'listing'} for ${planConfig[plan].label.toLowerCase()}. It activates automatically once the EcoCash payment succeeds.`
+                    : `Covers your ${isPersonal ? 'personal contact' : 'listing'} for ${planConfig[plan].label.toLowerCase()}. Admin will verify the EcoCash transaction.`}
                 </p>
               </div>
 
@@ -739,9 +761,9 @@ export default function PayPage() {
               </h2>
               <p className="text-sm text-text-secondary mb-1 leading-relaxed">
                 {paidLive ? (
-                  <><strong className="text-text-primary">{selected?.name}</strong> is now visible in the directory for {PLAN_CONFIG[plan].label.toLowerCase()}.</>
+                  <><strong className="text-text-primary">{selected?.name}</strong> is now visible in the directory for {planConfig[plan].label.toLowerCase()}.</>
                 ) : (
-                  <>You&apos;re paying <span className="font-bold text-whatsapp-700">${totalAmount.toFixed(2)}</span> ({PLAN_CONFIG[plan].label}) for <strong className="text-text-primary">{selected?.name}</strong></>
+                  <>You&apos;re paying <span className="font-bold text-whatsapp-700">${totalAmount.toFixed(2)}</span> ({planConfig[plan].label}) for <strong className="text-text-primary">{selected?.name}</strong></>
                 )}
               </p>
               {paidLive ? (
@@ -765,7 +787,7 @@ export default function PayPage() {
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">What happens next</p>
                   <ol className="text-xs text-amber-900 space-y-1.5 leading-relaxed">
                     <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> {autoEcoCash ? 'Enter your EcoCash PIN on the prompt' : 'Pay via EcoCash from +253… your number'}</li>
-                    <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your listing goes live for {PLAN_CONFIG[plan].label.toLowerCase()}{autoEcoCash ? ' automatically — this page will update itself' : ' once admin confirms'}</li>
+                    <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your {isPersonal ? 'personal contact' : 'listing'} goes live for {planConfig[plan].label.toLowerCase()}{autoEcoCash ? ' automatically — this page will update itself' : ' once admin confirms'}</li>
                     <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">3.</span> You&apos;ll receive a WhatsApp confirmation</li>
                   </ol>
                 </div>
