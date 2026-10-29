@@ -706,6 +706,8 @@ export function FALLBACK_HELP_LINES(siteUrl: string): string[] {
     '*My orders:* send *myorders* · Shops: send *orders*',
     '',
     '*List your business:* send *register*',
+    '*Your personal contacts:* send *contact*',
+    '*What you have paid:* send *paid* (expiry countdowns included)',
     '*Pay subscription:* send *pay*',
     '*Cancel:* send *cancel*',
     '*Help:* send *help*',
