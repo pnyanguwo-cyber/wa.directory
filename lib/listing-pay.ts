@@ -26,7 +26,7 @@ export interface CreateListingPaymentInput {
   plan: PlanType
   hasProAssistance?: boolean
   /** Overrides PLAN_CONFIG pricing (sub row, Paynow request, labels) —
-   * used by the $0.20 personal-contact listing flow, which rides plan '1m'. */
+   * used by the $1/$5/$10 personal-contact listing flow (plan '1m'/'6m'/'12m'). */
   amountOverride?: number
   /** Optional request for the payment-event audit log (IP/UA). */
   request?: Request | NextRequest

@@ -309,7 +309,7 @@ rate limit: 3 media tries/hour per phone, always with a text fallback
 flowchart TD
     M[Main menu] -->    CHOICE{"Which are you adding?"}
     CHOICE -->|Business $1/mo| FORM["list_form session:<br/>free-text 'name …', 'city …', 'prices $5-$20'…"]
-    CHOICE -->|Personal $0.20| ONE["One message: 'Tendai Ncube 0771… Harare IG @x'"]
+    CHOICE -->|Personal $1-$10| ONE["One message: 'Tendai Ncube 0771… Harare IG @x'"]
     FORM -->    PARSER["parseListingMessage rules"]
     PARSER -->|parser stalls| AIGEN["aiPatchListing (Gemini)"]
     PARSER --> LIVING["Living form re-rendered<br/>+ missing-field list"]

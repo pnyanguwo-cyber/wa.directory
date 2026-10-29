@@ -131,7 +131,7 @@ LAYOUT:
 3. Two side-by-side cards:
    CARD A — ON THE WEB: Fill name, category, WhatsApp number, city and prices · Upload your logo · Optionally set a portal password · Tap submit.
    CARD B — IN CHAT: Open the bot menu · tap ✎ Register · send "name, category, city, phone" as one message · tap ↗ Publish.
-4. Gold price strip, mono, three cells: BUSINESS USD 1 / MONTH · PERSONAL CONTACT USD 0.20 / MONTH · YELLOW PAGES FREE (PRIORITY REVIEW)
+4. Gold price strip, mono, three cells: BUSINESS USD 1 / MONTH · PERSONAL CONTACT USD 1 / MONTH · YELLOW PAGES FREE (PRIORITY REVIEW)
 5. WHAT YOU GET checklist with green double-check icons: your listing with an @username · a Business ID like WA-8SLL6A · a private edit link — keep it safe, anyone with it can edit · your page reviewed by our team before going live.
 
 ERROR GUARD: portrait only; every word spelled exactly as given; no lorem ipsum, no extra text, no watermark, no gibberish; palette and type exactly as the scheme.
@@ -151,7 +151,7 @@ LAYOUT:
 2. Numbered four-step vertical timeline with gold numerals and a green connector line:
    1 TAP PAY — Send "pay" in chat or open wadirectory.co.zw/pay.
    2 GET THE PROMPT — An EcoCash request lands on your phone; anyone can pay for you.
-   3 ENTER YOUR PIN — Confirm the USD 1 monthly (or USD 0.20 personal contact).
+   3 ENTER YOUR PIN — Confirm the USD 1 monthly (or USD 5 / 10 personal package).
    4 LIVE AUTOMATICALLY — Your listing and website activate the moment payment confirms; no waiting.
 3. Side note panel in ink with green heading: PREFER MANUAL? Bank transfer works too — the admin confirms on WhatsApp, usually within minutes.
 4. Trust row with green check icons: ✓ Verified badge after our quick check · ✓ Emergency & essential listings reviewed first · ✓ Renewal reminders on WhatsApp at 3 days and 1 day left.

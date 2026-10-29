@@ -70,7 +70,7 @@ import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@
 import { searchPayBusinesses, type PayBusiness } from '@/lib/pay-lookup'
 import { createListingPayment, paymentAmountFor } from '@/lib/listing-pay'
 import { normalizeEcoCashPhone } from '@/lib/paynow'
-import { PLAN_CONFIG } from '@/types'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
@@ -918,7 +918,7 @@ async function startFreshSearchPrompt(from: string) {
 const MENU_ROWS = [
   { id: 'menu_needs', title: '🛒 Post a need', description: 'Suppliers quote you here' },
   { id: 'menu_order', title: '🧺 Order items', description: 'Type items — sent shop by shop' },
-  { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal 20c' },
+  { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal $1/mo' },
   { id: 'menu_pay', title: '$ Pay (EcoCash)', description: 'Pay or top up via EcoCash' },
   { id: 'menu_help', title: '✆ Help', description: 'Tips & support' },
 ]
@@ -1241,12 +1241,12 @@ async function sendRegisterChoice(from: string) {
       '✎ *Registering on WA Directory*',
       '',
       '• Business subscription — USD 1 per month',
-      '• Personal contact — USD 0.20 each, per month',
+      '• Personal contact — $1/month, $5/6 months or $10/year',
       '',
       'Which are you adding?',
     ].join('\n'),
     [
-      { id: 'reg_personal', title: 'Personal contact $0.20' },
+      { id: 'reg_personal', title: 'Personal contact $1/mo' },
       { id: 'reg_business', title: '• Business $1/mo' },
       { id: 'cancel', title: '✖ Cancel' },
     ]
@@ -1334,9 +1334,14 @@ async function tryPublishContact(
   from: string,
   session: ChatSession,
   msgId?: string,
-  plan: '1m' | '12m' = '1m',
-  amount = 0.2
+  plan: PlanType = '1m',
+  amount?: number
 ) {
+  // Personal packages mirror the web app (types PERSONAL_PLAN_CONFIG):
+  // $1/month, $5/6 months, $10/year. The amount override rides through to
+  // createListingPayment so the subscription + EcoCash request use it directly.
+  const payAmount = amount ?? PERSONAL_PLAN_CONFIG[plan].price
+  const labelMonths = PERSONAL_PLAN_CONFIG[plan].label.toLowerCase()
   const c = session.data.contact!
   const rawName = c.name
   const rawPhone = c.phone.replace(/[^0-9]/g, '')
@@ -1348,7 +1353,7 @@ async function tryPublishContact(
   const payerZero = payerDigits.replace(/^263/, '0')
 
   // Guard 1 — cap: max 3 ACTIVE personal contacts per payer phone, so a
-  // business can't dodge the USD 1 subscription by batch-buying 20c rows.
+  // business can't dodge the USD 1 subscription by batch-buying cheap rows.
   const { data: payerSubs } = await getSupabase()
     .from('listing_subscriptions')
     .select('business_id, businesses!inner(category)')
@@ -1427,7 +1432,7 @@ async function tryPublishContact(
     businessId: result.businessId,
     payerPhone: from,
     plan,
-    amountOverride: amount,
+    amountOverride: payAmount,
   })
   if (!pay.ok) {
     // The listing exists but payment couldn't start — the admin fallback in
@@ -1437,7 +1442,7 @@ async function tryPublishContact(
       [
         `✅ *${result.name}* — Personal contact was saved.`,
         '',
-        `The USD ${amount.toFixed(2)} payment could not start right now. Our team will confirm it and your contact will go live.`,
+        `The USD ${payAmount.toFixed(2)} payment could not start right now. Our team will confirm it and your contact will go live.`,
       ].join('\n')
     )
     await clearSession(from)
@@ -1448,7 +1453,7 @@ async function tryPublishContact(
     [
       `✅ *${result.name}* — Personal contact`,
       '',
-      `💸 USD ${amount.toFixed(2)}${plan === '12m' ? ' · 12 months' : ' · 1 month'} · EcoCash`,
+      `💸 USD ${payAmount.toFixed(2)} · ${labelMonths} · EcoCash`,
       pay.autoEcoCash
         ? pay.message
         : pay.message + ' (goes live once confirmed — usually within minutes).',
@@ -3698,7 +3703,8 @@ async function handleAction(from: string, session: ChatSession | null, action: s
           "Send the contact's name + phone (+ city, socials optional), e.g.",
           '*Tendai Ncube 0771 234 567 Harare IG @tendai*',
           '',
-          'USD 0.20/month or USD 1.00/year — paid via EcoCash.',
+          '$1 per month · $5 for 6 months · $10 for the full year.',
+          'Paid via EcoCash.'
         ].join('\n')
       )
       return
@@ -3706,7 +3712,15 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'reg_contact_pay_monthly':
     case 'reg_contact_publish': {
       if (session?.step === 'reg_contact' && session.data.contact) {
-        await tryPublishContact(from, session, msgId, '1m', 0.2)
+        await tryPublishContact(from, session, msgId, '1m')
+      } else {
+        await sendRegisterChoice(from)
+      }
+      return
+    }
+    case 'reg_contact_pay_6m': {
+      if (session?.step === 'reg_contact' && session.data.contact) {
+        await tryPublishContact(from, session, msgId, '6m')
       } else {
         await sendRegisterChoice(from)
       }
@@ -3714,7 +3728,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     }
     case 'reg_contact_pay_year': {
       if (session?.step === 'reg_contact' && session.data.contact) {
-        await tryPublishContact(from, session, msgId, '12m', 1.0)
+        await tryPublishContact(from, session, msgId, '12m')
       } else {
         await sendRegisterChoice(from)
       }
@@ -5393,25 +5407,28 @@ export async function POST(request: Request) {
           }
           await saveSession(from, 'reg_contact', { contact: c })
           const socialLines = (c.socials || []).slice(0, 3).map(s => `🔗 ${s}`)
-          await sendInteractiveButtons(
+          // Package picker as a list row menu — three personal packages plus
+          // "fix details" would not fit WhatsApp's three-button cap.
+          await sendInteractiveList(
             from,
             [
               `*${c.name}* ${c.city ? `📍 ${c.city}` : '📍 Zimbabwe'}`,
               `📱 +${c.phone.startsWith('263') ? c.phone : '263' + c.phone.replace(/^0/, '')}`,
               ...socialLines,
               '',
-              'Personal contact pricing:',
-              '• USD 0.20 per month, or',
-              '• USD 1.00 for a full year',
-              'Paid via EcoCash — you enter the PIN now.',
-              '',
-              'Ready to go live?',
+              'Personal contact pricing — pick a package:',
+              '• USD 1 · 1 month',
+              '• USD 5 · 6 months',
+              '• USD 10 · 12 months',
+              'Paid via EcoCash — you enter the PIN after you choose.',
             ].join('\n'),
             [
-              { id: 'reg_contact_pay_monthly', title: 'Pay 20c · 1 month' },
-              { id: 'reg_contact_pay_year', title: 'Pay $1 · 12 months' },
+              { id: 'reg_contact_pay_monthly', title: 'Pay $1 · 1 month' },
+              { id: 'reg_contact_pay_6m', title: 'Pay $5 · 6 months' },
+              { id: 'reg_contact_pay_year', title: 'Pay $10 · 12 months' },
               { id: 'reg_contact_fix', title: '✎ Fix details' },
-            ]
+            ],
+            'Choose a package'
           )
           continue
         }
