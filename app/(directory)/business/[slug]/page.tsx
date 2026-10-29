@@ -3,7 +3,6 @@ import { BUSINESS_PROFILE_COLUMNS } from '@/lib/business-select'
 import Link from 'next/link'
 import Image from 'next/image'
 import { notFound } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import type { Metadata } from 'next'
 import WhatsAppButton from '@/components/whatsapp-button'
 import { hasWhatsAppChannel, hasVoiceChannel, voiceNumber, callHref } from '@/components/contact'
@@ -13,8 +12,8 @@ import StatsPing from '@/components/stats-ping'
 import TrackLink from '@/components/track-link'
 import BusinessCard from '@/components/business-card'
 import LogoImage from '@/components/logo-image'
-import BusinessCardPrint from '@/components/business-card-print'
 import { Suspense } from 'react'
+
 import { SkeletonProfile } from '@/components/skeleton-card'
 import type { Business, BusinessItem } from '@/types'
 import { getApprovedCategoryNames, getApprovedAreaNames } from '@/lib/approved-data'
@@ -25,10 +24,6 @@ import CategoryDoodle from '@/components/category-doodle'
 import { SOCIAL_META, SocialIcon, getSocialLinks } from '@/components/social-icons'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
-
-// Lazy: qrcode.react + the QR studio stay out of the profile page's main chunk;
-// the QR renders lower on the page inside the contact grid.
-const QrCard = dynamic(() => import('@/components/qr-card'))
 
 import ReviewSection from '@/components/review-section'
 
@@ -248,12 +243,6 @@ async function BusinessContent({ slug }: { slug: string }) {
   const waLinkDigits = /wa\.me\/(\d+)/.exec(business.whatsapp_link || '')?.[1] || null
   const orderDigits = !voice && phoneClean ? phoneClean : waLinkDigits || ''
   const qrMessage = encodeURIComponent(`Hi ${business.name}, I came to you through WA.Directory and I want to ask about your services.`)
-  // Voice-only listings get a one-tap dial QR instead of a chat QR.
-  const qrUrl = voice
-    ? (callHref(voiceNumber(business)) || business.whatsapp_link || '')
-    : phoneClean
-      ? `https://wa.me/${phoneClean}?text=${qrMessage}`
-      : (business.whatsapp_link || '')
   // One-tap turn-by-turn directions when the address was Google-verified;
   // falls back to a text search otherwise.
   const hasCoords = typeof business.lat === 'number' && typeof business.lng === 'number'
@@ -520,25 +509,6 @@ async function BusinessContent({ slug }: { slug: string }) {
               )}
 
               <div className="flex flex-col md:flex-row gap-4 sm:gap-6 mb-4 sm:mb-6 items-start">
-                {(qrUrl || business.whatsapp_link) && (
-                  <div className="w-full md:w-[280px] lg:w-[310px] shrink-0">
-                    <h2 className="text-sm sm:text-[16px] font-semibold text-text-primary mb-2 sm:mb-3">{voice ? 'Scan to call' : 'Scan to chat'}</h2>
-                    <QrCard
-                      value={qrUrl}
-                      businessName={business.name}
-                      businessSlug={business.slug || business.id}
-                      location={[businessAreas.length ? businessAreas[0] : '', business.city, 'Zimbabwe'].filter(Boolean).join(', ')}
-                      verified={business.verified}
-                      title={voice ? 'Scan to call' : 'Scan to chat'}
-                      subtitle={voice ? 'Scan with your phone camera to call the business' : 'Scan with your phone camera to start a chat'}
-                      downloadName={`${business.slug || 'business'}-qr.png`}
-                      size={200}
-                      interactive={true}
-                      username={(business as { username?: string }).username}
-                    />
-                  </div>
-                )}
-
                 <div className="flex-1 min-w-0 w-full space-y-4 sm:space-y-5">
                   {/* Quick Contact */}
                   <div>
@@ -754,24 +724,6 @@ async function BusinessContent({ slug }: { slug: string }) {
                   </div>
                 </div>
               )}
-
-              <div id="business-card" className="mb-4 sm:mb-8 pt-5 border-t border-gray-100 scroll-mt-6">
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h2 className="text-base sm:text-lg font-bold text-text-primary">Official Business Card</h2>
-                      <span className="inline-flex items-center gap-1 bg-whatsapp-50 border border-whatsapp-200 text-whatsapp-700 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                        <span className="w-1.5 h-1.5 rounded-full bg-whatsapp-500 animate-pulse" />
-                        World Standard · 3.5″ × 2.0″
-                      </span>
-                    </div>
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      Interactive 3D digital card with instant WhatsApp QR code & 300 DPI print-ready specifications.
-                    </p>
-                  </div>
-                </div>
-                <BusinessCardPrint business={business} />
-              </div>
 
               <div className="hidden sm:flex flex-col gap-2">
                 {hasWhatsAppChannel(business) && (

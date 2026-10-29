@@ -90,3 +90,87 @@ export async function expandSearchQuery(query: string): Promise<string[]> {
   }
   return []
 }
+
+// What the current step is asking, for the intent fallback prompt. A short
+// plain line is enough — the model only needs context to tell a stated plan
+// change apart from an ordinary answer.
+const INTENT_ASKS: Record<string, string> = {
+  name: 'a business or owner name to register',
+  username: 'a username for the listing URL',
+  phone: 'a contact phone number',
+  category: 'picking a business category from a list',
+  description: 'describing the business in a few words',
+  city: 'which town or city the business is in',
+  area: 'which area of that town the business is in',
+  confirm: 'confirming the listing details',
+  list_form: 'listing items for sale, one per line',
+  reg_contact: 'a personal contact for a personal listing',
+  item_photo: 'a shelf or item photo',
+  item_pick: 'choosing which item from a list',
+  need_form: 'describing a need to post to suppliers',
+  pay_search: 'a business name or number to look up before paying',
+  pay_pick: 'choosing which business to pay for',
+  pay_plan: 'choosing a payment plan or package',
+  pay_ecocash: 'an EcoCash phone number to bill',
+  search_loc: 'which town to search in',
+  search_term: 'what to search for',
+  browse: 'choosing what to browse from a list',
+  order: 'reading out an order, item by item',
+}
+
+export type IntentKind =
+  | 'register'
+  | 'pay'
+  | 'need'
+  | 'order'
+  | 'search'
+  | 'menu'
+  | 'continue'
+
+const INTENT_HINTS = new Set<IntentKind>([
+  'register',
+  'pay',
+  'need',
+  'order',
+  'search',
+  'menu',
+  'continue',
+])
+
+const INTENT_PROMPT = (ask: string, text: string) =>
+  `You are reading one reply inside a WhatsApp business-directory bot. The bot is mid-flow and just asked for ${ask}.\nClassify the reply as exactly one of:\n- continue: it answers what the bot asked for\n- register: they want to register or list a business instead\n- pay: they want to pay, renew, or learn what a listing costs\n- need: they want suppliers to quote them on a posted need\n- order: they are giving items to order and buy\n- search: they are looking for products, shops or services to find\n- menu: they want the main options\nReply: "${text}"\nAnswer ONLY with JSON {"intent":"<kind>"}.`
+
+// Last-resort intent check for mid-flow messages the regex rules could not
+// classify. Cached per (step, trimmed text), so a repeated line costs nothing.
+export async function classifyIntent(
+  text: string,
+  step: string
+): Promise<IntentKind | null> {
+  if (!process.env.GEMINI_API_KEY || !text.trim()) return null
+  const norm = text.trim().replace(/\s+/g, ' ').toLowerCase()
+  const cacheKey = `intent:${step}:${norm}`
+  const cached = await getCached<IntentKind>(cacheKey)
+  if (cached && INTENT_HINTS.has(cached)) return cached
+
+  const ask = INTENT_ASKS[step] || 'an answer to its question'
+  const body = {
+    contents: [{ parts: [{ text: INTENT_PROMPT(ask, norm) }] }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: 'application/json',
+      maxOutputTokens: 64,
+    },
+  }
+  const raw = await fetchGemini(body)
+  let intent: IntentKind | null = null
+  try {
+    const parsed = JSON.parse(raw || '') as { intent?: string }
+    if (parsed?.intent && INTENT_HINTS.has(parsed.intent as IntentKind)) {
+      intent = parsed.intent as IntentKind
+    }
+  } catch {
+    // fall through — the fallback stays null
+  }
+  if (intent) await setCached(cacheKey, intent)
+  return intent
+}

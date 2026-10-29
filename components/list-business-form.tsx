@@ -2,9 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { PLAN_CONFIG } from '@/types'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 import { countryCodes, validatePhone } from '@/data/countries'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
@@ -18,9 +17,7 @@ import { toFullPhone, normalizeVoicePhone, digitsOnly } from '@/lib/phone'
 import { normalizeUsername } from '@/lib/username'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 
-// Lazy: qrcode.react + the whole QR studio bundle stay out of the initial
-// page load — the QR preview is render-gated behind the success modal.
-const QrCard = dynamic(() => import('@/components/qr-card'))
+// Lazy: heavy portal-only pieces stay out of the main bundle.
 
 interface ApprovedCategory { name: string; icon: string; hint?: string }
 interface ApprovedArea { city: string; name: string }
@@ -72,6 +69,17 @@ export default function ListBusinessForm({
   // listing goes live with no admin step, detected by polling below.
   const [autoEcocash, setAutoEcocash] = useState(false)
   const [simulating, setSimulating] = useState(false)
+
+  // Registration type: the full business wizard or the fast personal-contact
+  // form. Personal rides the same creation engine as the WhatsApp bot's
+  // "Personal Contact" flow (categories ['Personal Contact'], no auto-site)
+  // and pays the half-price personal packages at the payment step.
+  const [regType, setRegType] = useState<'business' | 'personal'>('business')
+  const [personal, setPersonal] = useState({ name: '', phone: '', city: '' })
+  const [personalSocials, setPersonalSocials] = useState(['', '', ''])
+  const [personalLoading, setPersonalLoading] = useState(false)
+  const isPersonalReg = regType === 'personal'
+  const planConfig = isPersonalReg ? PERSONAL_PLAN_CONFIG : PLAN_CONFIG
 
   // Auto payment in flight: poll until the webhook flips the listing live.
   useEffect(() => {
@@ -155,6 +163,10 @@ export default function ListBusinessForm({
   const [geoLoading, setGeoLoading] = useState(false)
   const [addressRequestSent, setAddressRequestSent] = useState(false)
   const router = useRouter()
+
+  // Names shown on the success screen (personal form has its own field).
+  const submittedName = isPersonalReg ? (personal.name.trim() || 'Your personal contact') : form.name
+  const submittedKind = isPersonalReg ? 'personal' : undefined
 
   const selectedCountry = countryCodes.find(c => c.code === form.countryCode)
   const rawPhoneDigits = digitsOnly(form.phone)
@@ -542,6 +554,63 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
     }
   }
 
+  // Personal contact submission: one compact page (name + phone + optional
+  // city + up to 3 socials) through the same shared listing engine the
+  // WhatsApp bot's Personal Contact flow uses. No portal password — access is
+  // via the private edit link the success screen hands over.
+  async function handlePersonalSubmit() {
+    const name = personal.name.trim()
+    if (name.length < 2) {
+      setErrors(prev => ({ ...prev, submit: 'Enter the contact\u2019s full name.' }))
+      return
+    }
+    if (digitsOnly(personal.phone).length < 9) {
+      setErrors(prev => ({ ...prev, submit: 'Enter a valid WhatsApp phone number, e.g. 0771234567.' }))
+      return
+    }
+    setErrors(prev => ({ ...prev, submit: undefined }))
+    setPersonalLoading(true)
+    try {
+      const createRes = await fetchWithTimeout('/api/businesses/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          countryCode: '+263',
+          phone: personal.phone.trim(),
+          whatsapp_username: '',
+          categories: ['Personal Contact'],
+          city: personal.city,
+          socials: personalSocials.map(s => s.trim()).filter(Boolean),
+          phone_type: 'whatsapp',
+          generate_site: false,
+        }),
+      })
+      if (!createRes.ok) {
+        const payload = await createRes.json().catch(() => null)
+        throw new Error(payload?.error || 'Could not create your personal contact. Please try again.')
+      }
+      const created = await createRes.json() as { id: string; slug: string; edit_token: string; business_id: string; username: string; payment_status: string }
+      setBusinessId(created.business_id || '')
+      setSubmittedUsername(created.username || '')
+      setIsPaidListings(created.payment_status !== 'active')
+      setEditToken(created.edit_token)
+      setSubmittedId(created.slug || created.id)
+      fetch('/api/admin/notify-new-business', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ business: { name, category: 'Personal Contact', city: personal.city, phone: toFullPhone('+263', personal.phone), id: created.id } }),
+      }).catch(() => {})
+    } catch (err) {
+      const msg =
+        (err as { message?: string })?.message ||
+        (err instanceof Error ? err.message : 'Something went wrong. Please try again.')
+      setErrors(prev => ({ ...prev, submit: msg }))
+    } finally {
+      setPersonalLoading(false)
+    }
+  }
+
   if (submittedId) {
     return (
       <div className="max-w-lg mx-auto text-center py-8 animate-slide-up">
@@ -559,9 +628,9 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         </div>
         {isPaidListings ? (
           <>
-            <h2 className="text-2xl font-bold text-text-primary mb-1">Listing Created!</h2>
-            <p className="text-text-secondary mb-1">{form.name} is ready, but needs payment to go live.</p>
-            <p className="text-xs text-text-secondary mb-4">Business ID: <span className="font-mono font-bold">{businessId}</span></p>
+            <h2 className="text-2xl font-bold text-text-primary mb-1">{isPersonalReg ? 'Contact Created!' : 'Listing Created!'}</h2>
+            <p className="text-text-secondary mb-1">{submittedName} is ready, but needs payment to go live.</p>
+            <p className="text-xs text-text-secondary mb-4">{isPersonalReg ? 'Reference' : 'Business'} ID: <span className="font-mono font-bold">{businessId}</span></p>
             <p className="text-xs text-text-secondary mb-1">Username: <span className="font-bold">@{submittedUsername}</span></p>
           </>
         ) : (
@@ -573,63 +642,97 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         )}
 
         {isPaidListings && splashStage === 'entry' && payResult === 'none' && (
-          <div className="bg-white border border-amber-200 rounded-3xl p-4 sm:p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
-            {/* Splash card header */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500" />
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-md shrink-0">
+          <div className="w-full bg-white border border-gray-200/80 rounded-3xl p-4 sm:p-6 mb-6 text-left shadow-xl relative overflow-hidden animate-fade-in">
+            {/* Gradient accent strip — same look as the /pay flow */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-whatsapp-400 via-whatsapp-500 to-emerald-600" />
+            <div className="flex items-center gap-3 mb-4 mt-1.5">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-whatsapp-500 to-emerald-600 flex items-center justify-center shadow-md shrink-0">
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                 </svg>
               </div>
               <div>
-                <p className="text-base font-extrabold text-text-primary leading-tight">Choose a package to go live</p>
-                <p className="text-xs text-text-secondary">Your listing shows in search once payment is confirmed · {form.name}</p>
+                <p className="text-base font-extrabold text-text-primary leading-tight">Choose your package</p>
+                <p className="text-xs text-text-secondary">Goes live the moment your EcoCash payment is confirmed · {submittedName}</p>
               </div>
             </div>
 
-            {/** Step 1: package picker */}
+            {/** Step 1: package picker — tap a package, go straight to the
+                EcoCash number entry (same as the /pay flow). */}
             {payStage === 'packages' && (
-              <div className="space-y-2.5">
-                {(Object.keys(PLAN_CONFIG) as PlanType[]).map(key => {
-                  const p = PLAN_CONFIG[key]
+              <div className="space-y-3">
+                {(Object.keys(planConfig) as PlanType[]).map(key => {
+                  const p = planConfig[key]
+                  const isBest = key === '6m'
                   const selected = payPlan === key
+                  const features = isPersonalReg ? [
+                    'Personal contact in the public directory',
+                    `WhatsApp chat link + socials for ${p.days} days`,
+                    'Editable anytime from your private link',
+                    'QR codes + business card in your studio',
+                  ] : [
+                    'Registration, account activation and validation',
+                    `Link to WhatsApp search engine for ${p.days} days`,
+                    'Access to portal insights',
+                    'Allowed to bid for promotion in search',
+                    'Auto-generated website included',
+                  ]
                   return (
                     <button
                       type="button"
                       key={key}
-                      onClick={() => setPayPlan(key)}
+                      onClick={() => { setPayPlan(key); setPayStage('phone') }}
                       aria-pressed={selected}
-                      className={`w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-all ${
-                        selected ? 'border-amber-500 bg-amber-50 shadow-md' : 'border-gray-200 bg-white hover:border-amber-300'
+                      className={`group w-full text-left rounded-2xl border-2 bg-white transition-all duration-200 overflow-hidden hover:-translate-y-0.5 ${
+                        selected ? 'border-whatsapp-500 shadow-md' : 'border-gray-200 hover:border-whatsapp-300 hover:shadow-md'
                       }`}
                     >
-                      <span className="flex items-center gap-3 min-w-0">
-                        <span className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? 'border-amber-500' : 'border-gray-300'}`}>
-                          {selected && <span className="w-2 h-2 rounded-full bg-amber-500" />}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-bold text-text-primary">{p.label}</span>
-                          <span className="block text-[11px] text-text-secondary">USD ${p.perMonth.toFixed(2)}/mo equivalent</span>
-                        </span>
-                      </span>
-                      <span className="text-right shrink-0">
-                        <span className="block text-base font-extrabold text-text-primary">${p.price.toFixed(0)}</span>
-                        {key !== '1m' && <span className="text-[10px] text-whatsapp-700 font-semibold">save ${((PLAN_CONFIG['1m'].price * p.months - p.price)).toFixed(0)}</span>}
-                      </span>
+                      {isBest && (
+                        <div className="bg-whatsapp-600 text-white text-[10px] font-bold uppercase tracking-widest text-center py-1.5">
+                          Most Popular
+                        </div>
+                      )}
+                      <div className="p-4 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className={`inline-flex self-start px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide mb-2 ${
+                            isBest || selected ? 'bg-whatsapp-100 text-whatsapp-700' : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {p.months === 1 ? '1 MONTH' : `${p.months} MONTHS`}
+                          </div>
+                          <div className="mb-1">
+                            <span className="text-3xl font-extrabold tracking-tight text-text-primary">${p.price.toFixed(0)}</span>
+                            <span className="text-xs font-semibold text-text-secondary ml-1">USD</span>
+                            <span className="text-xs text-text-secondary ml-1.5">· ${p.perMonth.toFixed(2)}/mo</span>
+                          </div>
+                          <ul className="mt-2 space-y-1">
+                            {features.map((f, i) => (
+                              <li key={i} className="flex items-start gap-1.5">
+                                <svg className="w-3.5 h-3.5 mt-0.5 shrink-0 text-whatsapp-500" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                                </svg>
+                                <span className="text-xs text-text-secondary leading-snug">{f}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="text-right shrink-0 flex flex-col items-end gap-3">
+                          {key !== '1m' && (
+                            <span className="text-[10px] font-bold text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-full px-2 py-0.5">
+                              save ${(planConfig['1m'].price * p.months - p.price).toFixed(0)}
+                            </span>
+                          )}
+                          <span className={`inline-flex items-center gap-1 text-xs font-bold rounded-full px-3 py-1.5 transition-all ${
+                            selected ? 'bg-whatsapp-600 text-white shadow-sm' : 'text-whatsapp-700 group-hover:bg-whatsapp-50'
+                          }`}>
+                            {selected ? '✓ Selected' : 'Get Started'}
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12l-7.5 7.5M21 12H3" /></svg>
+                          </span>
+                        </div>
+                      </div>
                     </button>
-                  )})
-                }
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!splashPhone.trim()) return
-                    setPayStage('phone')
-                  }}
-                  className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition-all mt-3"
-                >
-                  Continue with {PLAN_CONFIG[payPlan].label} — ${PLAN_CONFIG[payPlan].price.toFixed(0)}
-                </button>
+                  )
+                })}
+                <p className="text-[11px] text-text-secondary text-center pt-1">Tap a package to continue — you&apos;ll pay with EcoCash on the next step.</p>
               </div>
             )}
 
@@ -649,6 +752,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                         business_id: businessId,
                         payer_phone: splashPhone.trim(),
                         plan: payPlan,
+                        ...(submittedKind ? { kind: submittedKind } : {}),
                       }),
                     })
                     const data = await res.json()
@@ -666,13 +770,13 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 }}
                 className="space-y-3"
               >
-                <button type="button" onClick={() => setPayStage('packages')} className="text-xs text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1">
-                  ← Change package ({PLAN_CONFIG[payPlan].label}, ${PLAN_CONFIG[payPlan].price.toFixed(0)})
+                <button type="button" onClick={() => { setPayStage('packages'); setSplashError('') }} className="text-xs text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1">
+                  ← Change package ({planConfig[payPlan].label}, ${planConfig[payPlan].price.toFixed(0)})
                 </button>
                 <div>
-                  <label className="block text-sm font-semibold text-text-primary mb-1">Your EcoCash number</label>
+                  <label className="block text-sm font-semibold text-text-primary mb-1">Your EcoCash phone number</label>
                   <p className="text-xs text-text-secondary mb-2">
-                    Enter the number paying from. You&apos;ll get an EcoCash PIN prompt on this phone — approve it and your listing goes live instantly.
+                    Enter the number you&apos;re paying from. You&apos;ll get an EcoCash PIN prompt on that phone — approve it and your listing goes live instantly.
                   </p>
                   <input
                     type="tel"
@@ -687,14 +791,17 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 {splashError && (
                   <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{splashError}</p>
                 )}
-                <button type="submit" disabled={splashLoading} className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md hover:from-amber-600 hover:to-orange-600 transition-all disabled:opacity-60">
+                <button type="submit" disabled={splashLoading} className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white shadow-md hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all disabled:opacity-60">
                   {splashLoading ? (
                     <span className="flex items-center justify-center gap-2">
                       <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                       Submitting…
                     </span>
-                  ) : `Pay $${PLAN_CONFIG[payPlan].price.toFixed(0)} & Go Live`}
+                  ) : `Pay $${planConfig[payPlan].price.toFixed(0)} with EcoCash`}
                 </button>
+                <p className="text-[11px] text-text-secondary leading-relaxed">
+                  Covers your {planConfig[payPlan].label.toLowerCase()} package. The listing activates automatically once the EcoCash payment succeeds — no admin approval needed.
+                </p>
               </form>
             )}
 
@@ -759,7 +866,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   </div>
                   <h3 className="text-lg font-extrabold text-text-primary">Payment verified ✓</h3>
                   <p className="text-xs text-text-secondary leading-relaxed">
-                    Your {PLAN_CONFIG[payPlan].label} package (${PLAN_CONFIG[payPlan].price.toFixed(0)}) was successfully applied to <strong>{form.name || 'your listing'}</strong>. Your listing is now live and visible in search.
+                    Your {planConfig[payPlan].label} package (${planConfig[payPlan].price.toFixed(0)}) was successfully applied to <strong>{submittedName}</strong>. Your listing is now live and visible in search.
                   </p>
                   <button
                     type="button"
@@ -782,11 +889,11 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   </h3>
                   {autoEcocash ? (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Check <strong>{splashPhone ? `+${digitsOnly(splashPhone)}` : 'your phone'}</strong> for the EcoCash prompt and enter your PIN. Your <strong>{PLAN_CONFIG[payPlan].label}</strong> listing goes live <strong className="text-text-primary">automatically</strong> the moment the payment succeeds — this screen updates by itself. No admin approval needed.
+                      Check <strong>{splashPhone ? `+${digitsOnly(splashPhone)}` : 'your phone'}</strong> for the EcoCash prompt and enter your PIN. Your <strong>{planConfig[payPlan].label}</strong> listing goes live <strong className="text-text-primary">automatically</strong> the moment the payment succeeds — this screen updates by itself. No admin approval needed.
                     </p>
                   ) : (
                     <p className="text-xs text-text-secondary leading-relaxed">
-                      Your request for <strong>{PLAN_CONFIG[payPlan].label}</strong> (${PLAN_CONFIG[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${digitsOnly(splashPhone)}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
+                      Your request for <strong>{planConfig[payPlan].label}</strong> (${planConfig[payPlan].price.toFixed(0)}) is being processed. We&apos;ll confirm on {splashPhone ? `+${digitsOnly(splashPhone)}` : 'your EcoCash number'} within <strong className="text-text-primary">15 minutes</strong> — your listing goes live once confirmed.
                     </p>
                   )}
                   {paymentSimulationEnabled() && (
@@ -852,39 +959,22 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           </p>
           <p className="text-xs text-text-secondary mt-2">If you lose this link, contact us to get a new one.</p>
         </div>
-        <div className="flex flex-col items-center mb-6">
-          <QrCard
-            value={typeof window !== 'undefined' ? `${window.location.origin}/edit?token=${editToken}` : ''}
-            title="Scan to save your edit link"
-            subtitle="Screenshot or print this to keep access to your listing"
-            downloadName={`${form.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-edit-link.png`}
-          />
-        </div>
-        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card mb-6">
-          <p className="text-sm font-bold text-text-primary mb-1">Your QR codes (once {isPaidListings ? 'paid and ' : ''}approved)</p>
-          <p className="text-xs text-text-secondary mb-4">
-            Print these and place them on your counter, shelves and packaging: customers scan to chat with you directly.
-          </p>
-          <div className="flex flex-wrap justify-center gap-4">
-            <QrCard
-              value={typeof window !== 'undefined' ? `${window.location.origin}/qr/${submittedId}` : ''}
-              title="Customer chat QR"
-              subtitle="Opens WhatsApp chat with you (tracked)"
-              size={130}
-              downloadName={`${submittedId}-customer-chat-qr.png`}
-            />
-            <QrCard
-              value={typeof window !== 'undefined' ? `${window.location.origin}/portal` : ''}
-              title="Portal QR"
-              subtitle="Opens your private portal"
-              size={130}
-              downloadName={`${submittedId}-portal-qr.png`}
-            />
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card mb-6 text-left">
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <p className="text-sm font-bold text-text-primary">QR codes &amp; business card</p>
+            {submittedId && (
+              <Link href={`/my-qr/${submittedId}`} className="text-xs font-semibold text-whatsapp-600 hover:text-whatsapp-700 hover:underline shrink-0 transition-colors">
+                Open studio →
+              </Link>
+            )}
           </div>
+          <p className="text-xs text-text-secondary leading-relaxed">
+            Your customer chat QR, portal QR and printable business card live in your private studio — customise, download and print once you&apos;re live.
+          </p>
         </div>
         <div className="flex flex-col gap-3">
           {isPaidListings && (
-            <Link href="/pay" className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-amber-600 hover:to-amber-700 transition-all">
+            <Link href={`/pay?business_id=${encodeURIComponent(businessId)}`} className="inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full py-3 text-[16px] font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
               </svg>
@@ -914,6 +1004,38 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         Cancel
       </Link>
 
+      {/* Registration type chooser */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6" role="group" aria-label="What are you listing?">
+        {([
+          { key: 'business' as const, icon: '🏪', title: 'Business', sub: 'From $2/month · full wizard, auto-website & analytics' },
+          { key: 'personal' as const, icon: '👤', title: 'Personal contact', sub: 'From $1/month · name, number & socials, 2 minutes' },
+        ]).map(t => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => { setRegType(t.key); setErrors(prev => ({ ...prev, submit: undefined })) }}
+            aria-pressed={regType === t.key}
+            className={`relative text-left rounded-2xl border-2 p-4 transition-all duration-200 hover:-translate-y-0.5 ${
+              regType === t.key
+                ? 'border-whatsapp-500 bg-whatsapp-50/70 shadow-md'
+                : 'border-gray-200 bg-white hover:border-whatsapp-300 hover:shadow-sm'
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-lg leading-none">{t.icon}</span>
+              <span className="text-sm font-bold text-text-primary">{t.title}</span>
+              {regType === t.key && (
+                <span className="ml-auto w-4 h-4 rounded-full bg-whatsapp-500 flex items-center justify-center shrink-0">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-text-secondary leading-snug">{t.sub}</p>
+          </button>
+        ))}
+      </div>
+
+      {regType === 'business' && (
       <div className="flex items-center justify-center gap-2 mb-8">
         {[1, 2, 3].map(s => (
           <div key={s} className="flex items-center">
@@ -930,8 +1052,115 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           </div>
         ))}
       </div>
+      )}
 
-      {step === 1 && (
+      {/* ── PERSONAL CONTACT: one compact form, mirror of the bot flow ── */}
+      {regType === 'personal' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="rounded-2xl border border-whatsapp-200/80 bg-whatsapp-50/60 p-4">
+            <p className="text-sm font-bold text-text-primary">Add a personal contact 👤</p>
+            <p className="text-xs text-text-secondary mt-1 leading-relaxed">
+              A person, not a company: their name, WhatsApp number and socials go live in the directory. You pick the package on the next screen — <strong>$1/month</strong>, <strong>$5/6 months</strong> or <strong>$10/year</strong>, all via EcoCash.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="personal-name" className="block text-sm font-medium text-text-primary mb-1.5">Full name</label>
+            <input
+              id="personal-name"
+              type="text"
+              value={personal.name}
+              onChange={e => setPersonal(f => ({ ...f, name: e.target.value }))}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('personal-phone')?.focus() } }}
+              placeholder="e.g. Tendai Ncube"
+              className="input-field"
+              autoFocus
+            />
+            <p className="text-xs text-whatsapp-600 mt-1">This is what people will search for</p>
+          </div>
+
+          <div>
+            <label htmlFor="personal-phone" className="block text-sm font-medium text-text-primary mb-1.5">WhatsApp number</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary text-sm pointer-events-none">+263</span>
+              <input
+                id="personal-phone"
+                type="tel"
+                value={personal.phone}
+                onChange={e => setPersonal(f => ({ ...f, phone: e.target.value.replace(/[^0-9+ ]/g, '') }))}
+                placeholder="e.g. 0771234567"
+                className="input-field pl-14"
+              />
+            </div>
+            <p className="text-xs text-whatsapp-600 mt-1">The number customers will chat with</p>
+          </div>
+
+          <div>
+            <label htmlFor="personal-city" className="block text-sm font-medium text-text-primary mb-1.5">
+              City <span className="text-text-secondary font-normal">(optional)</span>
+            </label>
+            <select
+              id="personal-city"
+              value={personal.city}
+              onChange={e => setPersonal(f => ({ ...f, city: e.target.value }))}
+              className="input-field"
+            >
+              <option value="">No city (nationwide)</option>
+              {allCityOptions.map(c => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-whatsapp-600 mt-1">Helps nearby people find this contact</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-text-primary">
+              Socials <span className="text-text-secondary font-normal">(up to 3, optional)</span>
+            </label>
+            {personalSocials.map((s, i) => (
+              <input
+                key={i}
+                type="text"
+                value={s}
+                onChange={e => setPersonalSocials(arr => arr.map((v, j) => (j === i ? e.target.value.replace(/[\s]{2,}/g, ' ').replace(/[`*_]/g, '') : v)))}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById(`personal-social-${(i + 1) % 3}`)?.focus() } }}
+                id={`personal-social-${i}`}
+                placeholder={['e.g. IG @tendai', 'e.g. tiktok.com/@tendai', 'e.g. facebook.com/tendai'][i]}
+                className="input-field"
+                maxLength={100}
+              />
+            ))}
+            <p className="text-xs text-whatsapp-600">Instagram, Facebook, TikTok, X — handles or full links</p>
+          </div>
+
+          {errors.submit && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 animate-fade-in">
+              <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
+              </svg>
+              {errors.submit}
+            </p>
+          )}
+
+          <button
+            onClick={handlePersonalSubmit}
+            disabled={personalLoading}
+            className="w-full py-3 rounded-2xl text-sm font-semibold bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white shadow-md hover:from-whatsapp-600 hover:to-whatsapp-700 active:scale-[0.98] transition-all disabled:opacity-60"
+          >
+            {personalLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Submitting...
+              </span>
+            ) : (
+              'Go Live — choose your package'
+            )}
+          </button>
+          <p className="text-[11px] text-text-secondary text-center">Personal contacts are capped at 3 per payer number, and the listed phone can&apos;t already be a business listing.</p>
+        </div>
+      )}
+
+      {regType === 'business' && step === 1 && (
         <div className="space-y-4 animate-fade-in">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -1169,7 +1398,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         </div>
       )}
 
-      {step === 2 && (
+      {regType === 'business' && step === 2 && (
         <div className="space-y-4 animate-fade-in">
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
@@ -1486,7 +1715,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
         </div>
       )}
 
-      {step === 3 && (
+      {regType === 'business' && step === 3 && (
         <div className="space-y-4 animate-fade-in">
           {/* Optional profile extras (logo, links, price) collapsed by default. */}
           <details className="group bg-surface/60 border border-gray-200/70 rounded-2xl px-4 py-3">

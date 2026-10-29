@@ -15,11 +15,29 @@ import {
 import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
 import { logBotMessage, logBotSearch } from '@/lib/bot-log'
 import { orderSearchResults } from '@/lib/ranking'
-import { expandSearchQuery } from '@/lib/gemini'
+import { expandSearchQuery, classifyIntent } from '@/lib/gemini'
 import type { Business } from '@/types'
-import { getSession, saveSession, clearSession, type ChatSession, type ChatSessionData, type PendingGroup, type PendingOrder } from '@/lib/chat-session'
+import {
+  getSession,
+  saveSession,
+  clearSession,
+  PAUSE_TTL_MS,
+  type ChatSession,
+  type ChatSessionData,
+  type PausedDraft,
+  type PendingGroup,
+  type PendingOrder,
+} from '@/lib/chat-session'
 import { compileOrderText } from '@/lib/order-message'
 import { parseOrderLine, matchOrder, type ShelfSupplier, type OrderPair, type MatchResult } from '@/lib/order-intake'
+import {
+  DATA_ENTRY_STEPS,
+  detectPivot,
+  familyOf,
+  pivotCandidateForIntent,
+  goalKindForWord,
+  type GoalAskKind,
+} from '@/lib/intent-pivot'
 import {
   createSupplyOrder, recordOrderOpen, claimSupplyOrder, getSupplyOrderById, listOrdersForBusiness,
   listOrdersForBuyer, orderStats, type SupplyOrderRow,
@@ -52,7 +70,7 @@ import { getApprovedCategories, getApprovedAreas, matchCategoryAgainst } from '@
 import { searchPayBusinesses, type PayBusiness } from '@/lib/pay-lookup'
 import { createListingPayment, paymentAmountFor } from '@/lib/listing-pay'
 import { normalizeEcoCashPhone } from '@/lib/paynow'
-import { PLAN_CONFIG } from '@/types'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
@@ -124,6 +142,19 @@ import {
   MAX_AUDIENCE,
   type CastSpec,
 } from '@/lib/casts'
+// S18.5 Supplier Demand Radar — lib/radar.ts helpers (fail-open by design).
+import {
+  emitDemandSearch,
+  getDemandSub,
+  recordDemandSub,
+  findClaimableDemandEvent,
+  claimDemandEvent,
+  unclaimDemandEvent,
+  setDemandEventRq,
+  getDemandEventById,
+  consumeClaim,
+  verifiedListingFor,
+} from '@/lib/radar'
 
 const WEBHOOK_VERIFY_TOKEN = process.env.WEBHOOK_VERIFY_TOKEN
 // Verify Meta's X-Hub-Signature-256 over the raw request body. Fail closed:
@@ -752,6 +783,54 @@ async function sendAskTerm(from: string, city: string | null) {
   }
 }
 
+// ── S19 goal-word ask ────────────────────────────────────────────────
+// "pay" can open the pay flow, but verified businesses called Paymore /
+// Payless exist too — the word is BOTH a menu goal and a search term. The
+// bot shows the two ways instead of guessing: 🔍 runs the search (any open
+// flow gets shelved, *resume* brings it back), the flow button opens that
+// flow the same way a stated pivot would.
+const GOAL_ASK_LINE: Record<GoalAskKind, string> = {
+  pay: '💳 Pay for a listing',
+  register: '✎ Register a business',
+  order: '🧺 Start an order',
+}
+
+async function countVerifiedNameMatches(word: string): Promise<number> {
+  try {
+    const { count } = await getSupabase()
+      .from('businesses')
+      .select('id', { count: 'exact', head: true })
+      .eq('verified', true)
+      .ilike('name', `%${word}%`)
+    return count || 0
+  } catch {
+    return 0
+  }
+}
+
+async function saveGoalAsk(from: string, kind: GoalAskKind, word: string) {
+  const cur = await getSession(from)
+  await saveSession(from, cur?.step || 'idle', {
+    ...(cur?.data || {}),
+    goal_ask: { kind, word },
+  })
+}
+
+async function sendGoalAskButtons(from: string, kind: GoalAskKind, word: string, found: number) {
+  await sendInteractiveButtons(
+    from,
+    [
+      `${found} ${found === 1 ? 'business matches' : 'businesses match'} "${word}" here 🤔`,
+      'Search them, or did you mean the menu action?',
+    ].join('\n'),
+    [
+      { id: 'bid_search', title: `🔍 Find "${word}"` },
+      { id: 'bid_flow', title: GOAL_ASK_LINE[kind] },
+      { id: 'cancel', title: '✖ Cancel' },
+    ]
+  )
+}
+
 function bizMatchesQuery(
   b: BotBusinessRow,
   lowerTerm: string,
@@ -839,7 +918,7 @@ async function startFreshSearchPrompt(from: string) {
 const MENU_ROWS = [
   { id: 'menu_needs', title: '🛒 Post a need', description: 'Suppliers quote you here' },
   { id: 'menu_order', title: '🧺 Order items', description: 'Type items — sent shop by shop' },
-  { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal 20c' },
+  { id: 'menu_register', title: '✎ Register', description: 'Business $1/mo · Personal $1/mo' },
   { id: 'menu_pay', title: '$ Pay (EcoCash)', description: 'Pay or top up via EcoCash' },
   { id: 'menu_help', title: '✆ Help', description: 'Tips & support' },
 ]
@@ -861,6 +940,296 @@ async function startRegister(from: string, initialText: string = '') {
   await sendFormUpdate(from, state, LIST_INTRO())
 }
 
+// The shelved flow, while it is still fresh enough to resume.
+function pausedDraft(session: ChatSession | null): PausedDraft | null {
+  const p = session?.data?.paused
+  if (!p?.step) return null
+  const at = Date.parse(p.at || '')
+  if (!Number.isFinite(at) || Date.now() - at > PAUSE_TTL_MS) return null
+  return p
+}
+
+// True when the session actually holds something worth shelving.
+function hasProgress(data: ChatSessionData): boolean {
+  return Object.entries(data).some(
+    ([k, v]) =>
+      k !== 'paused' &&
+      v != null &&
+      v !== '' &&
+      !(Array.isArray(v) && v.length === 0) &&
+      !(typeof v === 'object' && Object.keys(v as object).length === 0)
+  )
+}
+
+// Park a flow so it survives the one that is opening now. The row may have
+// been cleared by the new flow's start, hence the 'idle' placeholder step —
+// the dispatch treats it as "no active step".
+async function stashPaused(from: string, draft: PausedDraft) {
+  const cur = await getSession(from)
+  await saveSession(from, cur?.step || 'idle', { ...(cur?.data || {}), paused: draft })
+}
+
+/**
+ * Follow a stated change of direction mid-flow. Returns true when the message
+ * was a pivot and has been handled (the old flow is shelved, the new one is
+ * open); false hands the message back to the normal step handling.
+ */
+async function handleIntentPivot(
+  from: string,
+  session: ChatSession | null,
+  text: string
+): Promise<boolean> {
+  if (!session?.step || session.step === 'idle') return false
+  const step = session.step
+  let kind = detectPivot(text, step)
+  if (!kind) {
+    if (DATA_ENTRY_STEPS.has(step) || !pivotCandidateForIntent(text)) return false
+    // A plain town name in the location step is the answer, not a plan change.
+    if (
+      step === 'search_loc' &&
+      zimbabweCities.some(c => c.name.toLowerCase() === text.trim().toLowerCase())
+    ) {
+      return false
+    }
+    const hinted = await classifyIntent(text, step)
+    if (!hinted || hinted === 'continue' || hinted === familyOf(step)) return false
+    kind = hinted
+  }
+
+  // S19 goal-word ask: "pay" / "register" / "order" typed mid-flow while
+  // those words ALSO name real businesses — offer the two ways instead of
+  // pivoting silently. Direct-answer steps keep their normal handling (the
+  // word can be the answer they were asked for).
+  if (
+    (kind === 'pay' || kind === 'register' || kind === 'order') &&
+    !DATA_ENTRY_STEPS.has(step)
+  ) {
+    const word = kind === 'pay' ? 'pay' : kind === 'register' ? 'register' : 'order'
+    const named = await countVerifiedNameMatches(word)
+    if (named > 0) {
+      logOut(from, 'goal_ask', `${word} mid-${step} → ${named} named`)
+      await saveGoalAsk(from, kind, word)
+      await sendGoalAskButtons(from, kind, word, named)
+      return true
+    }
+  }
+
+  const shelvedFresh = pausedDraft(session)
+  const kept: PausedDraft =
+    shelvedFresh ??
+    ({ step: session.step, data: session.data, at: new Date().toISOString() } as PausedDraft)
+  const hadDraft = hasProgress(session.data)
+  const ack = hadDraft
+    ? "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+    : ''
+  const say = async (line: string) => {
+    if (line) await sendWhatsAppMessage(from, line)
+  }
+
+  switch (kind) {
+    case 'register': {
+      // Re-entering a registration that was shelved earlier: offer it back
+      // instead of silently starting a second one.
+      if (shelvedFresh && familyOf(shelvedFresh.step) === 'register') {
+        await sendWhatsAppMessage(
+          from,
+          'No problem — plans have changed 👍\n\nYou left a registration part-way through. Continue it, or start over?'
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'resume_paused', title: '▶ Continue my draft' },
+          { id: 'reg_restart', title: '✎ Start over' },
+          { id: 'cancel', title: '✖ Cancel' },
+        ])
+        break
+      }
+      await say(
+        ack
+          ? `${ack}\nOpen the list below and select Register business 👇`
+          : "Sounds like our plans have changed 👍\nOpen the list below and select Register business 👇"
+      )
+      await sendRegisterChoice(from)
+      break
+    }
+    case 'pay':
+      await say(`${ack}${ack ? '\n' : ''}Let's sort out payment then.`)
+      await startPayChoice(from)
+      break
+    case 'need':
+      await say(`${ack}${ack ? '\n' : ''}Let's post your need instead 👇`)
+      await startNeedIntake(from)
+      break
+    case 'order': {
+      const tail = text.trim().replace(/^order\b[,;:]?\s*/i, '')
+      await say(ack)
+      await typedOrderFromText(from, session, tail || 'order')
+      break
+    }
+    case 'search': {
+      // Strip the framing words so the search reads as they meant it:
+      // "wait, let me find a plumber" → "find a plumber".
+      const q = text
+        .trim()
+        .replace(
+          /^(?:(?:actually|wait|hold on(?: a (?:sec|moment))?|scratch that|never ?mind|let me|i (?:want|need|would like) to|i'd like to|can i|could i|how (?:do|can) i|how to|help me(?: out)?|instead|rather|ok(?:ay)?|so)[\s,]+)+/i,
+          ''
+        )
+      await say(ack)
+      await clearSession(from)
+      await dispatchSearch(from, q || text)
+      break
+    }
+    case 'menu':
+      await say(`${ack}${ack ? '\n' : ''}Open the list below and choose what you'd like to do 👇`)
+      await sendMainMenu(from)
+      break
+  }
+
+  await stashPaused(from, kept)
+  return true
+}
+
+/** Restore the flow an earlier direction change shelved. */
+async function resumePaused(from: string, session: ChatSession | null): Promise<boolean> {
+  const draft = pausedDraft(session)
+  if (!draft) return false
+  const { step, data } = draft
+  // The stash is live again — drop it from the session.
+  await saveSession(from, step, { ...data, paused: undefined })
+
+  const head = '✍️ Picking up where you left off.'
+  switch (step) {
+    case 'list_form':
+      await sendFormUpdate(from, data.list || ({} as ListingFormState), head)
+      return true
+    case 'reg_contact':
+      await sendWhatsAppMessage(
+        from,
+        [
+          head,
+          '',
+          "Send the contact's name + phone (+ city, socials optional), e.g.",
+          '*Tendai Ncube 0771 234 567 Harare*',
+        ].join('\n')
+      )
+      return true
+    case 'confirm':
+      await sendWhatsAppMessage(from, head)
+      await sendConfirmation(from, data)
+      return true
+    case 'name':
+      await sendWhatsAppMessage(from, `${head} What is your business name?`)
+      return true
+    case 'username':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Your *WhatsApp username* (the one shown on your WhatsApp Business profile).`
+      )
+      return true
+    case 'phone':
+      await sendWhatsAppMessage(from, `${head} Your *phone number* (e.g. 712345678).`)
+      return true
+    case 'category':
+      await sendWhatsAppMessage(
+        from,
+        `${head} What do you sell? e.g. *phones, plumbing, catering, magetsi, salon*…`
+      )
+      return true
+    case 'description':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Describe your business in one or two sentences (what you offer):`
+      )
+      return true
+    case 'city':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Which town or city are you based in? (or type *whole country*)`
+      )
+      return true
+    case 'area':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Which area in *${data.city || 'your town'}*? (or type *skip*)`
+      )
+      return true
+    case 'search_loc':
+      await sendAskTown(from, data.pending_search_term || '', false, true)
+      return true
+    case 'search_term':
+      await sendAskTerm(from, data.pending_city || null)
+      return true
+    case 'browse': {
+      const cards = data.results || []
+      if (cards.length) {
+        await sendWhatsAppMessage(from, head)
+        await sendResultsListPage(
+          from,
+          cards,
+          data.page || 0,
+          data.lastTerm || 'search',
+          data.lastCity ?? null,
+          !!data.nearby
+        )
+      } else {
+        await startFreshSearchPrompt(from)
+      }
+      return true
+    }
+    case 'need_form':
+      if (data.need?.item) {
+        await sendWhatsAppMessage(from, head)
+        await showNeedConfirm(from, data.need)
+      } else {
+        await sendWhatsAppMessage(from, head)
+        await startNeedIntake(from)
+      }
+      return true
+    case 'order':
+      if (data.pendingOrder?.groups?.length) {
+        await sendWhatsAppMessage(
+          from,
+          [head, renderOrderVerify(data.pendingOrder.groups), '', 'Reply *yes* to send, *no* to edit, or *back* to pause.'].join(
+            '\n'
+          )
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'osend', title: '✅ Send order' },
+          { id: 'oedit', title: '✎ Re-type' },
+        ])
+      } else {
+        await sendWhatsAppMessage(from, `${head} Send your order again — e.g. *order 2 bread, 1 cake*.`)
+      }
+      return true
+    case 'rating':
+      await sendWhatsAppMessage(
+        from,
+        `${head} Rate your experience *1* to *5* (1 = poor, 5 = excellent), add a short comment if you like, or reply *skip*.`
+      )
+      return true
+    case 'pay_plan':
+      await sendWhatsAppMessage(from, `${head} Reply *1*, *6* or *12* to pick your plan.`)
+      return true
+    case 'pay_ecocash':
+      await sendWhatsAppMessage(from, `${head} Enter your EcoCash number (e.g. 0771234567):`)
+      return true
+    case 'pay_search':
+      await sendWhatsAppMessage(from, `${head} Which business do you want to pay for? Type its name:`)
+      return true
+    case 'pay_pick':
+      await sendWhatsAppMessage(from, `${head} Reply a number to pick the listing to pay.`)
+      return true
+    case 'item_photo':
+      await sendWhatsAppMessage(from, `${head} Send the product photo, then *name $price* (e.g. *bread $2*).`)
+      return true
+    case 'item_pick':
+      await sendWhatsAppMessage(from, `${head} Tap the shop button to pick, or send the product photo again.`)
+      return true
+    default:
+      await sendWhatsAppMessage(from, `${head} Send your reply.`)
+      return true
+  }
+}
+
 // ✎ Register opens with the honest price list, then routes to the flow that
 // matches what the user is adding: a business subscription or paid personal
 // contacts — never both silently merged.
@@ -872,12 +1241,12 @@ async function sendRegisterChoice(from: string) {
       '✎ *Registering on WA Directory*',
       '',
       '• Business subscription — USD 1 per month',
-      '• Personal contact — USD 0.20 each, per month',
+      '• Personal contact — $1/month, $5/6 months or $10/year',
       '',
       'Which are you adding?',
     ].join('\n'),
     [
-      { id: 'reg_personal', title: 'Personal contact $0.20' },
+      { id: 'reg_personal', title: 'Personal contact $1/mo' },
       { id: 'reg_business', title: '• Business $1/mo' },
       { id: 'cancel', title: '✖ Cancel' },
     ]
@@ -965,9 +1334,14 @@ async function tryPublishContact(
   from: string,
   session: ChatSession,
   msgId?: string,
-  plan: '1m' | '12m' = '1m',
-  amount = 0.2
+  plan: PlanType = '1m',
+  amount?: number
 ) {
+  // Personal packages mirror the web app (types PERSONAL_PLAN_CONFIG):
+  // $1/month, $5/6 months, $10/year. The amount override rides through to
+  // createListingPayment so the subscription + EcoCash request use it directly.
+  const payAmount = amount ?? PERSONAL_PLAN_CONFIG[plan].price
+  const labelMonths = PERSONAL_PLAN_CONFIG[plan].label.toLowerCase()
   const c = session.data.contact!
   const rawName = c.name
   const rawPhone = c.phone.replace(/[^0-9]/g, '')
@@ -979,7 +1353,7 @@ async function tryPublishContact(
   const payerZero = payerDigits.replace(/^263/, '0')
 
   // Guard 1 — cap: max 3 ACTIVE personal contacts per payer phone, so a
-  // business can't dodge the USD 1 subscription by batch-buying 20c rows.
+  // business can't dodge the USD 1 subscription by batch-buying cheap rows.
   const { data: payerSubs } = await getSupabase()
     .from('listing_subscriptions')
     .select('business_id, businesses!inner(category)')
@@ -1058,7 +1432,7 @@ async function tryPublishContact(
     businessId: result.businessId,
     payerPhone: from,
     plan,
-    amountOverride: amount,
+    amountOverride: payAmount,
   })
   if (!pay.ok) {
     // The listing exists but payment couldn't start — the admin fallback in
@@ -1068,7 +1442,7 @@ async function tryPublishContact(
       [
         `✅ *${result.name}* — Personal contact was saved.`,
         '',
-        `The USD ${amount.toFixed(2)} payment could not start right now. Our team will confirm it and your contact will go live.`,
+        `The USD ${payAmount.toFixed(2)} payment could not start right now. Our team will confirm it and your contact will go live.`,
       ].join('\n')
     )
     await clearSession(from)
@@ -1079,7 +1453,7 @@ async function tryPublishContact(
     [
       `✅ *${result.name}* — Personal contact`,
       '',
-      `💸 USD ${amount.toFixed(2)}${plan === '12m' ? ' · 12 months' : ' · 1 month'} · EcoCash`,
+      `💸 USD ${payAmount.toFixed(2)} · ${labelMonths} · EcoCash`,
       pay.autoEcoCash
         ? pay.message
         : pay.message + ' (goes live once confirmed — usually within minutes).',
@@ -1933,6 +2307,192 @@ async function postBuyerNeed(from: string, session: ChatSession | null) {
     logOut(admin, 'text', adminBody)
   }
   await clearSession(from)
+}
+
+async function pingAdminsSearch(term: string, city: string | null, from: string) {
+  const adminBody = [
+    `🔎 *Buyer searching*`,
+    `• "${term}"${city ? ` · ${city.toUpperCase()}` : ''}`,
+    `👤 From: +${digitsOnly(from)}`,
+  ].join('\n')
+  for (const admin of await adminNumbers()) {
+    if (!admin || admin === digitsOnly(from)) continue
+    await sendWhatsAppText(admin, adminBody)
+    logOut(admin, 'text', adminBody)
+  }
+}
+
+// ── S18.5 Supplier Demand Radar ─────────────────────────────────────────────
+// Verified suppliers subscribe (radar on / radar all / radar off), get
+// anonymized pings of real buyer searches, and can `claim` the newest
+// matching lead. Consent gates everything buyer-facing: the buyer taps ✅
+// before a need is opened, and numbers still only move via quote acceptance.
+
+async function handleRadarCommand(from: string, lower: string): Promise<void> {
+  const arg = lower.replace(/^radar\b/, '').trim()
+
+  if (arg === 'claim') {
+    const biz = await verifiedListingFor(from)
+    if (!biz) {
+      await sendWhatsAppMessage(
+        from,
+        'Radar leads are for *verified* suppliers — reply `verify` to get the green tick first.'
+      )
+      return
+    }
+    const subCity = await getDemandSub(from)
+    if (!subCity) {
+      await sendWhatsAppMessage(
+        from,
+        'Your radar is off, so there\'s nothing to claim — reply `radar on` first.'
+      )
+      return
+    }
+    const ev = await findClaimableDemandEvent(from, subCity)
+    if (!ev) {
+      await sendWhatsAppMessage(
+        from,
+        'No open leads on the radar right now — I\'ll ping you the moment a matching search lands.'
+      )
+      return
+    }
+    if (!(await claimDemandEvent(ev.id, from))) {
+      await sendWhatsAppMessage(
+        from,
+        'Someone just grabbed that lead — try `claim` again in a minute.'
+      )
+      return
+    }
+    await sendWhatsAppMessage(
+      from,
+      `🎯 Lead taken — "${ev.term}"${ev.city ? ` in ${ev.city}` : ''} (${ev.result_count} result${ev.result_count === 1 ? '' : 's'}).`
+    )
+    const buyerDigits = digitsOnly(ev.buyer)
+    await sendInteractiveButtons(
+      buyerDigits,
+      `👋 A supplier on wa.directory is offering help with "${ev.term}"${ev.city ? ` in ${ev.city}` : ''}. Share your number with them?`,
+      [
+        { id: `claim_yes_${ev.id}`, title: '✅ Yes, share it' },
+        { id: `claim_no_${ev.id}`, title: '🚫 No thanks' },
+      ]
+    )
+    return
+  }
+
+  if (arg === 'on' || arg === 'all') {
+    const biz = await verifiedListingFor(from)
+    if (!biz) {
+      await sendWhatsAppMessage(
+        from,
+        'Radar is for *verified* suppliers — reply `verify` to get the green tick first.'
+      )
+      return
+    }
+    const city = arg === 'all' ? 'all' : biz.city || 'all'
+    await recordDemandSub(from, city)
+    await sendWhatsAppMessage(
+      from,
+      city === 'all'
+        ? '📡 Radar on — nationwide. I\'ll ping you for matching searches anywhere in Zimbabwe. Reply `radar off` anytime.'
+        : `📡 Radar on — I'll ping you when buyers search for what you sell in ${biz.city}. Reply \`radar off\` anytime.`
+    )
+    return
+  }
+
+  if (arg === 'off') {
+    await recordDemandSub(from, '')
+    await sendWhatsAppMessage(
+      from,
+      '📡 Radar off — no more pings. Your quotes and listings keep working as usual.'
+    )
+    return
+  }
+
+  const subCity = await getDemandSub(from)
+  await sendWhatsAppMessage(
+    from,
+    subCity
+      ? `📡 Your radar is ${subCity === 'all' ? 'on, nationwide' : `on for ${subCity}`} — I ping you when matching buyer searches land. \`claim\` takes the newest lead, \`radar off\` stops pings.`
+      : '📡 *Supplier Radar*\nI ping you when buyers search for what you sell. Verified suppliers only — reply `verify` first, then `radar on` (your city) or `radar all` (nationwide).'
+  )
+}
+
+async function handleClaimConsent(
+  from: string,
+  yes: boolean,
+  eventId: number
+): Promise<void> {
+  const ev = await getDemandEventById(eventId)
+  if (!ev || digitsOnly(ev.buyer) !== digitsOnly(from)) return
+
+  const supplierDigits = digitsOnly(ev.claimed_by || '')
+  if (!supplierDigits) {
+    await unclaimDemandEvent(ev.id)
+    await sendWhatsAppMessage(
+      from,
+      'That offer is no longer active — nothing was shared.'
+    )
+    return
+  }
+
+  if (!yes) {
+    await unclaimDemandEvent(ev.id, supplierDigits)
+    await sendWhatsAppMessage(from, 'No problem — nothing was shared.')
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `The buyer for "${ev.term}"${ev.city ? ` in ${ev.city}` : ''} declined to share their number. Lead closed.`
+    )
+    return
+  }
+
+  const evFresh = await consumeClaim(ev.id, supplierDigits)
+  if (!evFresh) {
+    await unclaimDemandEvent(ev.id, supplierDigits)
+    await sendWhatsAppMessage(
+      from,
+      'That offer expired before you replied — nothing was shared.'
+    )
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `The "${ev.term}" lead expired before the buyer replied. Reply \`claim\` to try the next one.`
+    )
+    return
+  }
+
+  const need = await createNeed({
+    buyer_phone: from,
+    item: evFresh.term,
+    qty: '',
+    budget: '',
+    city: evFresh.city || '',
+  })
+  if (!need) {
+    await unclaimDemandEvent(evFresh.id, supplierDigits)
+    await sendWhatsAppMessage(
+      from,
+      'Couldn\'t open the need right now — nothing was shared.'
+    )
+    await sendWhatsAppMessage(
+      supplierDigits,
+      `Couldn't open the "${evFresh.term}" lead right now. Reply \`claim\` to try again later.`
+    )
+    return
+  }
+
+  await sendWhatsAppMessage(
+    from,
+    renderNeedPosted(need.rq_id, {
+      item: evFresh.term,
+      qty: '',
+      budget: '',
+      city: evFresh.city || '',
+    })
+  )
+  await setDemandEventRq(evFresh.id, need.rq_id)
+  await sendWhatsAppMessage(
+    supplierDigits,
+    `✅ Buyer approved for "${evFresh.term}" — the need is live as *${need.rq_id}*.\nReply \`quotes ${need.rq_id} <price>\` and they'll see your quote right here.`
+  )
 }
 
 /** Buyer taps ✅ on a quote card: close the need with that winner and
@@ -2951,6 +3511,12 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     return
   }
 
+  const claim = action.match(/^claim_(yes|no)_(\d+)$/)
+  if (claim) {
+    await handleClaimConsent(from, claim[1] === 'yes', Number(claim[2]))
+    return
+  }
+
   const sel = action.match(/^sel_([1-9][0-9]?)$/)
   if (sel) {
     if (session?.step === 'browse') {
@@ -3021,6 +3587,53 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'menu_order':
       await typedOrderFromText(from, session, 'order')
       return
+    // ── S19 goal-word ask taps ────────────────────────────────────────
+    // The two-way prompt showed "N businesses match \"{word}\" — search
+    // them, or did you mean the menu action?" Either tap behaves like the
+    // pivot engine: an open step is set aside and *resume* brings it back.
+    case 'bid_search': {
+      const ask = session?.data.goal_ask
+      if (!ask?.word) {
+        await startFreshSearchPrompt(from)
+        return
+      }
+      const keptPaused: PausedDraft | null =
+        session && session.step !== 'idle' && hasProgress(session.data)
+          ? { step: session.step, data: session.data, at: new Date().toISOString() }
+          : null
+      if (keptPaused) {
+        await sendWhatsAppMessage(
+          from,
+          "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+        )
+      }
+      await clearSession(from)
+      await dispatchSearch(from, ask.word, { goalAskDone: true })
+      if (keptPaused) await stashPaused(from, keptPaused)
+      return
+    }
+    case 'bid_flow': {
+      const ask = session?.data.goal_ask
+      if (!ask || !ask.kind) {
+        await sendWhatsAppMessage(from, await helpText())
+        return
+      }
+      const keptPaused: PausedDraft | null =
+        session && session.step !== 'idle' && hasProgress(session.data)
+          ? { step: session.step, data: session.data, at: new Date().toISOString() }
+          : null
+      if (keptPaused) {
+        await sendWhatsAppMessage(
+          from,
+          "No problem — plans have changed 👍\nI've set what you were doing aside; reply *resume* to pick it up again."
+        )
+      }
+      if (ask.kind === 'pay') await startPayChoice(from)
+      else if (ask.kind === 'register') await sendRegisterChoice(from)
+      else await typedOrderFromText(from, session, 'order')
+      if (keptPaused) await stashPaused(from, keptPaused)
+      return
+    }
     case 'need_post':
       await postBuyerNeed(from, session)
       return
@@ -3049,7 +3662,32 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       }
       return
     }
-    case 'menu_register':
+    case 'menu_register': {
+      // A registration shelved by an earlier direction change gets offered
+      // back before a fresh one starts.
+      const draft = pausedDraft(session || (await getSession(from)))
+      if (draft && familyOf(draft.step) === 'register') {
+        await sendWhatsAppMessage(
+          from,
+          'You left a registration part-way through. Continue it, or start over?'
+        )
+        await sendInteractiveButtons(from, '', [
+          { id: 'resume_paused', title: '▶ Continue my draft' },
+          { id: 'reg_restart', title: '✎ Start over' },
+          { id: 'cancel', title: '✖ Cancel' },
+        ])
+        return
+      }
+      await sendRegisterChoice(from)
+      return
+    }
+    case 'resume_paused': {
+      if (!(await resumePaused(from, session || (await getSession(from))))) {
+        await sendWhatsAppMessage(from, "That draft has expired — send *register* to start again.")
+      }
+      return
+    }
+    case 'reg_restart':
       await sendRegisterChoice(from)
       return
     case 'reg_business':
@@ -3065,7 +3703,8 @@ async function handleAction(from: string, session: ChatSession | null, action: s
           "Send the contact's name + phone (+ city, socials optional), e.g.",
           '*Tendai Ncube 0771 234 567 Harare IG @tendai*',
           '',
-          'USD 0.20/month or USD 1.00/year — paid via EcoCash.',
+          '$1 per month · $5 for 6 months · $10 for the full year.',
+          'Paid via EcoCash.'
         ].join('\n')
       )
       return
@@ -3073,7 +3712,15 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'reg_contact_pay_monthly':
     case 'reg_contact_publish': {
       if (session?.step === 'reg_contact' && session.data.contact) {
-        await tryPublishContact(from, session, msgId, '1m', 0.2)
+        await tryPublishContact(from, session, msgId, '1m')
+      } else {
+        await sendRegisterChoice(from)
+      }
+      return
+    }
+    case 'reg_contact_pay_6m': {
+      if (session?.step === 'reg_contact' && session.data.contact) {
+        await tryPublishContact(from, session, msgId, '6m')
       } else {
         await sendRegisterChoice(from)
       }
@@ -3081,7 +3728,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     }
     case 'reg_contact_pay_year': {
       if (session?.step === 'reg_contact' && session.data.contact) {
-        await tryPublishContact(from, session, msgId, '12m', 1.0)
+        await tryPublishContact(from, session, msgId, '12m')
       } else {
         await sendRegisterChoice(from)
       }
@@ -3202,7 +3849,7 @@ async function sendResultsListPage(
 async function runSearchAndReply(
   from: string,
   p: ParsedQuery,
-  opts?: { replyTo?: string; aliased?: boolean; nationwideTried?: boolean }
+  opts?: { replyTo?: string; aliased?: boolean; nationwideTried?: boolean; goalAskDone?: boolean }
 ) {
   const supabase = getSupabase()
   const term = p.term.toLowerCase()
@@ -3283,6 +3930,17 @@ async function runSearchAndReply(
 
   results = results.slice(0, MAX_RESULTS)
   const termDisplay = p.term || category.toLowerCase()
+
+  // S19 goal-word ask: the search term IS a menu word (pay / register /
+  // order) AND businesses matched it — offer the two ways instead of
+  // assuming a search. Skipped on the 🔍 replay (goalAskDone).
+  const goalKind = goalKindForWord(termDisplay)
+  if (goalKind && results.length > 0 && !opts?.goalAskDone) {
+    await saveGoalAsk(from, goalKind, termDisplay)
+    logOut(from, 'goal_ask', `${termDisplay} → ${results.length} found`)
+    await sendGoalAskButtons(from, goalKind, termDisplay, results.length)
+    return
+  }
 
   // Name direct hit: a query that names exactly one business shows contact
   // details right away without the intermediate list.
@@ -3393,6 +4051,9 @@ async function runSearchAndReply(
         return
       }
     }
+    // S18.5 demand radar: this failed search is a live lead for subscribed
+    // suppliers (masked/sensitive terms never reach demand_events).
+    emitDemandSearch({ term: missTerm, city: city || '', resultCount: 0, buyer: from }).catch(() => {})
     await sendInteractiveButtons(
       from,
       `${renderEmptyResults(missTerm)}\n\n🛒 Or let suppliers find it: I post this exact need and they quote you right here.`,
@@ -3415,17 +4076,21 @@ async function runSearchAndReply(
     page: 0,
   })
   await sendResultsListPage(from, cards, 0, termDisplay, fromOrigin ? 'Near you' : city, fromOrigin, opts?.replyTo)
+  // S18.5 demand radar: this search found supply (buyer stored digits-only;
+  // consent is required before anything buyer-identifying moves).
+  emitDemandSearch({ term: termDisplay, city: fromOrigin ? '' : city || '', resultCount: results.length, buyer: from }).catch(() => {})
   recordBotEvents(results.map(r => r.biz)).catch(() => {})
 }
 
 async function dispatchSearch(
   from: string,
   text: string,
-  opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string }
+  opts?: { origin?: { lat: number; lng: number } | null; replyTo?: string; goalAskDone?: boolean }
 ) {    const p: ParsedQuery = { ...parseQuery(text), origin: opts?.origin ?? null }
     // Demand radar: every user query lands in bot_searches, even the ones
     // that never find supply — that's the admin digest's radar section.
     logBotSearch(from, p.term || (p.city ? '(town only)' : '(blank)'), p.city).catch(() => {})
+    pingAdminsSearch(p.term || (p.city ? '(town only)' : '(blank)'), p.city, from).catch(() => {})
 
   // Bare name search with no town: when exactly one verified business is
   // named by the query, show its contact details right away (nationwide)
@@ -3467,12 +4132,24 @@ async function dispatchSearch(
   if (!p.nationwide && !p.city) {
     // Product/service only — ask for the town first (plus the share-location
     // fast path that ranks matches by real distance).
+    // S19: unless the word is ALSO a menu goal and real businesses answer to
+    // it — then the two-way ask fires first (replays carry goalAskDone).
+    const goalKind = !opts?.goalAskDone ? goalKindForWord(p.term || '') : null
+    if (goalKind) {
+      const found = await countVerifiedNameMatches(p.term)
+      if (found > 0) {
+        logOut(from, 'goal_ask', `${p.term} → ${found} named nationwide`)
+        await saveGoalAsk(from, goalKind, p.term)
+        await sendGoalAskButtons(from, goalKind, p.term, found)
+        return
+      }
+    }
     await saveSession(from, 'search_loc', { pending_search_term: p.term })
     await sendAskTown(from, p.term, false, true)
     return
   }
 
-  await runSearchAndReply(from, p, { replyTo: opts?.replyTo })
+  await runSearchAndReply(from, p, { replyTo: opts?.replyTo, goalAskDone: opts?.goalAskDone })
 }
 
 // ── S18.2 typed customer orders: the buyer writes "2 bread, 1 cake", the
@@ -4399,9 +5076,13 @@ export async function POST(request: Request) {
           await sendWhatsAppMessage(from, 'Okay 👌 You will not hear from us again. Reply *help* if you ever want to browse again.')
           continue
         } else {
-          await upsertBotContact(from, waName, contactSession?.step || '')
+          await upsertBotContact(from, waName, contactSession && contactSession.step !== 'idle' ? contactSession.step : '')
         }
         let session = contactSession
+        // 'idle' is the placeholder row a shelved draft sits on when no flow is
+        // open: treat it as no active step — the draft itself is read from the
+        // DB by resumePaused / stashPaused.
+        if (session?.step === 'idle') session = null
 
         // ── Admin command suite (owner + allowlisted numbers) ───────────
         if (await isBotAdmin(from)) {
@@ -4453,6 +5134,22 @@ export async function POST(request: Request) {
           continue
         }
 
+        // Pick up a flow that an earlier direction change shelved (the draft
+        // lives in the session row, which may be the 'idle' placeholder).
+        if (
+          /^(?:resume|continue|pick ?up|carry on)\b/.test(lower) &&
+          (await resumePaused(from, session || (await getSession(from))))
+        ) {
+          continue
+        }
+
+        // Direction change mid-flow: follow the person, not the script.
+        // Structured RQ relays are never a direction change — they always
+        // belong to the quote flow below.
+        if (!/^rq-/i.test(lower) && (await handleIntentPivot(from, session, text))) {
+          continue
+        }
+
         // 🛒 Need intake (S16): buyers type one line, confirm card follows.
         if (session?.step === 'need_form') {
           if (lower === 'cancel' || lower === 'help') {
@@ -4461,6 +5158,12 @@ export async function POST(request: Request) {
             continue
           }
           await handleNeedFormText(from, session, text)
+          continue
+        }
+
+        // 📡 Radar: verified suppliers manage pings or claim the newest lead.
+        if (/^radar\b/.test(lower) || /^claim\s*$/.test(lower)) {
+          await handleRadarCommand(from, lower)
           continue
         }
 
@@ -4704,25 +5407,28 @@ export async function POST(request: Request) {
           }
           await saveSession(from, 'reg_contact', { contact: c })
           const socialLines = (c.socials || []).slice(0, 3).map(s => `🔗 ${s}`)
-          await sendInteractiveButtons(
+          // Package picker as a list row menu — three personal packages plus
+          // "fix details" would not fit WhatsApp's three-button cap.
+          await sendInteractiveList(
             from,
             [
               `*${c.name}* ${c.city ? `📍 ${c.city}` : '📍 Zimbabwe'}`,
               `📱 +${c.phone.startsWith('263') ? c.phone : '263' + c.phone.replace(/^0/, '')}`,
               ...socialLines,
               '',
-              'Personal contact pricing:',
-              '• USD 0.20 per month, or',
-              '• USD 1.00 for a full year',
-              'Paid via EcoCash — you enter the PIN now.',
-              '',
-              'Ready to go live?',
+              'Personal contact pricing — pick a package:',
+              '• USD 1 · 1 month',
+              '• USD 5 · 6 months',
+              '• USD 10 · 12 months',
+              'Paid via EcoCash — you enter the PIN after you choose.',
             ].join('\n'),
             [
-              { id: 'reg_contact_pay_monthly', title: 'Pay 20c · 1 month' },
-              { id: 'reg_contact_pay_year', title: 'Pay $1 · 12 months' },
+              { id: 'reg_contact_pay_monthly', title: 'Pay $1 · 1 month' },
+              { id: 'reg_contact_pay_6m', title: 'Pay $5 · 6 months' },
+              { id: 'reg_contact_pay_year', title: 'Pay $10 · 12 months' },
               { id: 'reg_contact_fix', title: '✎ Fix details' },
-            ]
+            ],
+            'Choose a package'
           )
           continue
         }
