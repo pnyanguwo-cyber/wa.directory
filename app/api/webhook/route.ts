@@ -1934,6 +1934,137 @@ async function ownPayableListings(from: string): Promise<{ id: string; name: str
 
 // Fresh DB read before every payment step: guards missing / already-live /
 // Yellow-Pages-free businesses (conditions can change mid-conversation).
+
+// ── My subscriptions: /contact & /paid ───────────────────────────────
+// A payer's own listing subscriptions. /contact lists their personal contacts
+// (registered by them, or listed on their number) and /paid lists everything
+// they pay for — both with expiry countdowns, so renewal is one *pay* away.
+ // Matched by payer_phone (both stored formats) OR the listed number.
+
+interface MyListingRow {
+  id: string
+  plan: string | null
+  amount: number | null
+  status: string
+  expiresAt: string | null
+  isPersonal: boolean
+  name: string
+  publicId: string
+}
+
+function myListingPackageLabel(row: MyListingRow): string {
+  const config = row.isPersonal && row.plan ? PERSONAL_PLAN_CONFIG[row.plan as PlanType] : row.plan ? PLAN_CONFIG[row.plan as PlanType] : undefined
+  const price = row.amount != null ? `USD ${row.amount.toFixed(2)}` : config ? `USD ${config.price.toFixed(2)}` : ''
+  return config ? `${price} · ${config.label.toLowerCase()}` : price
+}
+
+function myListingCountdown(row: MyListingRow): string {
+  if (row.status === 'pending') return 'awaiting payment'
+  if (!row.expiresAt) return ''
+  const diff = Math.ceil((new Date(row.expiresAt).getTime() - Date.now()) / 86400000)
+  if (row.status === 'expired' || diff < 0) return `expired ${Math.abs(diff) || 1}d ago`
+  if (diff === 0) return 'expires today'
+  if (diff === 1) return 'expires tomorrow'
+  return `${diff}d left`
+}
+
+async function fetchMyListings(from: string): Promise<MyListingRow[]> {
+  const payerDigits = digitsOnly(from)
+  const payerZero = payerDigits.replace(/^263/, '0')
+  const localDigits = payerZero
+  const supabase = getSupabase()
+
+  const subSelect = 'id, plan, amount, status, expires_at, payer_phone, businesses(name, business_id, phone, category, payment_status)'
+  const [payerSubs, listedBiz] = await Promise.all([
+    // Subscriptions the sender paid for (payer_phone carries 263… or 0…).
+    supabase
+      .from('listing_subscriptions')
+      .select(subSelect)
+      .or(`payer_phone.eq.${payerDigits},payer_phone.eq.${payerZero}`)
+      .order('expires_at', { ascending: false }),
+    // Listings registered on the sender's own number
+    supabase
+      .from('businesses')
+      .select('id')
+      .in('phone', [`263${localDigits}`, `+263${localDigits}`]),
+  ])
+
+  const rows: MyListingRow[] = []
+  const seen = new Set<string>()
+  const addRow = (s: { id: string; plan?: string | null; amount?: number | null; status?: string | null; expires_at?: string | null; businesses?: unknown }) => {
+    if (!s.id || seen.has(s.id)) return
+    seen.add(s.id)
+    const biz = (s.businesses || {}) as { name?: string | null; business_id?: string | null; category?: unknown }
+    rows.push({
+      id: s.id,
+      plan: s.plan ?? null,
+      amount: s.amount ?? null,
+      status: s.status || 'pending',
+      expiresAt: s.expires_at ?? null,
+      isPersonal: Array.isArray(biz.category) && (biz.category as string[]).includes('Personal Contact'),
+      name: biz.name || 'Listing',
+      publicId: biz.business_id || '',
+    })
+  }
+  for (const s of payerSubs?.data || []) addRow(s as Parameters<typeof addRow>[0])
+
+  // Subscriptions attached to real estate listings registered on the sender's phone.
+  if (listedBiz?.data?.length) {
+    const { data: phoneSubs } = await supabase
+      .from('listing_subscriptions')
+      .select(subSelect)
+      .in('business_id', (listedBiz.data as { id: string }[]).map(b => b.id))
+    for (const s of phoneSubs || []) addRow(s as Parameters<typeof addRow>[0])
+  }
+
+  // Live rows first (soonest expiry at top), then pending, then expired.
+  const rank = (r: MyListingRow) => (r.status === 'active' ? 0 : r.status === 'pending' ? 1 : 2)
+  return rows.sort((a, b) => rank(a) - rank(b) || (a.expiresAt || '').localeCompare(b.expiresAt || ''))
+}
+
+function renderMyListings(rows: MyListingRow[], onlyPersonal: boolean): string {
+  const scope = onlyPersonal ? rows.filter(r => r.isPersonal) : rows
+  const title = onlyPersonal ? '📇 *Your personal contacts*' : '💳 *Your paid listings*'
+  if (!scope.length) {
+    return onlyPersonal
+      ? 'No personal contacts yet.\n\nAdd one in seconds — send the name + phone, e.g.\n*Tendai Ncube 0771 234 567 Harare*'  // bot personal-contact intake
+      : 'Nothing paid for yet on your number.\n\n• Add a personal contact: send *register* and choose *Personal contact  $1/mo*\n• Check what is live: send *contact*'
+  }
+  const statusIcon = (r: MyListingRow) =>
+    r.status === 'active' ? '🟢' : r.status === 'pending' ? '🟡' : '🔴'
+  const lines = [`${title} — ${scope.length}`, '']
+  scope.forEach((r, i) => {
+    const bits = [
+      statusIcon(r),
+      `*${r.name}*${r.publicId ? ` (${r.publicId})` : ''}`,
+      myListingCountdown(r),
+      myListingPackageLabel(r),
+    ].filter(Boolean)
+    lines.push(`${i + 1}. ${bits.join(' · ')}`)
+  })
+  const expiringSoon = scope.filter(r => {
+    if (!r.expiresAt || r.status !== 'active') return false
+    return Math.ceil((new Date(r.expiresAt).getTime() - Date.now()) / 86400000) <= 3
+  })
+  lines.push('')
+  if (scope.some(r => r.status === 'pending')) {
+    lines.push('🟡 awaiting payment? Send *pay* and pick the listing to enter your EcoCash PIN.')
+  } else {
+    lines.push(expiringSoon.length ? `⏰ ${expiringSoon.length} winding down soon — renew with *pay*.` : 'Renew any: send *pay*.')
+  }
+  return lines.join('\n')
+}
+
+async function sendMyListings(from: string, onlyPersonal: boolean) {
+  try {
+    const rows = await fetchMyListings(from)
+    await sendWhatsAppMessage(from, renderMyListings(rows, onlyPersonal))
+  } catch (err) {
+    console.error('[webhook] my listings query failed:', err)
+    await sendWhatsAppMessage(from, 'Could not load your listings right now — please try again in a moment.')
+  }
+}
+
 async function assertPayableBusiness(
   businessId: string
 ): Promise<{ ok: true; name: string; waId: string } | { ok: false; reply: string }> {
@@ -5207,6 +5338,35 @@ export async function POST(request: Request) {
         }
         if (lower === 'orders' || lower.startsWith('orders ')) {
           await sendSupplierOrders(from, session)
+          continue
+        }
+
+        // ── My listings: /contact & /paid ────────────────────────────────
+        // /contact lists a payer's personal contacts, /paid everything their
+        // number has paid for — both with expiry countdowns. Slash forms are
+        // unambiguous and fire even mid-flow; the bare words only fire when
+        // no data-entry step could be expecting them as an answer.
+        const dataEntryLocked = !!session && ['need_form', 'reg_contact', 'list_form', 'pay', 'pay_search', 'pay_plan', 'pay_ecocash', 'order'].includes(session.step)
+        if (
+          lower === '/contact' ||
+          lower === '/contacts' ||
+          lower === 'mycontacts' ||
+          lower === 'my contacts' ||
+          ((lower === 'contact' || lower === 'contacts') && !dataEntryLocked)
+        ) {
+          await sendMyListings(from, true)
+          await clearSession(from)
+          continue
+        }
+        if (
+          lower === '/paid' ||
+          lower === 'mypaid' ||
+          lower === 'my paid' ||
+          lower === '/mypaid' ||
+          (lower === 'paid' && !dataEntryLocked)
+        ) {
+          await sendMyListings(from, false)
+          await clearSession(from)
           continue
         }
 
