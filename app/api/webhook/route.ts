@@ -4,6 +4,7 @@ import {
   sendWhatsAppMessage as sendWhatsAppText,
   sendInteractiveList as sendInteractiveListRaw,
   sendInteractiveButtons as sendInteractiveButtonsRaw,
+  sendInteractiveImageCard,
   sendCtaUrl as sendCtaUrlRaw,
   sendLocationRequest as sendLocationRequestRaw,
   sendReaction as sendReactionRaw,
@@ -521,10 +522,11 @@ interface BotBusinessRow {
   orders_fulfilled: number | null
   escrow_eligible: boolean
   website?: string | null
+  generate_site?: boolean | null
 }
 
 const BOT_BIZ_COLUMNS =
-  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials, verified, payment_status, response_time_minutes, orders_fulfilled, escrow_eligible, website'
+  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials, verified, payment_status, response_time_minutes, orders_fulfilled, escrow_eligible, website, generate_site'
 
 interface ParsedQuery {
   term: string
@@ -4914,6 +4916,7 @@ async function sendResultDetail(
     ordersFulfilled: b.orders_fulfilled || undefined,
     escrowEligible: b.escrow_eligible,
     website: b.website,
+    generateSite: !!b.generate_site || undefined,
   })
   await sendWhatsAppMessage(from, msg)
 
@@ -4957,12 +4960,10 @@ async function handleBrowseItems(
     return
   }
 
-  // Send items as rich media cards
+  // One atomic card per item: image header + body + Add to cart button.
   for (const item of items) {
-    const caption = `${item.name}${item.price != null ? ` — ${monoUSD(item.price)}` : ''}\n\n[Add to cart] [Contact supplier]`
-    await sendImageWithFallback(from, item.image_url ?? '', caption)
-    // Add interactivity for each item
-    await sendInteractiveButtonsRaw(from, 'Options', [
+    const body = `*${item.name}*${item.price != null ? `\n${monoUSD(item.price)}` : ''}`
+    await sendInteractiveImageCard(from, body, item.image_url || null, [
       { id: `add_to_cart_${item.id}`, title: '🧺 Add to cart' },
     ])
   }

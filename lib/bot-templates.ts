@@ -137,6 +137,8 @@ export interface DetailData {
   ordersFulfilled?: number
   escrowEligible?: boolean
   website?: string | null
+  /** Business has a generated mini-site (gated to active paid plans). */
+  generateSite?: boolean
 }
 
 /** Readable phone display: +263 772 234 002. */
@@ -220,11 +222,16 @@ export function renderDetailCard(b: DetailData): string {
     for (const s of socials) lines.push(`🔗 ${s}`)
   }
 
+  const shopLine =
+    b.generateSite && b.paymentStatus === 'active' && b.slug
+      ? ['🪄 Online shop', `${SITE_URL}/site/${b.slug}`]
+      : []
   return [
     ...lines,
     '',
     '🔗 View full listing',
     listingUrl(b),
+    ...shopLine,
     '',
     'Reply *back* to go back, or send a new search.',
   ].join('\n')

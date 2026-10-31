@@ -327,6 +327,67 @@ export async function sendInteractiveButtons(
   )
 }
 
+/**
+ * Product card: image + body + quick-reply buttons in ONE interactive
+ * message, so the button always travels with the picture. Degrades to the
+ * image/caption (then buttons) path when the interactive post fails.
+ */
+export async function sendInteractiveImageCard(
+  to: string,
+  body: string,
+  imageUrl: string | null,
+  buttons: InteractiveButton[]
+) {
+  const safeButtons = buttons.slice(0, 3).map(b => ({
+    type: 'reply' as const,
+    reply: { id: clip(b.id, 256), title: clip(b.title, 20) },
+  }))
+
+  if (safeButtons.length === 0) {
+    await sendImageWithFallback(to, imageUrl || '', clip(body, 1024))
+    return
+  }
+
+  const cleanBody = clip(body, 1024)
+  const card = {
+    type: 'button' as const,
+    ...(imageUrl ? { header: { type: 'image' as const, image: { link: imageUrl } } } : {}),
+    body: { text: cleanBody },
+    action: { buttons: safeButtons },
+  }
+
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return
+  }
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(
+      `[whatsapp][dry-run][image-card] to=${to} img=${imageUrl ? 'yes' : 'no'} (${safeButtons.map(b => b.reply.id).join(',')})\n${cleanBody}`
+    )
+    return
+  }
+
+  const ok = await postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: card,
+  })
+
+  if (!ok) {
+    if (imageUrl) {
+      await sendImageWithFallback(to, imageUrl, cleanBody)
+      await sendInteractiveButtons(to, 'Options', buttons)
+    } else {
+      await sendInteractiveButtons(to, cleanBody, buttons)
+    }
+  }
+}
+
 export async function sendWhatsAppTemplate(
   to: string,
   templateName: string,
