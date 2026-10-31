@@ -8,7 +8,7 @@ import {
   sendLocationRequest as sendLocationRequestRaw,
   sendReaction as sendReactionRaw,
   sendWhatsAppDocument as sendWhatsAppDocumentRaw,
-  sendWhatsAppImage,
+  sendImageWithFallback,
   sendContactCard,
   markRead,
   sendWhatsAppTemplate,
@@ -4951,11 +4951,7 @@ async function handleBrowseItems(
   // Send items as rich media cards
   for (const item of items) {
     const caption = `${item.name}${item.price != null ? ` — ${monoUSD(item.price)}` : ''}\n\n[Add to cart] [Contact supplier]`
-    if (item.image_url) {
-      await sendWhatsAppImage(from, item.image_url, caption)
-    } else {
-      await sendWhatsAppMessage(from, caption)
-    }
+    await sendImageWithFallback(from, item.image_url ?? '', caption)
     // Add interactivity for each item
     await sendInteractiveButtonsRaw(from, 'Options', [
       { id: `add_to_cart_${item.id}`, title: '🧺 Add to cart' },

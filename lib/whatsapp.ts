@@ -439,3 +439,21 @@ export async function sendWhatsAppImage(
     ...(replyTo ? { context: { message_id: replyTo } } : {}),
   })
 }
+
+/**
+ * Sends an image message, falling back to a plain text message when the
+ * image send fails (so the customer always receives content).
+ * Returns true when the image was actually sent.
+ */
+export async function sendImageWithFallback(
+  to: string,
+  imageUrl: string,
+  caption: string,
+  replyTo?: string
+): Promise<boolean> {
+  let ok = false
+  if (imageUrl) ok = await sendWhatsAppImage(to, imageUrl, caption, replyTo)
+  if (ok) return true
+  await sendWhatsAppMessage(to, caption)
+  return false
+}
