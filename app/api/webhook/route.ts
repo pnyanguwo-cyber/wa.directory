@@ -520,10 +520,11 @@ interface BotBusinessRow {
   response_time_minutes: number | null
   orders_fulfilled: number | null
   escrow_eligible: boolean
+  website?: string | null
 }
 
 const BOT_BIZ_COLUMNS =
-  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials, verified, payment_status, response_time_minutes, orders_fulfilled, escrow_eligible'
+  'id, name, slug, category, city, area, price_range, rating, review_count, phone, phone_type, lat, lng, socials, verified, payment_status, response_time_minutes, orders_fulfilled, escrow_eligible, website'
 
 interface ParsedQuery {
   term: string
@@ -2779,9 +2780,16 @@ async function handleRqText(from: string, waName: string, text: string): Promise
 
   // Relay straight into the buyer's chat (never the buyer's number out).
   const quotes = await listNeedQuotes(need.id)
+  const supabase = getSupabase()
+  const { data: supRow } = await supabase
+    .from('businesses')
+    .select('website')
+    .eq('phone', digitsOnly(from))
+    .maybeSingle()
+  const supplierWebsite = ((supRow as { website?: string | null } | null)?.website || '').trim() || null
   await sendInteractiveButtons(
     need.buyer_phone,
-    renderQuoteCard(rqId, waName || "A supplier", price, bodyText, quotes.length, Math.max(quotes.length, (need.quotes_forwarded || 0) + 1)),
+    renderQuoteCard(rqId, waName || "A supplier", price, bodyText, quotes.length, Math.max(quotes.length, (need.quotes_forwarded || 0) + 1), supplierWebsite),
     [
       { id: `q_pick_${result.quote.id}`, title: "✅ Deal with this" },
       { id: `q_stop_${rqId}`, title: "✋ Stop quotes" },
@@ -4905,6 +4913,7 @@ async function sendResultDetail(
     responseTimeMinutes: b.response_time_minutes || undefined,
     ordersFulfilled: b.orders_fulfilled || undefined,
     escrowEligible: b.escrow_eligible,
+    website: b.website,
   })
   await sendWhatsAppMessage(from, msg)
 

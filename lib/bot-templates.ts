@@ -136,6 +136,7 @@ export interface DetailData {
   responseTimeMinutes?: number
   ordersFulfilled?: number
   escrowEligible?: boolean
+  website?: string | null
 }
 
 /** Readable phone display: +263 772 234 002. */
@@ -205,6 +206,12 @@ export function renderDetailCard(b: DetailData): string {
     lines.push(isVoice ? `📞 ${formatPhone(digits)} (voice line, no WhatsApp)` : `📞 ${formatPhone(digits)}`)
   } else {
     lines.push(`🔗 ${listingUrl(b)}`)
+  }
+
+  const website = (b.website || '').trim()
+  if (website) {
+    const siteUrl = /^(https?:)?\/\//i.test(website) ? website : `https://${website}`
+    lines.push(`🌐 ${siteUrl}`)
   }
 
   const socials = (b.socials || []).filter(Boolean).slice(0, 3)
@@ -350,11 +357,17 @@ export function renderQuoteCard(
   price: string,
   body: string,
   index: number,
-  total: number
+  total: number,
+  website?: string | null
 ): string {
   const head = `💬 *Quote ${index}/${total}* · ${rqId}`
   const lines = [head, `${supplierName}: ${price ? `*${price}*` : '(price in text below)'}`]
   if (body) lines.push(`✍️ ${body}`)
+  const web = (website || '').trim()
+  if (web) {
+    const url = /^(https?:)?\/\//i.test(web) ? web : `https://${web}`
+    lines.push(`🌐 ${url}`)
+  }
   return lines.join('\n')
 }
 
@@ -542,6 +555,8 @@ export function renderFirstWelcome(channelLink: string): string {
     '',
     'You can also send just *plumber* to see matches nationwide. Photos and voice notes work too.',
     '',
+    '📸 You can also *see* the goods: open a business match and tap 🧺 *Browse all items* to view photos.',
+    '',
     '*You name your price*',
     'Have a budget in mind? Include your offer in the search.',
     '',
@@ -577,6 +592,8 @@ export function renderWelcomeBack(name?: string): string {
     '👤 Personal contacts listed on WA Directory (e.g. *John Mawere in Harare*)',
     '',
     'You can also send a photo or a voice note in English.',
+    '',
+    '📸 See what businesses sell — tap 🧺 *Browse all items* on any match.',
     '',
     'Have a price in mind? Include your offer in the search. Suppliers can accept it or make a counteroffer.',
     '',
