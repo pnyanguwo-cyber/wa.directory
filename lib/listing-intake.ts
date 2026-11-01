@@ -185,14 +185,23 @@ function setCtxField(ctx: Ctx, field: string, value: string): boolean {
         s.whole_country = true
         return true
       }
+      if (/^remote$/i.test(value.trim())) {
+        s.city = 'remote'
+        s.whole_country = false
+        return true
+      }
+      // If not a known city/remote/whole country, still accept but mark as pending validation
       s.city = value.slice(0, 60)
       s.whole_country = false
       return true
     }
-    case 'area':
+    case 'area': {
       if (!value) return false
-      s.area = value.slice(0, 60)
+      // Accept the area input even if not in our database
+      // We'll allow any input here, validation happens at publish/admin level
+      s.area = value.slice(0, 200) // Allow longer for multiple areas
       return true
+    }
     case 'phone': {
       if (ME_RE.test(value.replace(/[:\-]/g, '').trim()) || /^me\b/i.test(value.trim())) {
         if (!ctx.sender) return false
@@ -204,7 +213,10 @@ function setCtxField(ctx: Ctx, field: string, value: string): boolean {
       if (!m) return false
       const digits = m[0].replace(/[^0-9]/g, '')
       const nat = digits.startsWith('263') ? digits.slice(3) : digits.replace(/^0/, '')
-      if (nat.length !== 9 || !nat.startsWith('7')) return false
+      if (nat.length !== 9 || !nat.startsWith('7')) {
+        // Return a special error flag that the caller can use to show a more helpful message
+        throw new Error('INVALID_ZIM_PHONE')
+      }
       s.phone = `263${nat}`
       s.phone_type = VOICE_RE.test(value) ? 'voice' : 'whatsapp'
       return true
@@ -392,6 +404,9 @@ export function parseListingMessage(
       rem = rem.replace(NATION_RE, ' ').trim()
       patch.city = undefined
       patch.whole_country = true
+    } else if (/^remote$/i.test(rem.trim())) {
+      void ctx.set('city', 'remote')
+      void ctx.set('whole_country', false)
     }
 
     if (rem) {
@@ -539,7 +554,7 @@ export function renderListingForm(state: ListingFormState, senderPhone: string):
     ...fieldLines(state, senderPhone),
     '',
     ...(state.logo ? ['📷 Logo: photo attached — uploads at publish', ''] : []),
-    'Send anything to fill or update a field — one line or more. Tap ↗ Publish when ready, or *cancel* to quit.',
+    'To edit a field, type the heading and new value (e.g. *Prices: $5 - $20*). Tap ↗ Publish when ready, or *cancel* to quit.',
   ].join('\n')
 }
 
@@ -597,19 +612,19 @@ export const LIST_WIZARD_STEPS: WizardStep[] = [
   { key: 'categories', label: 'Category', optional: false,
     prompt: 'What type of business is it? Send one word, e.g. *Salon*, *Bakery*, *Electrician*, *Hardware*…' },
   { key: 'city', label: 'Town', optional: false,
-    prompt: 'Which town is your business office or shop physically located in? e.g. *Harare*, *Bulawayo*, *Gweru*… (Reply *whole country* if you serve everywhere online.)' },
+    prompt: 'Which town/city is your business physically located in? e.g. *Harare*, *Bulawayo*, *Gweru*…\n(This is just your physical location — you can still serve other areas. Reply *whole country* if you serve everywhere online, or *remote* if you have no physical shop.)' },
   { key: 'phone', label: 'Phone', optional: false,
-    prompt: 'What number should customers reach you on? Send it, or reply *me* to use this WhatsApp number.\n(Reply *call only* if customers should just call it — not on WhatsApp.)' },
-  { key: 'area', label: 'Area', optional: true,
-    prompt: 'Which suburb or specific area do you provide services to? e.g. *Avondale*, *Cowdray Park*.' },
+    prompt: 'What number should customers reach you on? Send it, or reply *me* to use this WhatsApp number.\n(Reply *call only* if customers should just call it — not on WhatsApp.)\n\n*Note: Only Zimbabwean numbers are accepted (e.g. 077, 078, 071, 073, 075, 077, 078).*' },
+  { key: 'area', label: 'Service Areas', optional: true,
+    prompt: 'Which suburbs or areas do you serve? You can list multiple, e.g. *Avondale, Mufakose, Highfield*.\n(If you entered "whole country" or "remote" above, you can skip this.)' },
   { key: 'price_range', label: 'Prices', optional: true,
     prompt: 'Your price range, cheapest to priciest? e.g. *$1 - $50*.' },
   { key: 'description', label: 'Description', optional: true,
     prompt: 'In one line, what do you sell or do?' },
   { key: 'website', label: 'Website', optional: true,
-    prompt: 'Do you have a website? Send the link, e.g. *www.myshop.co.zw*.' },
+    prompt: 'Do you have a website? Send the link, e.g. *www.myshop.co.zw*.\n(If you don\'t have one, just reply *skip* — a website will be created for you upon payment, linked to your WhatsApp.)' },
   { key: 'catalog', label: 'Catalog', optional: true,
-    prompt: 'Have a WhatsApp catalog or price list link? Send it, e.g. *wa.me/c/…*.' },
+    prompt: 'Have a WhatsApp catalog or price list link? Send it, e.g. *wa.me/c/…*.\n(You can copy your WhatsApp catalog link and paste it here for easy sharing.)' },
   { key: 'address', label: 'Address', optional: true,
     prompt: 'Physical address or stand number?' },
   { key: 'logo', label: 'Logo photo', optional: true,
@@ -621,6 +636,11 @@ export function wizardStepAnswered(state: ListingFormState, key: WizardStep['key
   if (key === 'categories') return !!state.categories?.length
   if (key === 'phone') return !!state.phone && state.phone.replace(/\D/g, '').length >= 9
   if (key === 'city') return !!(state.city || state.whole_country)
+  if (key === 'area') {
+    // If whole country or remote, area is considered answered (can be skipped)
+    if (state.whole_country || state.city === 'remote') return true
+    return !!(state.area && state.area.trim().length > 0)
+  }
   const v = (state as Record<string, unknown>)[key]
   return typeof v === 'string' ? v.trim().length > 0 : !!v
 }

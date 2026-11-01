@@ -1075,7 +1075,12 @@ async function sendWizardQuestion(
  * left behind; *back* re-opens them explicitly). -1 → review screen. */
 function nextWizardIndex(state: ListingFormState, after: number): number {
   for (let i = after + 1; i < LIST_WIZARD_STEPS.length; i++) {
-    if (!wizardStepAnswered(state, LIST_WIZARD_STEPS[i].key)) return i
+    const stepKey = LIST_WIZARD_STEPS[i].key
+    // Skip area step if whole_country or remote is selected
+    if (stepKey === 'area' && (state.whole_country || state.city === 'remote')) {
+      continue
+    }
+    if (!wizardStepAnswered(state, stepKey)) return i
   }
   return -1
 }
@@ -1093,7 +1098,7 @@ async function wizardAdvance(
     await sendWhatsAppImage(
       from,
       'https://images.unsplash.com/photo-1509440159596-0249088772ff',
-      '📦 *How to list your products & prices*\n\nOnce your business goes live, you can add products to your shop shelf anytime by sending a photo or typing:\n\n*bread $2*\n*cake $15*\n\nProducts without photos are fully accepted too!'
+      '📦 *How to list your products & prices*\n\nOnce your business goes live, you can add products to your shop shelf anytime by sending a photo with a caption that includes the product name and price, e.g.:\n\n*bread $2*\n*cake $15*\n\nYou can also add extra details in the caption like *\"i make home deliveries and customize cakes to your liking\"*.\n\nProducts without photos are fully accepted too!'
     )
     await sendFormUpdate(
       from,
@@ -1109,7 +1114,7 @@ async function wizardAdvance(
  * paragraph parser still runs on every answer, so a pasted line that
  * completes several fields simply pulls those steps along — but THIS
  * question must be answered before the wizard moves on. */
-async function handleListWizardText(from: string, session: ChatSession, text: string) {
+async function handleListWizardTextInternal(from: string, session: ChatSession, text: string) {
   const idx = typeof session.data.wizard === 'number' ? session.data.wizard : -1
   const step = idx >= 0 ? LIST_WIZARD_STEPS[idx] : null
   const before = session.data.list || {}
@@ -1128,6 +1133,12 @@ async function handleListWizardText(from: string, session: ChatSession, text: st
         idx,
         `We need the ${step.label.toLowerCase()} to publish — please answer it, or reply *cancel* to stop.`
       )
+      return
+    }
+    // Skip area step if whole_country or remote was selected
+    if (step.key === 'area' && (before.whole_country || before.city === 'remote')) {
+      const skipState = { ...before, area: '' }
+      await wizardAdvance(from, session, skipState, idx)
       return
     }
     await wizardAdvance(from, session, before, idx)
@@ -1151,22 +1162,30 @@ async function handleListWizardText(from: string, session: ChatSession, text: st
       state = applyListingFields(state, { phone_type: 'voice' }, from)
     }
   }
-  if (step.key === 'city' && /whole country/i.test(text)) {
-    state = applyListingFields(state, { whole_country: true }, from)
+  if (step.key === 'city') {
+    if (/whole country/i.test(text)) {
+      state = applyListingFields(state, { whole_country: true }, from)
+    } else if (/remote/i.test(text)) {
+      state = applyListingFields(state, { city: 'remote', whole_country: false }, from)
+    }
   }
 
   await saveSession(from, 'list_form', { ...session.data, list: state, wizard: idx } as ChatSessionData)
 
   if (!wizardStepAnswered(state, step.key)) {
+    let note = `Hmm, I couldn't read that as ${step.label.toLowerCase()} — please try again.`
+    if (step.key === 'city') {
+      note = "I don't know that town — try again, e.g. *Masvingo*, or reply *whole country* or *remote*."
+    } else if (step.key === 'categories') {
+      note = "I don't know that category — try a common one, e.g. *Salon*, *Bakery*, *Electrician*, *Hardware*."
+    } else if (step.key === 'phone') {
+      note = "Hmm, I couldn't read that as a phone number. Only Zimbabwean numbers are accepted (e.g. 077, 078, 071, 073, 075). Send it again, or reply *me* to use this WhatsApp number."
+    }
     await sendWizardQuestion(
       from,
       state,
       idx,
-      step.key === 'city'
-        ? "I don't know that town — try again, e.g. *Masvingo*, or reply *whole country*."
-        : step.key === 'categories'
-          ? "I don't know that category — try a common one, e.g. *Salon*, *Bakery*, *Electrician*, *Hardware*."
-          : `Hmm, I couldn't read that as ${step.label.toLowerCase()} — please try again.`
+      note
     )
     return
   }
@@ -1753,7 +1772,7 @@ async function handleListFormText(from: string, session: ChatSession, text: stri
   // Guided wizard mode: one question at a time; anything else stays in
   // review-mode free text (the familiar paragraph flow).
   if (typeof session.data.wizard === 'number' && session.data.wizard >= 0) {
-    await handleListWizardText(from, session, text)
+    await handleListWizardTextInternal(from, session, text)
     return
   }
   const before = session.data.list || {}
@@ -1808,16 +1827,18 @@ async function findActiveListingsForPhone(phone: string): Promise<ShelfBiz[]> {
 }
 
 // "bread $2", "bread 2.50", "2kg cement 7" → product spec. Pure numbers and
-// orders ("order 2 bread") don't parse.
-function parseItemSpec(text: string): { name: string; price: number } | null {
+// orders ("order 2 bread") don't parse. Also extracts optional description after price.
+interface ItemSpec { name: string; price: number; description?: string }
+function parseItemSpec(text: string): ItemSpec | null {
   const t = text.trim()
-  if (!t || t.length > 80) return null
-  const m = t.match(/^(.+?)\s*(?:usd\s*)?\$?\s*(\d+(?:[.,]\d+)?)$/i)
+  if (!t || t.length > 300) return null
+  // Match: "name $price optional description here"
+  const m = t.match(/^(.+?)\s*(?:usd\s*)?\$?\s*(\d+(?:[.,]\d+)?)(?:\s+(.*))?$/i)
   if (!m) return null
   const name = m[1].replace(/[-–:,\s]+$/, '').trim()
   const price = Number(m[2].replace(',', '.'))
   if (name.length < 2 || !Number.isFinite(price) || price <= 0) return null
-  return { name, price }
+  return { name, price, description: m[3]?.trim() || undefined }
 }
 
 async function insertShelfItem(
@@ -1842,6 +1863,7 @@ async function insertShelfItem(
 
 // One live shop → save the photo and ask for name+price (caption may carry
 // both, then it stocks directly). Several shops → pick list first.
+// Caption can be: "bread $2" or "bread $2 i make deliveries"
 async function startShelfItem(
   from: string,
   bizList: ShelfBiz[],
@@ -1852,7 +1874,10 @@ async function startShelfItem(
   void markRead(mediaMsgId, true).catch(() => {})
   const media = await fetchWhatsAppMedia(mediaId)
   const imageUrl = media ? (await uploadLogoImage(new Uint8Array(media.buffer))) || '' : ''
+
+  // Parse caption using the shared parser
   const spec = caption ? parseItemSpec(caption) : null
+  const extraDescription = spec?.description || ''
 
   if (spec && bizList.length === 1) {
     const biz = bizList[0]
@@ -1862,11 +1887,11 @@ async function startShelfItem(
       await sendWhatsAppMessage(from, '❌ Could not save that item — try again.', mediaMsgId)
       return
     }
-    await sendWhatsAppMessage(
-      from,
-      `🧺 *${spec.name}* at $${spec.price} stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`,
-      mediaMsgId
-    )
+    let response = `🧺 **${spec.name}** at \`$${spec.price}\` stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`
+    if (extraDescription) {
+      response += `\n\n📝 *Details:*\n> ${extraDescription}`
+    }
+    await sendWhatsAppMessage(from, response, mediaMsgId)
     return
   }
 
@@ -1887,12 +1912,13 @@ async function startShelfItem(
   await sendWhatsAppMessage(
     from,
     (imageUrl ? '📷 Photo saved. ' : '') +
-      'Reply with the product name and price to stock it on your shop shelf, e.g. *bread $2*. Reply *skip* to not add it.',
+      'Reply with the product name and price to stock it on your shop shelf, e.g. *bread $2*. You can also add extra details in your message like *\"i make home deliveries and customize cakes to your liking\"*. Reply *skip* to not add it.',
     mediaMsgId
   )
 }
 
 // Text for the item_photo step: "bread $2" → business_items row.
+// Also accepts: "bread $2 i make home deliveries and customize cakes"
 async function handleItemSpecText(from: string, session: ChatSession, text: string) {
   const lower = text.trim().toLowerCase()
   if (lower === 'skip' || lower === 'cancel') {
@@ -1900,12 +1926,22 @@ async function handleItemSpecText(from: string, session: ChatSession, text: stri
     await sendWhatsAppMessage(from, 'Skipped — the photo was not added to the shelf.')
     return
   }
+
+  // Use the shared parser
   const spec = parseItemSpec(text)
-  const biz = session.data.pendingItemBiz
-  if (!spec || !biz) {
+  if (!spec) {
     await sendWhatsAppMessage(
       from,
-      'Reply with the product name and price, e.g. *bread $2* — or *skip* to not add it.'
+      'Reply with the product name and price, e.g. *bread $2*. You can add extra details after. — or *skip* to not add it.'
+    )
+    return
+  }
+
+  const biz = session.data.pendingItemBiz
+  if (!biz) {
+    await sendWhatsAppMessage(
+      from,
+      'Reply with the product name and price, e.g. *bread $2*. You can add extra details after. — or *skip* to not add it.'
     )
     return
   }
@@ -1916,10 +1952,13 @@ async function handleItemSpecText(from: string, session: ChatSession, text: stri
     await sendWhatsAppMessage(from, '❌ Could not save that item — try again, e.g. *bread $2*.')
     return
   }
-  await sendWhatsAppMessage(
-    from,
-    `🧺 *${spec.name}* at $${spec.price} stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`
-  )
+
+  // Format the response: bold name, inline-code price, quote extra description
+  let response = `🧺 **${spec.name}** at \`$${spec.price}\` stocked on ${biz.name}'s shelf${imageUrl ? ' with the photo' : ''} — it shows in the shop section of the website.`
+  if (spec.description) {
+    response += `\n\n📝 *Details:*\n> ${spec.description}`
+  }
+  await sendWhatsAppMessage(from, response)
 }
 
 async function handleBotMedia(
@@ -4294,7 +4333,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'list_skip':
       // ⏭ Skip on an optional wizard question.
       if (session?.step === 'list_form' && typeof session.data.wizard === 'number' && session.data.wizard >= 0) {
-        await handleListWizardText(from, session, 'skip')
+        await handleListWizardTextInternal(from, session, 'skip')
       }
       return
     case 'list_cancel':
@@ -5574,7 +5613,8 @@ async function publishBusiness(from: string, session: ChatSession, msgId?: strin
         ? '💵 To go live: pay USD 1 — link: ' + SITE_URL + '/pay (manual confirmation; EcoCash on WhatsApp is coming soon)'
         : '⭐ Public-service listing: our team verifies it fast.',
       '',
-      '📸 After go-live: send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
+      '📸 *After go-live:* send a product photo with a caption that includes the product name and price (e.g. *bread $2*), and you can add extra details like *\"i make home deliveries and customize cakes to your liking\"*.',
+      'The bot will format it beautifully: it will quote your description, **bold the name**, and `inline-code` the price.',
       '',
       `✏️ Save this link to edit your listing later:`,
       `${SITE_URL}/edit?token=${token}`,
