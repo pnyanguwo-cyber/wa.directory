@@ -112,6 +112,7 @@ import {
   renderInvalidSelection,
   renderErrorCard,
   FALLBACK_HELP_LINES,
+  SUPPLIER_HELP_LINES,
   renderNeedIntro,
   renderNeedConfirm,
   renderNeedPosted,
@@ -196,8 +197,6 @@ const STOPWORDS = new Set([
   'some', 'get', 'any', 'have', 'just', 'like', 'of', 'on', 'my', 'your',
 ])
 
-const HELP_TEXT = FALLBACK_HELP_LINES(SITE_URL).join('\n')
-
 // ── Admin settings (S16.1) ────────────────────────────────────────────────
 // Channel link: bot_settings override, env (CHANNEL_LINK) fallback.
 async function channelLinkRaw(): Promise<string> {
@@ -210,9 +209,23 @@ async function channelLine(): Promise<string> {
   return link ? `📲 Live buys & deals: ${link}` : ''
 }
 
-async function helpText(): Promise<string> {
+async function helpText(from?: string): Promise<string> {
   const ch = await channelLine()
-  return ch ? `${HELP_TEXT}\n\n${ch}` : HELP_TEXT
+
+  // Check if user is a supplier (has active business listings)
+  let isSupplier = false
+  if (from) {
+    const activeListings = await findActiveListingsForPhone(from)
+    isSupplier = activeListings.length > 0
+  }
+
+  const siteUrl = SITE_URL
+  const channelUrl = ch.replace('📲 Live buys & deals: ', '')
+  const helpLines = isSupplier
+    ? SUPPLIER_HELP_LINES(siteUrl, channelUrl)
+    : FALLBACK_HELP_LINES(siteUrl, channelUrl)
+
+  return helpLines.join('\n')
 }
 
 // Extra admin numbers live in bot_settings.admin_allowlist (JSON array).
