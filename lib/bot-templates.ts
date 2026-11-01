@@ -32,7 +32,9 @@ export interface ResultCard {
   area: string | null
   km?: number | null
   // Exact product match the customer searched for (may be unpriced).
-  item: { name: string; price: number | null } | null
+  // id + image_url ride along so the bot can offer that item's
+  // single photo without opening the catalog (the 📸 quick action).
+  item: { name: string; price: number | null; id?: string; image_url?: string | null } | null
   // Business-level price range, only shown when there is no exact product.
   priceRange: string | null
   // Verification signals for trust badges

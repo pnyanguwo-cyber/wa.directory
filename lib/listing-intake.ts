@@ -578,6 +578,71 @@ export const LIST_INTRO = (): string => [
   'Reply *cancel* to stop anytime.',
 ].join('\n')
 
+// ── Guided registration wizard (one question per step) ────────────────
+// First-time owners freeze when handed a 10-field wall, so the bot now
+// asks questions one at a time — same ListingFormState underneath, so the
+// publish path, media handling and draft-resume all stay untouched.
+
+export interface WizardStep {
+  /** State key this question answers (logo = media-only step). */
+  key: 'name' | 'categories' | 'city' | 'phone' | 'area' | 'price_range' | 'description' | 'website' | 'catalog' | 'address' | 'logo'
+  label: string
+  prompt: string
+  optional: boolean
+}
+
+export const LIST_WIZARD_STEPS: WizardStep[] = [
+  { key: 'name', label: 'Name', optional: false,
+    prompt: "What's your business called? Just send the name, e.g. *Job Moyo Hardware*." },
+  { key: 'categories', label: 'Category', optional: false,
+    prompt: 'What type of business is it? Send one word, e.g. *Salon*, *Bakery*, *Electrician*, *Hardware*…' },
+  { key: 'city', label: 'Town', optional: false,
+    prompt: 'Which town is your business office or shop physically located in? e.g. *Harare*, *Bulawayo*, *Gweru*… (Reply *whole country* if you serve everywhere online.)' },
+  { key: 'phone', label: 'Phone', optional: false,
+    prompt: 'What number should customers reach you on? Send it, or reply *me* to use this WhatsApp number.\n(Reply *call only* if customers should just call it — not on WhatsApp.)' },
+  { key: 'area', label: 'Area', optional: true,
+    prompt: 'Which suburb or specific area do you provide services to? e.g. *Avondale*, *Cowdray Park*.' },
+  { key: 'price_range', label: 'Prices', optional: true,
+    prompt: 'Your price range, cheapest to priciest? e.g. *$1 - $50*.' },
+  { key: 'description', label: 'Description', optional: true,
+    prompt: 'In one line, what do you sell or do?' },
+  { key: 'website', label: 'Website', optional: true,
+    prompt: 'Do you have a website? Send the link, e.g. *www.myshop.co.zw*.' },
+  { key: 'catalog', label: 'Catalog', optional: true,
+    prompt: 'Have a WhatsApp catalog or price list link? Send it, e.g. *wa.me/c/…*.' },
+  { key: 'address', label: 'Address', optional: true,
+    prompt: 'Physical address or stand number?' },
+  { key: 'logo', label: 'Logo photo', optional: true,
+    prompt: 'Last one 📷 — send a photo of your logo or shop front.' },
+]
+
+export function wizardStepAnswered(state: ListingFormState, key: WizardStep['key']): boolean {
+  if (key === 'logo') return !!state.logo
+  if (key === 'categories') return !!state.categories?.length
+  if (key === 'phone') return !!state.phone && state.phone.replace(/\D/g, '').length >= 9
+  if (key === 'city') return !!(state.city || state.whole_country)
+  const v = (state as Record<string, unknown>)[key]
+  return typeof v === 'string' ? v.trim().length > 0 : !!v
+}
+
+/** First step whose answer is still missing (so a pasted paragraph can
+ * skip several questions ahead). -1 = everything answered → review. */
+export function firstUnansweredWizardStep(state: ListingFormState): number {
+  for (let i = 0; i < LIST_WIZARD_STEPS.length; i++) {
+    if (!wizardStepAnswered(state, LIST_WIZARD_STEPS[i].key)) return i
+  }
+  return -1
+}
+
+export const wizardProgress = (i: number): string =>
+  `📝 *Registration — question ${i + 1} of ${LIST_WIZARD_STEPS.length}*`
+
+export const wizardIntro = (): string => [
+  "Great — let's list your business. I'll ask a few quick questions, one at a time.",
+  '',
+  'Every optional question accepts *skip*. Reply *back* to fix an earlier answer, or *cancel* to stop.',
+].join('\n')
+
 // ── Field-patch application (AI fallback + photo perception share this) ───
 // Every external source of field values funnels through the same validators,
 // so garbage from any source is rejected exactly like typed text.

@@ -21,6 +21,9 @@ export interface ChatSessionData {
   whole_country?: boolean
   // Living form state for the paragraph intake flow (step 'list_form').
   list?: import('./listing-intake').ListingFormState
+  // Guided wizard: index of the current question in LIST_WIZARD_STEPS.
+  // -1 (or missing) = review/legacy free-text mode on the same form state.
+  wizard?: number
   // Personal contact draft (step 'reg_contact'): name + phone + optional
   // city and up to 3 social links.
   contact?: { name: string; phone: string; city: string | null; socials?: string[] }

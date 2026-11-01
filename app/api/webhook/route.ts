@@ -13,6 +13,7 @@ import {
   sendContactCard,
   markRead,
   sendWhatsAppTemplate,
+  sendWhatsAppImage,
 } from '@/lib/whatsapp'
 import type { InteractiveRow, InteractiveButton } from '@/lib/whatsapp'
 import { monoUSD } from '@/lib/bot-templates'
@@ -69,11 +70,17 @@ import {
   isSinglePriceRange,
   needsAIPass,
   LIST_INTRO,
+  LIST_WIZARD_STEPS,
+  wizardStepAnswered,
+  firstUnansweredWizardStep,
+  wizardProgress,
+  wizardIntro,
   type ListingFormState,
 } from '@/lib/listing-intake'
 import { aiPatchListing } from '@/lib/listing-ai'
 import { findBusinessesByName, activateListingForDays, notifyBusinessLive, bestNameSimilarity, type VerifyCandidate } from '@/lib/admin-verify'
 import { imageLuminanceFromUrl } from '@/lib/image-luminance'
+import { curatedRelatedTerms } from '@/lib/related-words'
 import { slugify } from '@/lib/utils'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import { validatePhone } from '@/data/countries'
@@ -861,7 +868,9 @@ function bizMatchesQuery(
 
 interface BotResult {
   biz: BotBusinessRow
-  item: { name: string; price: number | null } | null
+  // id + image_url ride along so the 📸 single-photo quick action can
+  // open that exact item without a second query.
+  item: { name: string; price: number | null; id?: string; image_url?: string | null } | null
   km?: number
 }
 
@@ -871,13 +880,13 @@ interface BotResult {
 async function fetchMatchingItems(
   bizIds: string[],
   term: string
-): Promise<Map<string, { name: string; price: number | null }>> {
-  const out = new Map<string, { name: string; price: number | null }>()
+): Promise<Map<string, { name: string; price: number | null; id?: string; image_url?: string | null }>> {
+  const out = new Map<string, { name: string; price: number | null; id?: string; image_url?: string | null }>()
   if (bizIds.length === 0 || term.length < 3) return out
   const tokens = term.split(/[^a-z0-9]+/).filter(w => w.length >= 2)
   let req = getSupabase()
     .from('business_items')
-    .select('business_id, name, price')
+    .select('business_id, name, price, id, image_url')
     .in('business_id', bizIds)
     .eq('is_active', true)
   // Word-tokens ANDed ("zzcart bread" → name must contain both) so the
@@ -888,14 +897,14 @@ async function fetchMatchingItems(
   const { data } = await req
     .order('price', { ascending: true })
     .limit(200)
-  for (const it of (data as { business_id: string; name: string; price: number | null }[]) || []) {
+  for (const it of (data as { business_id: string; name: string; price: number | null; id: string; image_url: string | null }[]) || []) {
     const cur = out.get(it.business_id)
     if (it.price != null) {
       if (!cur || cur.price == null || it.price < cur.price) {
-        out.set(it.business_id, { name: it.name, price: it.price })
+        out.set(it.business_id, { name: it.name, price: it.price, id: it.id, image_url: it.image_url })
       }
     } else if (!cur) {
-      out.set(it.business_id, { name: it.name, price: null })
+      out.set(it.business_id, { name: it.name, price: null, id: it.id, image_url: it.image_url })
     }
   }
   return out
@@ -920,6 +929,71 @@ function toCard(r: BotResult): ResultCard {
     ordersFulfilled: b.orders_fulfilled,
     escrowEligible: b.escrow_eligible,
   }
+}
+
+// Cheapest matching item across the results that actually has a photo —
+// the target of the 📸 "See product photo" quick button under a search.
+// Photos only; an imageless item would make the button a sorry-message.
+function cheapestSearchPhotoItem(cards: ResultCard[]): { id: string; name: string } | null {
+  let best: { id: string; name: string; price: number | null } | null = null
+  for (const c of cards) {
+    const it = c.item
+    if (!it || !it.id || !it.image_url) continue
+    if (it.price != null) {
+      if (!best || best.price == null || it.price < best.price) {
+        best = { id: it.id, name: it.name, price: it.price }
+      }
+    } else if (!best) {
+      best = { id: it.id, name: it.name, price: null }
+    }
+  }
+  return best ? { id: best.id, name: best.name } : null
+}
+
+// S20 related-word widening: what else the searcher might mean. The
+// curated Zimbabwe word families answer instantly; anything else falls
+// back to the Gemini alias sweep — raced against a 1.5s ceiling so an
+// odd term can never stall the results screen.
+async function expandRelatedTerms(term: string): Promise<string[]> {
+  const t = (term || '').trim().toLowerCase()
+  if (t.length < 3) return []
+  const curated = curatedRelatedTerms(t)
+  let terms: string[] = curated
+  if (!curated.length) {
+    const gem = await Promise.race([
+      expandSearchQuery(t),
+      new Promise<string[]>(resolve => setTimeout(() => resolve([]), 1500)),
+    ])
+    terms = (gem || []).map(s => (s || '').trim().toLowerCase()).filter(s => s && s !== t)
+  }
+  return [...new Set(terms)].filter(s => s.length >= 3).slice(0, 4)
+}
+
+/** Up to 3 businesses matching related words that are NOT already in the
+ * exact results ("electricity" exact-matches, then finds electricians/ZESA).
+ * Name/category tier only — cheap, no extra item queries. */
+async function findRelatedBusinesses(
+  scope: BotBusinessRow[],
+  term: string,
+  seen: Set<string>
+): Promise<{ cards: ResultCard[]; terms: string[] }> {
+  const terms = await expandRelatedTerms(term)
+  if (!terms.length) return { cards: [], terms: [] }
+  const approved = await getApprovedCategories()
+  const cards: ResultCard[] = []
+  const matchedTerms: string[] = []
+  for (const t of terms) {
+    const cat = matchCategoryAgainst(t, approved)
+    const hit = scope
+      .filter(b => !seen.has(b.id) && bizMatchesQuery(b, t, cat))
+      .sort((a, b) => (b.rating || 0) - (a.rating || 0))[0]
+    if (hit) {
+      seen.add(hit.id)
+      cards.push(toCard({ biz: hit, item: null }))
+      matchedTerms.push(t)
+    }
+  }
+  return { cards: cards.slice(0, 3), terms: matchedTerms }
 }
 
 // Search message rendering moved to lib/bot-templates.ts (Stage 2). The
@@ -962,8 +1036,142 @@ async function sendMainMenu(from: string) {
 
 async function startRegister(from: string, initialText: string = '') {
   const { state } = parseListingMessage(initialText, from)
-  await saveSession(from, 'list_form', { list: state } as ChatSessionData)
-  await sendFormUpdate(from, state, LIST_INTRO())
+  // Guided wizard: one question at a time, starting from the first answer
+  // still missing (a pasted paragraph can jump several steps ahead).
+  const idx = firstUnansweredWizardStep(state)
+  await saveSession(from, 'list_form', { list: state, wizard: idx } as ChatSessionData)
+  if (idx < 0) {
+    // Nothing to ask — straight to the review card.
+    await sendFormUpdate(from, state, LIST_INTRO())
+    return
+  }
+  await sendWhatsAppMessage(from, wizardIntro())
+  await sendWizardQuestion(from, state, idx)
+}
+
+// The shelved flow, while it is still fresh enough to resume.
+
+/** One question on screen: progress line + prompt + Skip/Cancel buttons. */
+async function sendWizardQuestion(
+  from: string,
+  state: ListingFormState,
+  index: number,
+  note?: string
+) {
+  const step = LIST_WIZARD_STEPS[index]
+  if (!step) return
+  let body = [wizardProgress(index), '', note ? `${note}\n` : '', step.prompt].filter(Boolean).join('\n')
+  // Add context note for area step if whole_country was selected
+  if (step.key === 'area' && state.whole_country) {
+    body += '\n\n_You selected "whole country" — this step is optional and can be skipped._'
+  }
+  const buttons: InteractiveButton[] = []
+  if (step.optional) buttons.push({ id: 'list_skip', title: '⏭ Skip' })
+  buttons.push({ id: 'list_cancel', title: '✖ Cancel' })
+  await sendInteractiveButtons(from, body, buttons)
+}
+
+/** First unanswered question AFTER the current one (skipped optionals are
+ * left behind; *back* re-opens them explicitly). -1 → review screen. */
+function nextWizardIndex(state: ListingFormState, after: number): number {
+  for (let i = after + 1; i < LIST_WIZARD_STEPS.length; i++) {
+    if (!wizardStepAnswered(state, LIST_WIZARD_STEPS[i].key)) return i
+  }
+  return -1
+}
+
+/** Persist progress and show either the next question or the review card. */
+async function wizardAdvance(
+  from: string,
+  session: ChatSession,
+  state: ListingFormState,
+  fromIndex: number
+) {
+  const idx = nextWizardIndex(state, fromIndex)
+  await saveSession(from, 'list_form', { ...session.data, list: state, wizard: idx } as ChatSessionData)
+  if (idx < 0) {
+    await sendWhatsAppImage(
+      from,
+      'https://images.unsplash.com/photo-1509440159596-0249088772ff',
+      '📦 *How to list your products & prices*\n\nOnce your business goes live, you can add products to your shop shelf anytime by sending a photo or typing:\n\n*bread $2*\n*cake $15*\n\nProducts without photos are fully accepted too!'
+    )
+    await sendFormUpdate(
+      from,
+      state,
+      "That's all the questions ✅ — check your listing above, then tap *↗ Publish* to go live."
+    )
+    return
+  }
+  await sendWizardQuestion(from, state, idx)
+}
+
+/** One answer per message: *skip* / *back* / free text. The forgiving
+ * paragraph parser still runs on every answer, so a pasted line that
+ * completes several fields simply pulls those steps along — but THIS
+ * question must be answered before the wizard moves on. */
+async function handleListWizardText(from: string, session: ChatSession, text: string) {
+  const idx = typeof session.data.wizard === 'number' ? session.data.wizard : -1
+  const step = idx >= 0 ? LIST_WIZARD_STEPS[idx] : null
+  const before = session.data.list || {}
+  if (!step) {
+    // Stale index → fall back to the review card.
+    await sendFormUpdate(from, before)
+    return
+  }
+  const lower = text.trim().toLowerCase()
+
+  if (lower === 'skip') {
+    if (!step.optional) {
+      await sendWizardQuestion(
+        from,
+        before,
+        idx,
+        `We need the ${step.label.toLowerCase()} to publish — please answer it, or reply *cancel* to stop.`
+      )
+      return
+    }
+    await wizardAdvance(from, session, before, idx)
+    return
+  }
+
+  if (lower === 'back') {
+    const prev = Math.max(0, idx - 1)
+    await saveSession(from, 'list_form', { ...session.data, wizard: prev } as ChatSessionData)
+    await sendWizardQuestion(from, before, prev, "Let's fix that answer.")
+    return
+  }
+
+  // Free text → the shared parser (fills whatever it recognises), then the
+  // wizard-specific meanings for this question win.
+  let state = parseListingMessage(text, from, before).state
+  if (step.key === 'phone') {
+    if (/^me\b/i.test(text.trim())) {
+      state = applyListingFields(state, { phone: from, phone_type: 'whatsapp' }, from)
+    } else if (/\b(call only|voice|landline)\b/i.test(text) && state.phone) {
+      state = applyListingFields(state, { phone_type: 'voice' }, from)
+    }
+  }
+  if (step.key === 'city' && /whole country/i.test(text)) {
+    state = applyListingFields(state, { whole_country: true }, from)
+  }
+
+  await saveSession(from, 'list_form', { ...session.data, list: state, wizard: idx } as ChatSessionData)
+
+  if (!wizardStepAnswered(state, step.key)) {
+    await sendWizardQuestion(
+      from,
+      state,
+      idx,
+      step.key === 'city'
+        ? "I don't know that town — try again, e.g. *Masvingo*, or reply *whole country*."
+        : step.key === 'categories'
+          ? "I don't know that category — try a common one, e.g. *Salon*, *Bakery*, *Electrician*, *Hardware*."
+          : `Hmm, I couldn't read that as ${step.label.toLowerCase()} — please try again.`
+    )
+    return
+  }
+
+  await wizardAdvance(from, { ...session, data: { ...session.data, list: state } }, state, idx)
 }
 
 // The shelved flow, while it is still fresh enough to resume.
@@ -1542,6 +1750,12 @@ async function tryPublishForm(from: string, session: ChatSession, msgId?: string
 }
 
 async function handleListFormText(from: string, session: ChatSession, text: string) {
+  // Guided wizard mode: one question at a time; anything else stays in
+  // review-mode free text (the familiar paragraph flow).
+  if (typeof session.data.wizard === 'number' && session.data.wizard >= 0) {
+    await handleListWizardText(from, session, text)
+    return
+  }
   const before = session.data.list || {}
   const beforeMissing = missingRequired(before).length
   const parsed = parseListingMessage(text, from, before)
@@ -1764,6 +1978,41 @@ async function handleBotMedia(
   }
 
   if (session?.step === 'list_form') {
+    // Mid-wizard media: voice answers the question on screen; a photo
+    // queues as the logo and the question repeats (or completes the flow
+    // when the logo step itself is on screen).
+    const wz = session.data.wizard
+    const wstep = typeof wz === 'number' && wz >= 0 ? LIST_WIZARD_STEPS[wz] : null
+    if (wstep) {
+      if (kind === 'audio') {
+        await handleListFormText(
+          from,
+          session,
+          sense.transcript || [sense.term, sense.city].filter(Boolean).join(' ')
+        )
+        return
+      }
+      if (wstep.key === 'logo' && kind === 'image') {
+        const advanced = { ...session, data: { ...session.data, wizard: -1 } }
+        await saveSession(from, 'list_form', advanced.data as ChatSessionData)
+        await handleListFormMedia(from, advanced, kind, sense, media!.buffer)
+        return
+      }
+      const logoUrl = kind === 'image' ? await uploadLogoImage(new Uint8Array(media!.buffer)) : ''
+      const state = logoUrl
+        ? { ...(session.data.list || {}), logo: logoUrl }
+        : session.data.list || {}
+      if (logoUrl) {
+        await saveSession(from, 'list_form', { ...session.data, list: state } as ChatSessionData)
+      }
+      await sendWizardQuestion(
+        from,
+        state,
+        wz!,
+        logoUrl ? "📷 Photo saved — I'll use it as your logo." : "I couldn't read that photo — no problem, let's continue."
+      )
+      return
+    }
     await handleListFormMedia(from, session, kind, sense, media!.buffer)
     return
   }
@@ -3751,6 +4000,35 @@ async function handleAction(from: string, session: ChatSession | null, action: s
   }
 
   // ── Browse items (shop shelf) ──────────────────────────────────────────
+  // S20 "Did you mean…" → fresh search for that related word in the same town.
+  const relSearch = action.match(/^relsearch_(.+)$/)
+  if (relSearch) {
+    const relTerm = decodeURIComponent(relSearch[1])
+    const relCity = session?.data.lastCity && session.data.lastCity !== 'Near you' ? session.data.lastCity : ''
+    await clearSession(from)
+    await dispatchSearch(from, [relTerm, relCity].filter(Boolean).join(' '))
+    return
+  }
+
+  // ── 📸 Single-photo + chat handoff actions ──────────────────────
+  const seePhoto = action.match(/^see_photo_(.+)$/)
+  if (seePhoto) {
+    await handleItemPhoto(from, seePhoto[1])
+    return
+  }
+  const photoPick = action.match(/^photo_pick_(.+)$/)
+  if (photoPick) {
+    await handlePhotoPick(from, photoPick[1])
+    return
+  }
+  // Chat handoff — opens the same tracked /go link the web app uses.
+  const ctaChat = action.match(/^cta_chat_(.+)$/)
+  if (ctaChat) {
+    await handleCtaChat(from, ctaChat[1])
+    return
+  }
+
+  // ── Browse items (shop shelf) ───────────────────────────────────
   const browseItems = action.match(/^browse_items_(.+)_(\d+)$/)
   if (browseItems) {
     const businessId = browseItems[1]
@@ -4013,6 +4291,12 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       }
       return
     }
+    case 'list_skip':
+      // ⏭ Skip on an optional wizard question.
+      if (session?.step === 'list_form' && typeof session.data.wizard === 'number' && session.data.wizard >= 0) {
+        await handleListWizardText(from, session, 'skip')
+      }
+      return
     case 'list_cancel':
       await clearSession(from)
       await sendWhatsAppMessage(from, 'Registration cancelled. Send *help* anytime.')
@@ -4093,7 +4377,8 @@ async function sendResultsListPage(
   termDisplay: string,
   cityLabel: string | null,
   nearby: boolean,
-  replyTo?: string
+  replyTo?: string,
+  relatedTerms?: string[]
 ) {
   if (cards.length === 0) return
   const body = nearby && cityLabel === 'Near you'
@@ -4102,6 +4387,33 @@ async function sendResultsListPage(
       ? renderNearbyListBody(termDisplay, cityLabel || 'Zimbabwe', cards.length, page)
       : renderResultsListBody(termDisplay, cityLabel, cards.length, page)
   await sendInteractiveList(from, body, resultRows(cards, page), 'Choose a business', replyTo)
+
+  // 📸 One-tap product photo: the cheapest matching item that has a photo.
+  // Only when the search actually matched products — service-only results
+  // (plumbers, builders…) get no photo button.
+  const photoItem = cheapestSearchPhotoItem(cards)
+  if (photoItem) {
+    await sendInteractiveButtons(
+      from,
+      `Want a peek at *${photoItem.name}*? I can show its photo right here — no need to open the shop.`,
+      [{ id: `see_photo_${photoItem.id}`, title: '📸 See product photo' }],
+      replyTo
+    )
+  }
+
+  // S20 "Did you mean…?": the related trades/brands already have shops in
+  // the list above (labelled by term); these buttons search the rest.
+  if (page === 0 && relatedTerms?.length) {
+    await sendInteractiveButtons(
+      from,
+      `Also showing shops related to *${termDisplay}* in the list above — or tap to search:`,
+      relatedTerms.slice(0, 3).map(t => ({
+        id: `relsearch_${encodeURIComponent(t)}`,
+        title: t.charAt(0).toUpperCase() + t.slice(1),
+      })),
+      replyTo
+    )
+  }
 }
 
 async function runSearchAndReply(
@@ -4323,17 +4635,23 @@ async function runSearchAndReply(
 
   const fromOrigin = !!p.origin
   const cards = results.map(toCard)
+  // S20: widen with related trades/brands — "electricity" also surfaces
+  // electrician/ZESA shops, labelled at the end of the list message. Runs
+  // AFTER the exact tier is computed so ranking never changes; related
+  // cards append at the end of the same numbered list (taps keep working).
+  const related = await findRelatedBusinesses(scope, term, new Set(results.map(r => r.biz.id)))
+  const allCards = [...cards, ...related.cards]
   const prev = await getSession(from)
   await saveSession(from, 'browse', {
     ...pendingFields(prev),
-    results: cards,
+    results: allCards,
     lastScreen: 'list',
     lastTerm: termDisplay,
     lastCity: fromOrigin ? 'Near you' : city,
     nearby: fromOrigin,
     page: 0,
   })
-  await sendResultsListPage(from, cards, 0, termDisplay, fromOrigin ? 'Near you' : city, fromOrigin, opts?.replyTo)
+  await sendResultsListPage(from, allCards, 0, termDisplay, fromOrigin ? 'Near you' : city, fromOrigin, opts?.replyTo, related.terms)
   // S18.5 demand radar: this search found supply (buyer stored digits-only;
   // consent is required before anything buyer-identifying moves).
   emitDemandSearch({ term: termDisplay, city: fromOrigin ? '' : city || '', resultCount: results.length, buyer: from }).catch(() => {})
@@ -4920,18 +5238,21 @@ async function sendResultDetail(
   })
   await sendWhatsAppMessage(from, msg)
 
-  // Native "Chat on WhatsApp" button (cta_url) — the card's only button.
-  // Voice-only listings have nothing to chat with, so they skip it.
+  // Native "Chat on WhatsApp" button (cta_url) — plus the 📸 single-photo
+  // pick-list so customers can see one item without the full catalog walk.
+  // Voice-only listings have nothing to chat with, so they skip chat.
   const digits = (b.phone || '').replace(/[^0-9]/g, '')
   if (digits && b.phone_type !== 'voice') {
     await sendInteractiveButtons(from, renderChatPrompt(b.name), [
       { id: `browse_items_detail_${b.id}`, title: '🧺 Browse all items' },
       { id: `cta_chat_${b.id}`, title: '💬 Chat on WhatsApp' },
+      { id: `photo_pick_${b.id}`, title: '📸 See a photo' },
     ])
   } else {
     // Fallback: just browsing if no chat
     await sendInteractiveButtons(from, 'Options', [
       { id: `browse_items_detail_${b.id}`, title: '🧺 Browse all items' },
+      { id: `photo_pick_${b.id}`, title: '📸 See a photo' },
     ])
   }
 
@@ -4976,6 +5297,97 @@ async function handleBrowseItems(
   } else {
     await sendWhatsAppMessage(from, '✔ End of catalog.')
   }
+}
+
+// ── 📸 Single-item photo views ──────────────────────────────────────────
+// One product photo without the full catalog walk. Entry points:
+//   see_photo_<itemId>  — quick button under a search's results list and
+//                         rows of the detail-card pick-list
+//   photo_pick_<bizId>  — “📸 See a photo” on the detail card: a small
+//                         pick-list that still ends with the full browse
+//   cta_chat_<bizId>    — 💬 chat handoff (also fixes the previously
+//                         unhandled chat button on the detail card)
+
+/** Send ONE item's photo card: image + name/price/shop caption + the
+ * actions under it. Imageless items get a polite text reply, never a
+ * dead end. */
+async function handleItemPhoto(from: string, itemId: string) {
+  const { data: row } = await getSupabase()
+    .from('business_items')
+    .select('id, name, price, image_url, businesses(id, name, phone, phone_type)')
+    .eq('id', itemId)
+    .maybeSingle()
+
+  if (!row) {
+    await sendWhatsAppMessage(from, 'That item is not available anymore. Send a new search anytime.')
+    return
+  }
+
+  const bizUntyped = Array.isArray(row.businesses) ? (row.businesses as unknown[])[0] : row.businesses
+  const b = bizUntyped as { id: string; name: string | null; phone: string | null; phone_type: string | null } | null
+
+  if (!row.image_url) {
+    await sendWhatsAppMessage(
+      from,
+      `Sorry, no photo has been uploaded for *${row.name}* yet${b?.name ? ` at ${b.name}` : ''}. Tap 🧺 *Browse all items* to see what else they stock.`
+    )
+    return
+  }
+
+  const digits = (b?.phone || '').replace(/[^0-9]/g, '')
+  const chatable = !!digits && b?.phone_type !== 'voice'
+  const buttons: InteractiveButton[] = [{ id: `add_to_cart_${row.id}`, title: '🧺 Add to cart' }]
+  if (chatable) buttons.push({ id: `cta_chat_${b!.id}`, title: '💬 Chat on WhatsApp' })
+
+  await sendInteractiveImageCard(
+    from,
+    `*${row.name}*${row.price != null ? `\n${monoUSD(row.price)}` : ''}\n🏪 ${b?.name || 'A shop on the directory'}`,
+    row.image_url,
+    buttons
+  )
+}
+
+/** 📸 See a photo (detail card): a small WhatsApp pick-list of the shop's
+ * items, cheapest first. Rows keep the catalog open — the final row jumps
+ * into the existing full browse flow. */
+async function handlePhotoPick(from: string, businessId: string) {
+  const { data: items } = await getSupabase()
+    .from('business_items')
+    .select('id, name, price, image_url')
+    .eq('business_id', businessId)
+    .eq('is_active', true)
+    .order('price', { ascending: true, nullsFirst: false })
+    .limit(9)
+
+  if (!items || items.length === 0) {
+    await sendWhatsAppMessage(from, 'No items are listed at this shop yet.')
+    return
+  }
+
+  const rows: InteractiveRow[] = items.map(it => ({
+    id: `see_photo_${it.id}`,
+    title: it.name,
+    description: `${it.price != null ? monoUSD(it.price).replace(/`/g, '') : 'Price not listed'}${it.image_url ? ' · 📸' : ''}`,
+  }))
+  // WhatsApp caps a list at 10 rows; the last is reserved for the full
+  // catalog so the pick-list never blocks the deeper browse.
+  rows.push({ id: `browse_items_detail_${businessId}`, title: '🧺 Browse catalog', description: 'See every item they stock' })
+  await sendInteractiveList(from, '📸 Which item would you like to see?', rows, '📸 Pick an item')
+}
+
+/** 💬 Chat on WhatsApp: the tracked /go handoff (records attribution +
+ * transcript), same link the web app opens. */
+async function handleCtaChat(from: string, businessId: string) {
+  const { data: b } = await getSupabase()
+    .from('businesses')
+    .select('id, name')
+    .eq('id', businessId)
+    .maybeSingle()
+  if (!b) {
+    await sendWhatsAppMessage(from, 'That listing is not available anymore. Type your search again.')
+    return
+  }
+  await sendCtaUrl(from, renderChatPrompt(b.name || 'this shop'), '💬 Chat on WhatsApp', chatCtaUrl(businessId, from))
 }
 
 async function handleAddToCart(from: string, session: ChatSession | null, itemId: string, msgId?: string) {
