@@ -813,19 +813,15 @@ export function FALLBACK_HELP_LINES(siteUrl: string, channelLink?: string): stri
     '',
     `🌐 ${siteUrl}`,
     '',
-    `📲 *LIVE BUYS & DEALS*`,
+    '📲 *LIVE BUYS & DEALS*',
     'Join our WhatsApp Channel for the latest offers, deals, and discoveries.',
     '',
-    'https://whatsapp.com/channel/0029Vb90F2B60eBcE52vnk1S',
+    channelLink || 'https://whatsapp.com/channel/0029Vb90F2B60eBcE52vnk1S',
     '',
     '📞 *CONTACT FOR HELP*',
     '+263773791864',
     'wadirectory@proton.me',
   ]
-
-  if (channelLink) {
-    lines.push('', '📲 *LIVE BUYS & DEALS*', 'Join our WhatsApp Channel for the latest offers, deals, and discoveries.', '', channelLink)
-  }
 
   return lines
 }
@@ -886,16 +882,12 @@ export function SUPPLIER_HELP_LINES(siteUrl: string, channelLink?: string): stri
     '📲 *LIVE BUYS & DEALS*',
     'Join our WhatsApp Channel for offers, deals, and new opportunities.',
     '',
-    'https://whatsapp.com/channel/0029Vb90F2B60eBcE52vnk1S',
+    channelLink || 'https://whatsapp.com/channel/0029Vb90F2B60eBcE52vnk1S',
     '',
     '📞 *CONTACT FOR HELP*',
     '+263773791864',
     'wadirectory@proton.me',
   ]
-
-  if (channelLink) {
-    lines.push('', '📲 *LIVE BUYS & DEALS*', 'Join our WhatsApp Channel for offers, deals, and new opportunities.', '', channelLink)
-  }
 
   return lines
 }

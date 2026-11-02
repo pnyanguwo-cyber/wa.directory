@@ -4203,7 +4203,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     case 'bid_flow': {
       const ask = session?.data.goal_ask
       if (!ask || !ask.kind) {
-        await sendWhatsAppMessage(from, await helpText())
+        await sendWhatsAppMessage(from, await helpText(from))
         return
       }
       const keptPaused: PausedDraft | null =
@@ -4354,7 +4354,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
       await sendWhatsAppMessage(from, 'Registration cancelled. Send *help* anytime.')
       return
     case 'menu_help':
-      await sendWhatsAppMessage(from, await helpText())
+      await sendWhatsAppMessage(from, await helpText(from))
       return
     case 'menu_pay':
     case 'pay':
@@ -4379,7 +4379,7 @@ async function handleAction(from: string, session: ChatSession | null, action: s
     }
     case 'cancel':
       await clearSession(from)
-      await sendWhatsAppMessage(from, await helpText())
+      await sendWhatsAppMessage(from, await helpText(from))
       return
     case 'whole_country':
       if (session?.step === 'search_loc' && session.data.pending_search_term) {
@@ -5801,7 +5801,7 @@ async function continueRegistration(from: string, session: ChatSession, text: st
 
     default:
       await clearSession(from)
-      await sendWhatsAppMessage(from, await helpText())
+      await sendWhatsAppMessage(from, await helpText(from))
   }
 }
 
@@ -6007,7 +6007,7 @@ export async function POST(request: Request) {
         if (session?.step === 'need_form') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           await handleNeedFormText(from, session, text)
@@ -6030,7 +6030,7 @@ export async function POST(request: Request) {
         if (session?.step === 'rating') {
           if (lower === 'cancel' || lower === 'help' || lower === 'back') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           await handleRatingReply(from, session, text)
@@ -6097,7 +6097,7 @@ export async function POST(request: Request) {
           // Waiting for the user's town (term already captured)
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -6136,7 +6136,7 @@ export async function POST(request: Request) {
           // Waiting for the search term (town already captured)
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -6184,7 +6184,7 @@ export async function POST(request: Request) {
           // Verify screen up: finish, fix, or speak a brand-new order line.
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           if (lower === 'back') {
@@ -6224,7 +6224,7 @@ export async function POST(request: Request) {
           // more/next pages through the stored candidates.
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           if (lower === 'back' || lower === '0') {
@@ -6271,7 +6271,7 @@ export async function POST(request: Request) {
         if (session?.step === 'reg_contact') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           const c = parseContactLine(text)
@@ -6319,7 +6319,7 @@ export async function POST(request: Request) {
         if (session?.step === 'list_form') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           if (/^(publish|submit|yes|y|go live)\b/.test(lower)) {
@@ -6334,7 +6334,7 @@ export async function POST(request: Request) {
         if (session?.step === 'item_photo') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           await handleItemSpecText(from, session, text)
@@ -6350,7 +6350,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_search') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           await handlePaySearchText(from, session, text)
@@ -6359,7 +6359,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_pick') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           const mPick = lower.match(/^([1-9])$/)
@@ -6376,7 +6376,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_plan') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           const plan = canonicalPlan(text)
@@ -6390,7 +6390,7 @@ export async function POST(request: Request) {
         if (session?.step === 'pay_ecocash') {
           if (lower === 'cancel' || lower === 'help') {
             await clearSession(from)
-            await sendWhatsAppMessage(from, await helpText())
+            await sendWhatsAppMessage(from, await helpText(from))
             continue
           }
           await handleEcoCashText(from, session, text)
@@ -6404,7 +6404,7 @@ export async function POST(request: Request) {
 
         if (session?.step && (lower === 'cancel' || lower === 'help')) {
           await clearSession(from)
-          await sendWhatsAppMessage(from, await helpText())
+          await sendWhatsAppMessage(from, await helpText(from))
           continue
         }
 
@@ -6427,7 +6427,7 @@ export async function POST(request: Request) {
         }
 
         if (lower === 'help') {
-          await sendWhatsAppMessage(from, await helpText())
+          await sendWhatsAppMessage(from, await helpText(from))
           continue
         }
 
