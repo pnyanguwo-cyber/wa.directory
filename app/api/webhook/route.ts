@@ -1111,7 +1111,7 @@ async function wizardAdvance(
     await sendWhatsAppImage(
       from,
       'https://images.unsplash.com/photo-1509440159596-0249088772ff',
-      '📦 *How to list your products & prices*\n\nOnce your business goes live, you can add products to your shop shelf anytime by sending a photo with a caption that includes the product name and price, e.g.:\n\n*bread $2*\n*cake $15*\n\nYou can also add extra details in the caption like *\"i make home deliveries and customize cakes to your liking\"*.\n\nProducts without photos are fully accepted too!'
+      '📦 *How to list your products & prices*\n\nOnce your business goes live, you can add products to your shop shelf anytime by sending a photo with a caption that includes the product name and price, e.g.:\n\n*bread $2*\n*cake $15*\n\nYou can also add extra details in the caption like *\"i make home deliveries and customize cakes to your liking\"*.\n\nProducts without photos are fully accepted too!\n\n📸 *Photo tips:* While optional, we strongly recommend uploading original photos of your actual products — this builds customer trust. Please avoid internet-sourced or AI-generated images. If we detect non-original images, they may be removed.'
     )
     await sendFormUpdate(
       from,
@@ -1925,7 +1925,7 @@ async function startShelfItem(
   await sendWhatsAppMessage(
     from,
     (imageUrl ? '📷 Photo saved. ' : '') +
-      'Reply with the product name and price to stock it on your shop shelf, e.g. *bread $2*. You can also add extra details in your message like *\"i make home deliveries and customize cakes to your liking\"*. Reply *skip* to not add it.',
+      'Reply with the product name and price to stock it on your shop shelf, e.g. *bread $2*. You can also add extra details in your message like *\"i make home deliveries and customize cakes to your liking\"*. Reply *skip* to not add it.\n\n📸 *Photo tips:* While optional, we strongly recommend uploading original photos of your actual products — this builds customer trust. Please avoid internet-sourced or AI-generated images. If we detect non-original images, they may be removed.',
     mediaMsgId
   )
 }
@@ -5628,6 +5628,8 @@ async function publishBusiness(from: string, session: ChatSession, msgId?: strin
       '',
       '📸 *After go-live:* send a product photo with a caption that includes the product name and price (e.g. *bread $2*), and you can add extra details like *\"i make home deliveries and customize cakes to your liking\"*.',
       'The bot will format it beautifully: it will quote your description, **bold the name**, and `inline-code` the price.',
+      '',
+      '📸 *Photo tips:* While optional, we strongly recommend uploading original photos of your actual products — this builds customer trust. Please avoid internet-sourced or AI-generated images. If we detect non-original images, they may be removed.',
       '',
       `✏️ Save this link to edit your listing later:`,
       `${SITE_URL}/edit?token=${token}`,
