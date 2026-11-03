@@ -1,6 +1,5 @@
 import { SITE_URL } from './site-url'
 import type { InteractiveRow } from './whatsapp'
-import type { PendingGroup } from './chat-session'
 
 // The literal phrase that ties a customer chat to our attribution message:
 // written by /go/[id] when a customer opens a business chat, and matched by

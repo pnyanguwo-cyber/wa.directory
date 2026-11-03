@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.45.0",
     "@types/leaflet": "^1.9.22",
     "@vercel/og": "^0.11.1",
+    "@wa-directory/shared": "file:../wa-directory-shared",
     "bcryptjs": "^3.0.3",
     "framer-motion": "^14.3.0",
     "leaflet": "^1.9.4",
@@ -27,7 +28,8 @@
     "react-is": "^19.2.8",
     "react-leaflet": "^4.2.1",
     "recharts": "^3.10.1",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "wa-directory-bot": "file:../wa-directory-bot"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

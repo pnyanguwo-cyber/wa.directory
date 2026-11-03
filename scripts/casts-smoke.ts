@@ -1,6 +1,6 @@
 // Regression checks for the cast command parser (pure logic only — no DB,
 // no env needed). Run: npx -y tsx scripts/casts-smoke.ts
-import { parseCastSpec, scheduledForIso, type CastSpec } from '../lib/casts'
+import { parseCastSpec, scheduledForIso, type CastSpec } from '@wa-directory/shared'
 
 let passed = 0
 let failed = 0
