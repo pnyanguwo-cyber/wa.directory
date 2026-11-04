@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const serverExternals = ['sharp', 'wa-directory-bot', '@wa-directory/shared', 'wa-directory-shared'];
+const serverExternals = ['sharp', '@wa-directory/shared', 'wa-directory-shared'];
 
 const nextConfig = {
   experimental: {
