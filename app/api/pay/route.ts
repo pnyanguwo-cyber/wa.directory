@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { searchPayBusinesses } from '@/lib/pay-lookup'
-import { createListingPayment } from '@/lib/listing-pay'
-import { paynowConfigured } from '@/lib/paynow'
+import { createListingPayment, type PaymentAdapters } from '@wa-directory/shared'
+import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
+import { logPaymentEvent } from '@/lib/payment-events'
+import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 
-// Thin wrapper over lib/pay-lookup + lib/listing-pay (shared with the
-// WhatsApp bot pay flow — see those modules for the logic).
+// Thin wrapper over lib/pay-lookup + the shared @wa-directory/shared
+// createListingPayment engine (the same engine the WhatsApp bot pay flow uses).
 
 // GET: Search for a business
 export async function GET(request: Request) {
@@ -37,14 +39,21 @@ export async function POST(request: Request) {
     // Personal contacts ride the same plan keys/durations at the half-price
     // personal rates; lives through the same listing_subscriptions engine.
     const isPersonal = kind === 'personal'
-    const result = await createListingPayment({
-      businessId: business_id,
-      payerPhone: payer_phone,
-      plan,
-      hasProAssistance: isPersonal ? false : !!hasProAssistance,
-      amountOverride: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
-      request,
-    })
+    const adapters: PaymentAdapters = {
+      initiateEcoCashPayment,
+      logPaymentEvent: (p) => logPaymentEvent({ ...p, request }),
+      sendWhatsAppMessage: (phone, text) => sendWhatsAppMessage(phone, text).catch(() => {}),
+    }
+    const result = await createListingPayment(
+      {
+        businessId: business_id,
+        payerPhone: payer_phone,
+        plan,
+        hasProAssistance: isPersonal ? false : !!hasProAssistance,
+        amountOverride: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
+      },
+      adapters
+    )
 
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status })
