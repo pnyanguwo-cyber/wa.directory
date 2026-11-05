@@ -317,17 +317,27 @@ flowchart TD
     GATE -->    CL["createListing — same engine as A2"]
     ONE --> GUARDS["cap: 3 active personal / payer<br/>block if number already a business"]
     GUARDS --> CL
-    CL --> PAY["createListingPayment → EcoCash prompt (B4)"]
+    CL --> ASK["always asked: 'Which EcoCash number should get<br/>the PIN prompt?' — or reply *me* (this chat's number)]
+    ASK --> PAY["createListingPayment → EcoCash prompt (B4)"]
 ```
 
 ### B4. Pay from chat (`$ Pay (EcoCash)`)
 
 ```
 menu_pay → searchPayBusinesses (find the listing by name/username)
+        → pick plan (1m / 6m / 12m buttons)
+        → askEcoCashNumber — the bot ALWAYS asks which number pays:
+            "Which EcoCash number should get the PIN prompt?
+             e.g. 0771 234 567 — or reply *me* (this chat's number)"
+            (personal contacts bill PERSONAL_PLAN_CONFIG rates via pay_amount)
+        → handleEcoCashText validates 071…/077…/078…, normalizes 263→0
         → createListingPayment (identical engine to A3)
-        → Paynow push to the payer's phone → /api/paynow/result auto-activates
-        → admin gets a WhatsApp alert either way
-        → user gets "enter your PIN → live automatically" (or manual-confirm wording)
+        → Paynow EcoCash push to the payer's phone (method pinned to 'ecocash')
+        → /api/paynow/result auto-activates — no admin step
+        → payer + owner both get "🎉 Payment received — you are live!"
+        → admin receives only an "AUTOMATIC PAYMENT IN PROGRESS" alert
+        → *me* reply bills the chat's own number; non-Econet numbers
+          are rejected by the engine with a clear error message
 ```
 
 ### B5. Orders — "🧺 Order items" (chat → shop shelf → suppliers)
