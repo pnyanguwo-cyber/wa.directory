@@ -577,7 +577,7 @@ export function renderFirstWelcome(channelLink: string): string {
     '',
     '*Terms and Conditions*',
     'By searching on WA Directory, you agree to our Terms and Conditions. Please read them here:',
-    '🌐 https://wadirectory.vercel.app',
+    `🌐 ${SITE_URL}`,
     '',
     '*Let\'s find what you need!*',
   ]
