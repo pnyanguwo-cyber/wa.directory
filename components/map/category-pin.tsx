@@ -11,7 +11,7 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type maplibregl from 'maplibre-gl'
-import { doodleFor, LUCIDE_DOODLES } from '@/lib/category-style'
+import { doodleFor, LUCIDE_DOODLES, CATEGORY_ACCENTS } from '@/lib/category-style'
 import type { LucideProps } from 'lucide-react'
 
 // ---- pin geometry (logical px; rendered @2x) -------------------------------
@@ -89,7 +89,7 @@ function pathRoundedRect(
 
 async function renderPin(
   icon: ComponentType<LucideProps>,
-  glyphColor: string,
+  categoryName: string,
   selected: boolean
 ): Promise<ImageData> {
   const canvas = document.createElement('canvas')
@@ -98,6 +98,9 @@ async function renderPin(
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('no canvas 2d context')
   ctx.scale(2, 2)
+
+  // Use category accent color for default state, green for selected
+  const accentColor = CATEGORY_ACCENTS[categoryName] || CATEGORY_ACCENTS.Other
 
   // Soft drop shadow baked under the pin (consistent for every marker).
   ctx.save()
@@ -109,8 +112,9 @@ async function renderPin(
     fill.addColorStop(0, SEL_TOP)
     fill.addColorStop(1, SEL_BOTTOM)
   } else {
-    fill.addColorStop(0, '#FFFFFF')
-    fill.addColorStop(1, '#FDFEFE')
+    // Use category accent color with slight gradient for depth
+    fill.addColorStop(0, accentColor)
+    fill.addColorStop(1, shadeColor(accentColor, -15)) // slightly darker bottom
   }
 
   // Tail first, body over it - one fused shadow pass.
@@ -128,7 +132,7 @@ async function renderPin(
   // Crisp border pass (no shadow).
   ctx.lineWidth = selected ? 2 : 1.5
   ctx.lineJoin = 'round'
-  ctx.strokeStyle = selected ? BORDER_SEL : BORDER
+  ctx.strokeStyle = selected ? BORDER_SEL : hexToRgba(accentColor, 0.9)
   pathRoundedRect(ctx, PIN_BODY.x, PIN_BODY.y, PIN_BODY.w, PIN_BODY.h, PIN_BODY.r)
   ctx.stroke()
   ctx.beginPath()
@@ -138,12 +142,32 @@ async function renderPin(
   ctx.stroke()
 
   // Category glyph (rasterized Lucide icon), centered in the body.
+  // White glyph on colored background, white on green when selected
+  const glyphColor = '#FFFFFF'
   const glyph = await loadImage(iconToSvg(icon, glyphColor))
   const gx = (PIN_W - GLYPH_BOX) / 2
   const gy = PIN_BODY.y + (PIN_BODY.h - GLYPH_BOX) / 2 - 0.5
   ctx.drawImage(glyph, gx, gy, GLYPH_BOX, GLYPH_BOX)
 
   return ctx.getImageData(0, 0, canvas.width, canvas.height)
+}
+
+// Helper: shade a hex color by percentage (positive = lighter, negative = darker)
+function shadeColor(hex: string, percent: number): string {
+  const num = parseInt(hex.replace('#', ''), 16)
+  const r = Math.min(255, Math.max(0, (num >> 16) + Math.round(255 * percent / 100)))
+  const g = Math.min(255, Math.max(0, ((num >> 8) & 0xFF) + Math.round(255 * percent / 100)))
+  const b = Math.min(255, Math.max(0, (num & 0xFF) + Math.round(255 * percent / 100)))
+  return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`
+}
+
+// Helper: convert hex to rgba string
+function hexToRgba(hex: string, alpha: number): string {
+  const num = parseInt(hex.replace('#', ''), 16)
+  const r = num >> 16
+  const g = (num >> 8) & 0xFF
+  const b = num & 0xFF
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
 const IMG_OPTIONS = { pixelRatio: 2 } as const
@@ -200,11 +224,11 @@ async function renderFeaturedBadge(): Promise<ImageData> {
 // session; re-registration on style swaps only replays map.addImage.
 const RASTER_CACHE = new Map<string, ImageData>()
 
-function cachedPin(icon: ComponentType<LucideProps>, key: string, selected: boolean): Promise<ImageData> {
+function cachedPin(icon: ComponentType<LucideProps>, categoryName: string, key: string, selected: boolean): Promise<ImageData> {
   const cacheKey = `${key}|${selected ? 'selected' : 'default'}`
   const hit = RASTER_CACHE.get(cacheKey)
   if (hit) return Promise.resolve(hit)
-  return renderPin(icon, selected ? '#FFFFFF' : GLYPH_COLOR, selected).then((data) => {
+  return renderPin(icon, categoryName, selected).then((data) => {
     RASTER_CACHE.set(cacheKey, data)
     return data
   })
@@ -228,7 +252,7 @@ export async function registerPinImages(
       const name = pinImageName(key, state)
       if (map.hasImage(name)) continue
       jobs.push(
-        cachedPin(iconForCategory([canonical]), key, state === 'selected')
+        cachedPin(iconForCategory([canonical]), canonical, key, state === 'selected')
           .then((data) => map.addImage(name, data, IMG_OPTIONS))
           .catch(() => {})
       )

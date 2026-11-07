@@ -7,12 +7,13 @@ import { CATEGORY_IMAGES } from '@/data/category-images'
 import BusinessCard from '@/components/business-card'
 import YellowCompactCard from '@/components/yellow-compact-card'
 import type { Business } from '@/types'
-import { doodleFor, LUCIDE_DOODLES } from '@/lib/category-style'
+import { doodleFor, LUCIDE_DOODLES, CATEGORY_ACCENTS } from '@/lib/category-style'
 
 interface YellowPagesCategory {
   name: string
   description: string
   query: string
+  color: string
 }
 
 const YP_CATEGORIES: YellowPagesCategory[] = [
@@ -20,11 +21,13 @@ const YP_CATEGORIES: YellowPagesCategory[] = [
     name: 'Emergency Services',
     description: 'Police, fire brigade, ambulance, emergency response and hotlines',
     query: 'emergency',
+    color: CATEGORY_ACCENTS['Emergency Services'],
   },
   {
     name: 'Government Services',
     description: 'Councils, municipalities, registrar, passport office, ZIMRA and public offices',
     query: 'government',
+    color: CATEGORY_ACCENTS['Government Services'],
   },
 ]
 
@@ -56,6 +59,9 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
           const doodle = doodleFor([cat.name])
           const Icon = doodle?.icon || LUCIDE_DOODLES.Other
           const isActive = selected === cat.name
+          const color = cat.color
+          const colorLight = `${color}15` // 8% opacity for light bg
+          const colorHover = `${color}25` // 15% opacity for hover
 
           return (
             <button
@@ -63,8 +69,8 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
               onClick={() => setSelected(isActive ? null : cat.name)}
               className={`card relative overflow-hidden p-5 sm:p-6 rounded-2xl border text-left transition-all duration-200 group ${
                 isActive
-                  ? 'border-amber-400 shadow-card-hover ring-2 ring-amber-200'
-                  : 'border-gray-200/70 hover:border-amber-300 hover:-translate-y-1 hover:shadow-card-hover'
+                  ? `border-[${color}] shadow-card-hover ring-2 ring-[${color}40]`
+                  : 'border-gray-200/70 hover:border-[${color}80] hover:-translate-y-1 hover:shadow-card-hover'
               }`}
             >
               {coverImage && (
@@ -81,19 +87,19 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
               <div className="relative z-10">
                 <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center mb-3 sm:mb-4 ${
                   isActive
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-amber-50 text-amber-600 group-hover:bg-amber-100'
+                    ? `bg-[${color}] text-white`
+                    : `bg-[${colorLight}] text-[${color}] group-hover:bg-[${colorHover}]`
                 } transition-colors`}>
                   <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-                <h3 className="font-bold text-text-primary text-base sm:text-lg group-hover:text-amber-700 transition-colors">
+                <h3 className="font-bold text-text-primary text-base sm:text-lg group-hover:text-[${color}] transition-colors">
                   {cat.name}
                 </h3>
                 <p className="text-text-secondary text-xs sm:text-sm mt-1 leading-relaxed">
                   {cat.description}
                 </p>
               </div>
-              <div className="relative z-10 mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-amber-700">
+              <div className="relative z-10 mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs font-semibold text-[${color}]">
                 <span>{count} listing{count !== 1 ? 's' : ''}</span>
                 <span className={`transition-transform ${isActive ? 'rotate-90' : 'group-hover:translate-x-1'}`}>
                   &rarr;
@@ -110,7 +116,8 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSelected(null)}
-              className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+              className={`flex items-center gap-1.5 text-xs sm:text-sm font-semibold hover:text-[${selectedCat.color}] transition-colors`}
+              style={{ color: selectedCat.color }}
             >
               <ArrowLeft className="w-4 h-4" />
               All Categories
@@ -123,7 +130,7 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
             return (
               <div>
                 <h2 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
-                  <HeaderIcon className="w-6 h-6 text-amber-600" />
+                  <HeaderIcon style={{ color: selectedCat.color }} className="w-6 h-6" />
                   {selectedCat.name}
                 </h2>
                 <p className="text-text-secondary text-xs sm:text-sm mt-1">
