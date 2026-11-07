@@ -7,10 +7,13 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
 }
 
+const DISMISSED_KEY = 'pwa-install-dismissed'
+
 export default function InstallPWA() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
   const [showIOS, setShowIOS] = useState(false)
   const [installed, setInstalled] = useState(false)
+  const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -18,6 +21,15 @@ export default function InstallPWA() {
     if (window.matchMedia('(display-mode: standalone)').matches || (window.navigator as unknown as { standalone?: boolean }).standalone) {
       setInstalled(true)
       return
+    }
+
+    try {
+      if (localStorage.getItem(DISMISSED_KEY) === '1') {
+        setDismissed(true)
+        return
+      }
+    } catch {
+      // localStorage unavailable (private mode) — just show the pill
     }
 
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
@@ -29,6 +41,7 @@ export default function InstallPWA() {
     }
     function onInstalled() {
       setInstalled(true)
+      setDismissed(true)
       setDeferred(null)
     }
 
@@ -45,10 +58,21 @@ export default function InstallPWA() {
     await deferred.prompt()
     const { outcome } = await deferred.userChoice
     if (outcome === 'accepted') setInstalled(true)
+    if (outcome === 'dismissed') dismiss()
     setDeferred(null)
   }
 
-  if (installed || (!deferred && !showIOS)) return null
+  function dismiss() {
+    try {
+      localStorage.setItem(DISMISSED_KEY, '1')
+    } catch {
+      // ignore persistence failures
+    }
+    setDismissed(true)
+    setShowIOS(false)
+  }
+
+  if (installed || dismissed || (!deferred && !showIOS)) return null
 
   return (
     <div className="fixed bottom-5 left-4 z-50 animate-slide-up">
@@ -64,7 +88,7 @@ export default function InstallPWA() {
         </button>
       ) : (
         <button
-          onClick={() => setShowIOS(false)}
+          onClick={dismiss}
           className="flex items-center gap-1.5 bg-black/50 backdrop-blur-md text-white rounded-full pl-2.5 pr-3.5 py-1.5 shadow-lg active:scale-95 transition-all"
         >
           <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

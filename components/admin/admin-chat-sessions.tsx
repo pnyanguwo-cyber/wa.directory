@@ -11,12 +11,18 @@ interface SessionRow {
   updated_at: string
 }
 
+interface HeldInfo {
+  at?: string
+  notified?: boolean
+}
+
 export default function AdminChatSessions() {
   const router = useRouter()
   const [rows, setRows] = useState<SessionRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   useEffect(() => {
     load()
@@ -40,6 +46,23 @@ export default function AdminChatSessions() {
     })
     setDeleting(null)
     if (ok) setRows(prev => prev.filter(r => r.phone !== phone))
+  }
+
+  async function toggleHold(s: SessionRow) {
+    const isHeld = !!(s.data?.held)
+    setActionBusy(s.phone)
+    const { ok, data } = await adminFetch('/api/admin/chat-sessions', {
+      method: 'PATCH',
+      body: JSON.stringify({ phone: s.phone, action: isHeld ? 'release' : 'hold' }),
+    })
+    setActionBusy(null)
+    if (ok && data?.session) {
+      setRows(prev =>
+        prev.map(r =>
+          r.phone === s.phone ? { ...r, step: data.session.step, data: data.session.data } : r
+        )
+      )
+    }
   }
 
   function searchNow(e: React.FormEvent) {
@@ -82,34 +105,55 @@ export default function AdminChatSessions() {
         </div>
       ) : (
         <div className="space-y-2.5">
-          {rows.map(s => (
-            <div key={s.phone} className="neo-card p-4 flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0">
-                <span className="text-sm font-bold text-whatsapp-800">+{s.phone.slice(-4)}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-text-primary text-sm">+{s.phone}</h3>
-                  <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-blue-100 text-blue-800">
-                    step: {s.step || 'search'}
-                  </span>
+          {rows.map(s => {
+            const isHeld = !!(s.data?.held as HeldInfo | undefined)
+            const fields = Object.entries(s.data || {}).filter(([k]) => k !== 'held')
+            return (
+              <div key={s.phone} className="neo-card p-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-whatsapp-100 to-whatsapp-200 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-bold text-whatsapp-800">+{s.phone.slice(-4)}</span>
                 </div>
-                <p className="text-xs text-text-secondary mt-1 truncate">
-                  {s.data && Object.keys(s.data).length > 0
-                    ? Object.entries(s.data).map(([k, v]) => `${k}: ${v}`).join(' · ')
-                    : 'No form data yet'}
-                </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">Last activity: {new Date(s.updated_at).toLocaleString()}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-text-primary text-sm">+{s.phone}</h3>
+                    {isHeld ? (
+                      <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-amber-100 text-amber-800">
+                        🤝 held
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-blue-100 text-blue-800">
+                        step: {s.step || 'search'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-text-secondary mt-1 truncate">
+                    {fields.length > 0
+                      ? fields.map(([k, v]) => `${k}: ${v}`).join(' · ')
+                      : 'No form data yet'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Last activity: {new Date(s.updated_at).toLocaleString()}</p>
+                </div>
+                <button
+                  onClick={() => toggleHold(s)}
+                  disabled={actionBusy === s.phone}
+                  className={
+                    isHeld
+                      ? 'h-8 px-3 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all disabled:opacity-50 shrink-0'
+                      : 'h-8 px-3 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all disabled:opacity-50 shrink-0'
+                  }
+                >
+                  {actionBusy === s.phone ? '...' : isHeld ? 'Release' : 'Hold'}
+                </button>
+                <button
+                  onClick={() => removeSession(s.phone)}
+                  disabled={deleting === s.phone}
+                  className="h-8 px-3 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all disabled:opacity-50 shrink-0"
+                >
+                  {deleting === s.phone ? '...' : 'Clear'}
+                </button>
               </div>
-              <button
-                onClick={() => removeSession(s.phone)}
-                disabled={deleting === s.phone}
-                className="h-8 px-3 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all disabled:opacity-50 shrink-0"
-              >
-                {deleting === s.phone ? '...' : 'Clear'}
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

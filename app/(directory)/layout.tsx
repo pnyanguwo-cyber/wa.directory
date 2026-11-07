@@ -8,7 +8,6 @@ import BannerStrip from '@/components/banner-strip'
 const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
 const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
 const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
-const MobileFloatingActions = dynamic(() => import('@/components/mobile-floating-actions'), { ssr: false })
 
 export default function DirectoryLayout({ children }: { children: ReactNode }) {
   return (
@@ -18,7 +17,6 @@ export default function DirectoryLayout({ children }: { children: ReactNode }) {
         <BannerStrip />
         <PWARegistration />
         <InstallPWA />
-      <MobileFloatingActions />
       {/* Global Floor / Background Wallpaper */}
         <div
           aria-hidden="true"

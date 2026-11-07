@@ -46,6 +46,11 @@ export default function PayPage() {
   // True once the webhook (or a simulation) has activated the listing — the
   // poll below flips this without any reload or admin step.
   const [paidLive, setPaidLive] = useState(false)
+  // Last failure reason reported by the poll below ('' while still waiting).
+  const [failMessage, setFailMessage] = useState('')
+  // Set ~5 minutes into waiting with no answer — polling keeps going but the
+  // "what happens next" list shows a 'payments can take a while' hint.
+  const [slowConfirm, setSlowConfirm] = useState(false)
   // Whether Paynow is configured server-side (auto EcoCash possible).
   const [paymentsConfigured, setPaymentsConfigured] = useState(true)
   // Match-type filter for the "select business" step.
@@ -98,33 +103,62 @@ export default function PayPage() {
     }
   }, [])
 
-  // Done step + auto payment: poll until the webhook activates the listing.
+  // Done step + auto payment: watch /api/pay/status until the webhook
+  // activates the listing — and surface a clear message if the payment
+  // definitively failed (cancelled / rejected / expired), read from the
+  // subscription's lastEvent pre-set by the webhook.
   useEffect(() => {
-    if (step !== 'done' || paidLive || !autoEcoCash || !selected) return
+    if (step !== 'done' || paidLive || !autoEcoCash || !selected || failMessage) return
+    const bizId = selected.business_id
+    const startedAt = Date.now()
     let cancelled = false
     let ticks = 0
-    const interval = setInterval(async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    // Fast 4s checks for the first 5 minutes (75 ticks), then slow checks
+    // every 15s so the page still flips live if the payment lands late.
+    async function poll() {
       ticks += 1
-      if (ticks > 75) {
-        clearInterval(interval)
-        return
-      }
       try {
-        const res = await fetch(`/api/pay/status?business_id=${encodeURIComponent(selected.business_id)}`, { cache: 'no-store' })
+        const res = await fetch(`/api/pay/status?business_id=${encodeURIComponent(bizId)}&fresh=${Date.now()}`, { cache: 'no-store' })
         const data = await res.json()
-        if (res.ok && data.active && !cancelled) {
-          clearInterval(interval)
+        if (cancelled) return
+        if (res.ok && data.active) {
           setPaidLive(true)
+          setFailMessage('')
+          return
         }
+        if (res.ok && data.lastEvent) {
+          const ev = data.lastEvent
+          // Only trust events recorded during THIS attempt — the 5s grace
+          // absorbs clock skew between the webhook and this page.
+          const fresh = new Date(ev.created_at).getTime() >= startedAt - 5000
+          if (fresh) {
+            let reason = ''
+            if (ev.event_type === 'activation_failed') {
+              reason = 'Payment received, but activating the listing hit a technical error. Our team has been notified and will make it live manually — or contact us.'
+            } else if (ev.event_type === 'payment_result' && ev.outcome === 'rejected') {
+              const rawStatus = (ev.detail && ev.detail.paynowStatus) || ''
+              const status = typeof rawStatus === 'string' ? rawStatus.toLowerCase() : ''
+              if (status === 'cancelled') reason = 'The EcoCash payment was cancelled before it completed.'
+              else if (status === 'failed') reason = 'The EcoCash payment failed — the PIN may not have been entered in time.'
+              else if (status === 'disputed') reason = "The EcoCash payment is under dispute and can't be confirmed automatically."
+              else reason = 'The EcoCash payment expired before it was completed.'
+            }
+            if (reason) setFailMessage(reason)
+          }
+        }
+        if (ticks === 75) setSlowConfirm(true)
       } catch {
         // transient network error: keep polling
       }
-    }, 4000)
+      if (!cancelled) timer = setTimeout(poll, ticks < 76 ? 4000 : 15000)
+    }
+    timer = setTimeout(poll, 4000)
     return () => {
       cancelled = true
-      clearInterval(interval)
+      if (timer) clearTimeout(timer)
     }
-  }, [step, paidLive, autoEcoCash, selected])
+  }, [step, paidLive, autoEcoCash, selected, failMessage])
 
   // Bring the active step's card into view when moving between steps
   useEffect(() => {
@@ -187,6 +221,8 @@ export default function PayPage() {
       }
       setAutoEcoCash(!!data.auto_ecocash)
       setPaidLive(false)
+      setFailMessage('')
+      setSlowConfirm(false)
       setStep('done')
     } catch {
       setError('Could not submit payment request. Please try again.')
@@ -780,8 +816,28 @@ export default function PayPage() {
                 </p>
               )}
 
+              {/* Definite failure — reported by the webhook terminal result */}
+              {!paidLive && failMessage && (
+                <div className="rounded-2xl border border-red-200/80 bg-red-50/70 p-5 mb-6 text-center"
+                  style={{ boxShadow: '0 2px 8px -2px rgba(217,45,32,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
+                  <p className="text-xs font-bold uppercase tracking-wider text-red-700 mb-2">Payment didn&apos;t go through</p>
+                  <p className="text-xs text-red-900 mb-4 leading-relaxed">{failMessage}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFailMessage('')
+                      setSlowConfirm(false)
+                      setStep('pay')
+                    }}
+                    className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-5 py-2.5 rounded-full text-xs font-semibold text-red-800 bg-red-50 border border-red-200 hover:bg-red-100 transition-all disabled:opacity-60"
+                  >
+                    Try payment again
+                  </button>
+                </div>
+              )}
+
               {/* What happens next — only while waiting for the payment */}
-              {!paidLive && (
+              {!paidLive && !failMessage && (
                 <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 p-5 mb-6 text-left"
                   style={{ boxShadow: '0 2px 8px -2px rgba(217,119,6,0.10), inset 0 1px 0 rgba(255,255,255,0.5)' }}>
                   <p className="text-xs font-bold uppercase tracking-wider text-amber-700 mb-2">What happens next</p>
@@ -789,6 +845,9 @@ export default function PayPage() {
                     <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">1.</span> {autoEcoCash ? 'Enter your EcoCash PIN on the prompt' : 'Pay via EcoCash from +253… your number'}</li>
                     <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">2.</span> Your {isPersonal ? 'personal contact' : 'listing'} goes live for {planConfig[plan].label.toLowerCase()}{autoEcoCash ? ' automatically — this page will update itself' : ' once admin confirms'}</li>
                     <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">3.</span> You&apos;ll receive a WhatsApp confirmation</li>
+                    {slowConfirm && (
+                      <li className="flex gap-2"><span className="font-bold text-amber-600 shrink-0">!</span> Still no confirmation after 5 minutes — payment can take up to 15 minutes to reflect</li>
+                    )}
                   </ol>
                 </div>
               )}

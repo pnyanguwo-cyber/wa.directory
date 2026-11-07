@@ -5,6 +5,10 @@ import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/
 import { activateListingSubscription } from '@/lib/listing-activation'
 import { logPaymentEvent } from '@/lib/payment-events'
 
+// Paynow terminal results we treat as a definite "no". Anything else (Sent,
+// waiting, etc.) is just "not paid yet" and keeps clients polling.
+const TERMINAL_PAYNOW_STATUSES = new Set<string>(['cancelled', 'failed', 'disputed', 'expired'])
+
 // Paynow server-to-server result update (configured as the integration's
 // "result url"). Paynow POSTs an application/x-www-form-urlencoded body here
 // whenever a transaction's status changes, e.g.:
@@ -66,7 +70,23 @@ export async function POST(request: Request) {
 
     const poll = await pollTransactionStatus(pollUrl)
     if (!poll.ok) return NextResponse.json({ error: 'Status check failed' }, { status: 503 })
-    if (!poll.paid) return NextResponse.json({ ok: true, paynow_status: poll.status })
+    if (!poll.paid) {
+      // Definitive rejections (Cancelled / Failed / Disputed / Expired) are
+      // logged as terminal so clients polling /api/pay/status can stop
+      // waiting and show a failure message with a retry option. Non-terminal
+      // Paynow states (Sent, waiting, etc.) stay silent — they're just
+      // "not paid yet".
+      if (poll.status && TERMINAL_PAYNOW_STATUSES.has(poll.status.toLowerCase())) {
+        await logPaymentEvent({
+          eventType: 'payment_result',
+          outcome: 'rejected',
+          businessId: sub.business_id,
+          detail: { via: 'webhook', kind: 'listing', paynowStatus: poll.status, reference },
+          request,
+        })
+      }
+      return NextResponse.json({ ok: true, paynow_status: poll.status })
+    }
 
     await logPaymentEvent({
       eventType: 'payment_confirmed',
@@ -140,6 +160,18 @@ export async function POST(request: Request) {
 
   if (!poll.paid) {
     // Sent / Cancelled / Failed / Disputed etc. — acknowledge, don't activate.
+    // Terminal rejections get logged so clients polling /api/pay/status can
+    // stop waiting and surface a "try again" message to the payer.
+    if (poll.status && TERMINAL_PAYNOW_STATUSES.has(poll.status.toLowerCase())) {
+      await logPaymentEvent({
+        eventType: 'payment_result',
+        outcome: 'rejected',
+        businessId: bid.business_id,
+        bidId,
+        detail: { via: 'webhook', kind: 'bid', paynowStatus: poll.status, reference },
+        request,
+      })
+    }
     return NextResponse.json({ ok: true, paynow_status: poll.status })
   }
 
