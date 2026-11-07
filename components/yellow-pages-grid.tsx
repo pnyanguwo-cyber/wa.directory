@@ -2,15 +2,15 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
-import { Siren, Landmark, ArrowLeft, MapPin, type LucideProps } from 'lucide-react'
+import { ArrowLeft, MapPin, type LucideProps } from 'lucide-react'
 import { CATEGORY_IMAGES } from '@/data/category-images'
 import BusinessCard from '@/components/business-card'
 import YellowCompactCard from '@/components/yellow-compact-card'
 import type { Business } from '@/types'
+import { doodleFor, LUCIDE_DOODLES } from '@/lib/category-style'
 
 interface YellowPagesCategory {
   name: string
-  icon: React.ComponentType<LucideProps>
   description: string
   query: string
 }
@@ -18,13 +18,11 @@ interface YellowPagesCategory {
 const YP_CATEGORIES: YellowPagesCategory[] = [
   {
     name: 'Emergency Services',
-    icon: Siren,
     description: 'Police, fire brigade, ambulance, emergency response and hotlines',
     query: 'emergency',
   },
   {
     name: 'Government Services',
-    icon: Landmark,
     description: 'Councils, municipalities, registrar, passport office, ZIMRA and public offices',
     query: 'government',
   },
@@ -55,7 +53,8 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
         {YP_CATEGORIES.map(cat => {
           const count = businesses.filter(b => (b.category || []).includes(cat.name)).length
           const coverImage = CATEGORY_IMAGES[cat.name]
-          const Icon = cat.icon
+          const doodle = doodleFor([cat.name])
+          const Icon = doodle?.icon || LUCIDE_DOODLES.Other
           const isActive = selected === cat.name
 
           return (
@@ -118,15 +117,21 @@ export default function YellowPagesGrid({ businesses }: { businesses: Business[]
             </button>
           </div>
 
-          <div>
-            <h2 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
-              <selectedCat.icon className="w-6 h-6 text-amber-600" />
-              {selectedCat.name}
-            </h2>
-            <p className="text-text-secondary text-xs sm:text-sm mt-1">
-              {filtered.length} listing{filtered.length !== 1 ? 's' : ''} across {cities.length} location{cities.length !== 1 ? 's' : ''}
-            </p>
-          </div>
+          {(() => {
+            const doodle = doodleFor([selectedCat.name])
+            const HeaderIcon = doodle?.icon || LUCIDE_DOODLES.Other
+            return (
+              <div>
+                <h2 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight flex items-center gap-2">
+                  <HeaderIcon className="w-6 h-6 text-amber-600" />
+                  {selectedCat.name}
+                </h2>
+                <p className="text-text-secondary text-xs sm:text-sm mt-1">
+                  {filtered.length} listing{filtered.length !== 1 ? 's' : ''} across {cities.length} location{cities.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )
+          })()}
 
           {filtered.length === 0 ? (
             <div className="neo-card p-8 text-center">
