@@ -9,7 +9,8 @@
     "lint": "next lint",
     "migrate": "node scripts/migrate.mjs",
     "backfill-usernames": "node scripts/backfill-usernames.mjs",
-    "backfill-coords": "node scripts/backfill-coords.mjs"
+    "backfill-coords": "node scripts/backfill-coords.mjs",
+    "backfill-embeddings": "node scripts/backfill-embeddings.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

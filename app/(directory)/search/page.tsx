@@ -8,6 +8,9 @@ import ItemCard from '@/components/item-card'
 import ImpressionPing from '@/components/impression-ping'
 import FilterBar from '@/components/filter-bar'
 import SkeletonCard from '@/components/skeleton-card'
+import DiscoveryModeSwitch from '@/components/discovery-mode-switch'
+import ProductResults from '@/components/product-results'
+import ProductSearchByImage from '@/components/product-search-by-image'
 import { matchCategory } from '@/data/categories'
 import { expandSearchQuery } from '@/lib/gemini'
 import { orderSearchResults } from '@/lib/ranking'
@@ -176,7 +179,16 @@ const MATCH_TYPES = ['all', 'name', 'description', 'category', 'related'] as con
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string; verified?: string; sort?: string; match?: string }
+  searchParams: {
+    q?: string
+    verified?: string
+    sort?: string
+    match?: string
+    mode?: string
+    category?: string
+    availability?: string
+    page?: string
+  }
 }) {
   const q = searchParams.q || ''
   const verified = searchParams.verified === 'true'
@@ -185,8 +197,34 @@ export default async function SearchPage({
     ? (searchParams.match as string)
     : 'all'
 
+  // One shell, two modes. `services` is the default so old links and shared
+  // URLs keep resolving to the directory they were built for.
+  const mode = searchParams.mode === 'products' ? 'products' : 'services'
+  const page = Math.max(Number.parseInt(searchParams.page || '1', 10) || 1, 1)
+  const category = searchParams.category || ''
+  const availability = searchParams.availability || ''
+
+  const modeHref = (next: 'products' | 'services') => {
+    const params = new URLSearchParams()
+    if (next === 'products') params.set('mode', 'products')
+    if (q) params.set('q', q)
+    if (next === 'products' && category) params.set('category', category)
+    if (next === 'products' && availability) params.set('availability', availability)
+    if (next === 'services' && verified) params.set('verified', 'true')
+    if (next === 'services' && sort !== 'rating') params.set('sort', sort)
+    const query = params.toString()
+    return query ? `/search?${query}` : '/search'
+  }
+
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className={`${mode === 'products' ? 'max-w-5xl' : 'max-w-4xl'} mx-auto px-4 py-8`}>
+      <div className="flex justify-center mb-4">
+        <DiscoveryModeSwitch
+          mode={mode}
+          productsHref={modeHref('products')}
+          servicesHref={modeHref('services')}
+        />
+      </div>
       <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl rounded-3xl border border-white/70 shadow-soft-lift p-6 sm:p-8">
         <Link
           href="/"
@@ -197,9 +235,18 @@ export default async function SearchPage({
           </svg>
           Back to Home
         </Link>
-        <Suspense fallback={<SearchSkeleton />}>
-          <SearchResults q={q} verified={verified} sort={sort} match={match} />
-        </Suspense>
+        {mode === 'products' ? (
+          <div className="space-y-5">
+            <ProductSearchByImage />
+            <Suspense fallback={<SearchSkeleton />}>
+              <ProductResults q={q} category={category} availability={availability} page={page} />
+            </Suspense>
+          </div>
+        ) : (
+          <Suspense fallback={<SearchSkeleton />}>
+            <SearchResults q={q} verified={verified} sort={sort} match={match} />
+          </Suspense>
+        )}
       </div>
     </div>
   )

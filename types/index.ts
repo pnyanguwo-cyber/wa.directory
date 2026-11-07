@@ -77,6 +77,10 @@ export interface Business {
   // Avg luminance of site_content.gallery[0] (hero cover source). NULL =
   // unknown → default hero wash tiers.
   site_cover_luminance?: number | null
+  // Products mode on /map carries the seller's matching products so the
+  // marker preview can show them without a second round trip.
+  products?: BusinessItem[]
+  productCount?: number
 }
 
 // FAQ / hours / gallery blocks owned via the portal Site editor.
@@ -117,6 +121,22 @@ export interface BusinessItem {
   created_at: string
   updated_at: string
   business?: { name: string; slug: string; city?: string } | null
+  // Product-mode fields (migration 033). Optional so the existing readers
+  // (profile page, auto-site, bot browse) keep compiling untouched.
+  description?: string
+  category?: string
+  subcategory?: string
+  brand?: string
+  item_condition?: string
+  currency_code?: string
+  price_type?: 'fixed' | 'on_request'
+  availability_status?: 'in_stock' | 'available_on_order' | 'out_of_stock' | 'availability_unknown'
+  stock_quantity?: number | null
+  status?: 'draft' | 'active' | 'inactive' | 'archived'
+  ai_generated?: boolean
+  published_at?: string | null
+  // Seller joined from `businesses` in product discovery queries.
+  businesses?: Business | null
 }
 
 export interface Organization {

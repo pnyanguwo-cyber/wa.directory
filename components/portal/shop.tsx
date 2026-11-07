@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { Loader2, Sparkles } from 'lucide-react'
+import { categories } from '@/data/categories'
 
 interface ShopItem {
   id: string
@@ -14,6 +16,29 @@ interface ShopItem {
   is_active: boolean
   created_at: string
   updated_at: string
+  description?: string
+  category?: string
+  brand?: string
+  item_condition?: string
+  currency_code?: string
+  price_type?: 'fixed' | 'on_request'
+  availability_status?: string
+  status?: string
+  stock_quantity?: number | null
+}
+
+// Only the fields the AI actually supports are prefilled; everything else is
+// left for the seller (no invented prices, stock or specifications).
+interface ListingSuggestion {
+  product_name?: { value: string; confidence: number }
+  description?: { value: string; confidence: number }
+  category?: { value: string; confidence: number }
+  brand?: { value: string; confidence: number }
+  condition?: { value: string; confidence: number }
+  price?: { amount: number | null; currency: string | null; confidence: number }
+  availability?: { value: string; confidence: number }
+  missing_required_fields?: string[]
+  warnings?: string[]
 }
 
 // Product photo picker: uploads via /api/upload (2 MB cap, PNG/JPEG/WebP)
@@ -108,6 +133,23 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
   const [editPrice, setEditPrice] = useState('')
   const [editImageUrl, setEditImageUrl] = useState('')
 
+  // Product detail fields (migration 033).
+  const [newDescription, setNewDescription] = useState('')
+  const [newCategory, setNewCategory] = useState('')
+  const [newBrand, setNewBrand] = useState('')
+  const [newCondition, setNewCondition] = useState('')
+  const [newCurrency, setNewCurrency] = useState('USD')
+  const [newPriceType, setNewPriceType] = useState<'fixed' | 'on_request'>('fixed')
+  const [newAvailability, setNewAvailability] = useState('in_stock')
+  const [newStock, setNewStock] = useState('')
+
+  // AI listing assistant state.
+  const [analysing, setAnalysing] = useState(false)
+  const [aiNote, setAiNote] = useState('')
+  const [aiWarnings, setAiWarnings] = useState<string[]>([])
+  const [missingFields, setMissingFields] = useState<string[]>([])
+  const [usedAI, setUsedAI] = useState(false)
+
   async function loadItems() {
     setLoading(true)
     setError('')
@@ -137,15 +179,75 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
     router.refresh()
   }
 
+  // Uploads the photo, stores it, and prefills only what the model could
+  // actually read. A failure keeps the image and falls back to manual entry.
+  async function analysePhoto(file: File) {
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Photo too large (max 2MB).')
+      return
+    }
+    setAnalysing(true)
+    setError('')
+    setNotice('')
+    setAiNote('')
+    setAiWarnings([])
+    setMissingFields([])
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/portal/products/analyse', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Could not read that photo.')
+        return
+      }
+      if (data.imageUrl) setNewImageUrl(data.imageUrl)
+
+      const suggestion = data.suggestion as ListingSuggestion | null
+      if (!data.analysed || !suggestion) {
+        setAiNote(data.message || 'We could not read that photo. Fill in the details below.')
+        return
+      }
+
+      setUsedAI(true)
+      if (suggestion.product_name?.value) setNewName(suggestion.product_name.value)
+      if (suggestion.description?.value) setNewDescription(suggestion.description.value)
+      if (suggestion.category?.value && (suggestion.category.confidence || 0) >= 0.5) {
+        setNewCategory(suggestion.category.value)
+      }
+      if (suggestion.brand?.value) setNewBrand(suggestion.brand.value)
+      if (suggestion.condition?.value) setNewCondition(suggestion.condition.value)
+      if (suggestion.price?.amount) {
+        setNewPrice(String(suggestion.price.amount))
+        setNewPriceType('fixed')
+      }
+      if (suggestion.price?.currency) setNewCurrency(suggestion.price.currency)
+      if (suggestion.availability?.value && suggestion.availability.value !== 'availability_unknown') {
+        setNewAvailability(suggestion.availability.value)
+      }
+      setMissingFields(suggestion.missing_required_fields || [])
+      setAiWarnings(suggestion.warnings || [])
+      setAiNote('We filled in what we could read. Please check every field before publishing.')
+    } catch {
+      setError('Could not read that photo. Check your connection and try again.')
+    } finally {
+      setAnalysing(false)
+    }
+  }
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     const price = Number(newPrice)
     if (newName.trim().length < 2) {
-      setError('Item name must be at least 2 characters.')
+      setError('Product name must be at least 2 characters.')
       return
     }
-    if (!Number.isFinite(price) || price < 0) {
-      setError('Enter a valid price.')
+    if (newPriceType === 'fixed' && (!Number.isFinite(price) || price < 0)) {
+      setError('Enter a valid price, or choose "Price on request".')
+      return
+    }
+    if (newStock !== '' && (!Number.isInteger(Number(newStock)) || Number(newStock) < 0)) {
+      setError('Enter a whole number for stock, or leave it blank.')
       return
     }
     setSaving(true)
@@ -155,17 +257,43 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
       const res = await fetch('/api/portal/shop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), price, image_url: newImageUrl, is_active: true }),
+        body: JSON.stringify({
+          name: newName.trim(),
+          price: newPriceType === 'on_request' ? 0 : price,
+          price_type: newPriceType,
+          currency_code: newCurrency,
+          description: newDescription,
+          category: newCategory,
+          brand: newBrand,
+          item_condition: newCondition,
+          availability_status: newAvailability,
+          stock_quantity: newStock === '' ? null : Number(newStock),
+          status: 'active',
+          image_url: newImageUrl,
+          ai_generated: usedAI,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || 'Could not add item')
         return
       }
-      setNotice('Item added.')
+      setNotice('Product published.')
       setNewName('')
       setNewPrice('')
       setNewImageUrl('')
+      setNewDescription('')
+      setNewCategory('')
+      setNewBrand('')
+      setNewCondition('')
+      setNewStock('')
+      setNewAvailability('in_stock')
+      setNewPriceType('fixed')
+      setNewCurrency('USD')
+      setAiNote('')
+      setAiWarnings([])
+      setMissingFields([])
+      setUsedAI(false)
       await loadItems()
       refreshPublicPages()
     } catch {
@@ -265,37 +393,194 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
 
       {/* Create form */}
       <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <h3 className="text-sm font-bold text-text-primary mb-3">Add item</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-sm font-bold text-text-primary">Add product</h3>
+          <label
+            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer select-none border transition-colors ${
+              analysing
+                ? 'bg-gray-100 text-gray-500 border-gray-200'
+                : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200 hover:bg-whatsapp-100'
+            }`}
+          >
+            {analysing ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />}
+            {analysing ? 'Reading photo…' : 'Fill from a photo'}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              disabled={analysing}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) void analysePhoto(file)
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+
+        <p className="text-[11px] text-text-secondary mb-3 -mt-1">
+          Upload a product photo and we will fill in what we can read. Nothing is published until you press Publish.
+        </p>
+
+        {aiNote && (
+          <p className="text-xs text-whatsapp-800 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 mb-3">
+            {aiNote}
+          </p>
+        )}
+        {aiWarnings.length > 0 && (
+          <ul className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-3 space-y-1 list-disc list-inside">
+            {aiWarnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        )}
+
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Item name</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Product name</label>
               <input
                 type="text"
                 value={newName}
                 onChange={e => { setNewName(e.target.value); setNotice('') }}
-                placeholder="e.g. Borehole Drilling"
+                placeholder="e.g. iPhone 15 Pro"
                 className="input-field w-full"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Price (USD)</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Price</label>
+              <div className="flex gap-2">
+                <select
+                  value={newCurrency}
+                  onChange={e => setNewCurrency(e.target.value)}
+                  className="input-field w-24"
+                  aria-label="Currency"
+                >
+                  <option value="USD">USD</option>
+                  <option value="ZAR">ZAR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="EUR">EUR</option>
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newPrice}
+                  onChange={e => { setNewPrice(e.target.value); setNotice('') }}
+                  placeholder="0.00"
+                  className="input-field w-full"
+                  disabled={newPriceType === 'on_request'}
+                  aria-label="Price amount"
+                />
+              </div>
+              <label className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={newPriceType === 'on_request'}
+                  onChange={e => setNewPriceType(e.target.checked ? 'on_request' : 'fixed')}
+                />
+                Price on request
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
+              Description <span className="text-text-secondary font-normal">(optional)</span>
+            </label>
+            <textarea
+              value={newDescription}
+              onChange={e => setNewDescription(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              placeholder="What is it, and what condition is it in?"
+              className="input-field w-full resize-y"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Category</label>
+              <input
+                type="text"
+                list="product-category-options"
+                value={newCategory}
+                onChange={e => setNewCategory(e.target.value)}
+                placeholder="e.g. Electronics"
+                className="input-field w-full"
+              />
+              <datalist id="product-category-options">
+                {categories.map(category => (
+                  <option key={category.name} value={category.name} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Brand <span className="text-text-secondary font-normal">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={newBrand}
+                onChange={e => setNewBrand(e.target.value)}
+                placeholder="e.g. Samsung"
+                className="input-field w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Condition <span className="text-text-secondary font-normal">(optional)</span>
+              </label>
+              <select value={newCondition} onChange={e => setNewCondition(e.target.value)} className="input-field w-full">
+                <option value="">Not stated</option>
+                <option value="new">New</option>
+                <option value="used">Used</option>
+                <option value="refurbished">Refurbished</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Availability</label>
+              <select
+                value={newAvailability}
+                onChange={e => setNewAvailability(e.target.value)}
+                className="input-field w-full"
+              >
+                <option value="in_stock">In stock</option>
+                <option value="available_on_order">Available on order</option>
+                <option value="out_of_stock">Out of stock</option>
+                <option value="availability_unknown">Not sure</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">
+                Stock <span className="text-text-secondary font-normal">(optional)</span>
+              </label>
               <input
                 type="number"
                 min="0"
-                step="0.01"
-                value={newPrice}
-                onChange={e => { setNewPrice(e.target.value); setNotice('') }}
-                placeholder="0.00"
+                step="1"
+                value={newStock}
+                onChange={e => setNewStock(e.target.value)}
+                placeholder="e.g. 12"
                 className="input-field w-full"
               />
             </div>
           </div>
+
           <ItemImageField imageUrl={newImageUrl} onSet={setNewImageUrl} inputId="new-item-image" />
+
+          {missingFields.length > 0 && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5">
+              Still needed before this is useful to buyers: {missingFields.join(', ')}.
+            </p>
+          )}
           {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>}
           {notice && <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>}
           <button type="submit" disabled={saving} className="btn-primary inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl text-sm font-semibold disabled:opacity-60">
-            {saving ? 'Saving…' : 'Add item'}
+            {saving ? 'Saving…' : 'Publish product'}
           </button>
         </form>
       </div>

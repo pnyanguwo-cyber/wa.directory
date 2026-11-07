@@ -11,8 +11,9 @@ import { categories as staticCategories } from '@/data/categories'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import RequestConfirmModal from '@/components/request-confirm-modal'
+import RegistrationAIPanel, { type RegistrationPrefillData } from '@/components/registration-ai-panel'
 import { PasswordStrengthMeter, validatePassword } from '@/components/password-strength'
-import { Smartphone, PhoneCall } from 'lucide-react'
+import { Smartphone, PhoneCall, MessageSquare, Phone } from 'lucide-react'
 import { toFullPhone, normalizeVoicePhone, digitsOnly } from '@/lib/phone'
 import { normalizeUsername } from '@/lib/username'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
@@ -261,6 +262,49 @@ export default function ListBusinessForm({
     ...allCityOptions,
   ]
 
+  // AI-assisted registration prefill. Only values the extractor was confident
+  // about are applied, and every one of them stays editable in the normal form.
+  // The owner still reviews the details and submits through the usual flow, so
+  // verification, payment and activation are untouched.
+  const applyRegistrationPrefill = useCallback(
+    (prefill: RegistrationPrefillData) => {
+      const digits = (prefill.phone || prefill.whatsapp_username || '').replace(/\D/g, '')
+      let local = digits
+      if (local.startsWith('263')) local = local.slice(3)
+      if (local && !local.startsWith('0')) local = `0${local}`
+
+      const cityMatch = prefill.city
+        ? cityOptions.find(o => o.value.toLowerCase() === prefill.city.toLowerCase())
+        : undefined
+
+      // Sync phoneWhatsapp checkbox with AI detection: if phone_is_whatsapp is true,
+      // the phone number is a WhatsApp number; otherwise it's a voice-only number.
+      setPhoneWhatsapp(prefill.phone_is_whatsapp)
+      setPhoneVoice(!prefill.phone_is_whatsapp)
+
+      setForm(f => ({
+        ...f,
+        name: prefill.name || f.name,
+        description: prefill.description || f.description,
+        // If the AI detected the phone is explicitly WhatsApp, put it in whatsapp_username
+        // Otherwise put it in phone field (calls only)
+        phone: prefill.phone_is_whatsapp ? '' : (local || f.phone),
+        whatsapp_username: prefill.phone_is_whatsapp ? local : (f.whatsapp_username || ''),
+        website: prefill.website || f.website,
+        address: prefill.address || f.address,
+        city: cityMatch ? cityMatch.value : f.city,
+      }))
+
+      if (prefill.categories.length > 0) {
+        const resolved = prefill.categories
+          .map(cat => categoryOptions.find(o => o.value.toLowerCase() === cat.toLowerCase())?.value)
+          .filter((v): v is string => !!v)
+        if (resolved.length > 0) setCategories(resolved.slice(0, 4))
+      }
+    },
+    [cityOptions, categoryOptions]
+  )
+
   const areaOptions = form.city && form.city !== '*'
     ? [
         ...(selectedCity?.areas || []).map(a => ({ value: a, label: a })),
@@ -275,7 +319,14 @@ export default function ListBusinessForm({
   const hasPhysical = !!form.city || areas.length > 0
   const hasLocation = form.isRemote || hasPhysical
   const locationMissing = (!form.isPhysical && !form.isRemote) || (needsPhysical && !hasPhysical)
-  const isValidStep1 = !!(form.name.trim() && form.whatsapp_username.trim() && form.phone.trim() && !phoneError)
+  const isValidStep1 = !!(
+    form.name.trim() &&
+    !phoneError &&
+    // Need either a phone number (voice) OR whatsapp_username (WhatsApp)
+    // When phoneWhatsapp is true, whatsapp_username is required
+    // When phoneWhatsapp is false, phone is required
+    (phoneWhatsapp ? form.whatsapp_username.trim() : form.phone.trim())
+  )
   const isValidStep2 = !!(form.description.trim() && categories.length > 0 && !locationMissing)
   const passwordError = !form.password
     ? 'Create a portal password. It unlocks your statistics portal.'
@@ -1230,6 +1281,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
 
       {regType === 'business' && step === 1 && (
         <div className="space-y-4 animate-fade-in">
+          <RegistrationAIPanel onApply={applyRegistrationPrefill} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Business Name</label>
@@ -1244,7 +1296,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               />
               <p className="text-xs text-whatsapp-600 mt-1">This is what customers will search for</p>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
                 WhatsApp Business Username <span className="text-text-secondary font-normal">(optional)</span>
               </label>

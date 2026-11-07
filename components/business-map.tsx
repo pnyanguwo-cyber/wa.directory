@@ -77,6 +77,7 @@ import {
   type MapProviderId,
 } from '@/lib/map-providers'
 import CategoryIcon from '@/components/map/category-icon'
+import { formatMoney } from '@/lib/product-format'
 import { doodleFor } from '@/lib/category-style'
 import {
   registerPinImages,
@@ -85,6 +86,9 @@ import {
 
 interface BusinessMapProps {
   businesses: Business[]
+  // Products mode reuses this map: markers are sellers that have matching
+  // products, and the preview shows those products.
+  mode?: 'products' | 'services'
 }
 
 interface MapBounds {
@@ -318,7 +322,7 @@ function ensureSourcesAndLayers(map: MlMap): void {
   }
 }
 
-export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
+export default function BusinessMap({ businesses = [], mode = 'services' }: BusinessMapProps) {
   const router = useRouter()
   const [mounted, setMounted] = useState(false)
 
@@ -1568,6 +1572,31 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                   <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
                   <span className="truncate">{selected.address}</span>
                 </p>
+              )}
+
+              {/* PRODUCTS MODE: the seller's matching products */}
+              {mode === 'products' && (selected.products?.length ?? 0) > 0 && (
+                <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+                    {selected.productCount || selected.products!.length} matching{' '}
+                    {(selected.productCount || selected.products!.length) === 1 ? 'product' : 'products'}
+                  </p>
+                  <ul className="space-y-1">
+                    {selected.products!.map((product) => (
+                      <li key={product.id} className="flex items-center justify-between gap-2 text-xs">
+                        <span className="truncate text-slate-700">{product.name}</span>
+                        <span className="shrink-0 font-bold text-whatsapp-700">
+                          {formatMoney(product.price, product.currency_code, product.price_type)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {(selected.productCount || 0) > selected.products!.length && (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      +{(selected.productCount || 0) - selected.products!.length} more on the profile
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* ACTION BUTTONS (State-of-the-Art responsive feedback) */}

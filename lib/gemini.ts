@@ -7,10 +7,14 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 // candidate text — or null when the call fails or the response is empty.
 // Callers own their fallback copy and caching.
 const GEMINI_TIMEOUT = 8_000
+// Vision calls carry an image and a larger structured answer, so they get a
+// longer budget than the text helpers. Still bounded: a slow model must not
+// hold a serverless request open indefinitely.
+const GEMINI_VISION_TIMEOUT = 25_000
 
-async function fetchGemini(body: unknown): Promise<string | null> {
+async function fetchGemini(body: unknown, timeoutMs = GEMINI_TIMEOUT): Promise<string | null> {
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT)
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
   try {
     const res = await fetch(GEMINI_URL, {
       method: 'POST',
@@ -41,6 +45,53 @@ export interface GeminiPart {
 
 export async function callGeminiParts(parts: GeminiPart[]): Promise<string | null> {
   return fetchGemini({ contents: [{ parts }] })
+}
+
+/**
+ * Structured multimodal call: sends text + inline images and asks the model for
+ * JSON. The response is parsed here but remains untrusted input — callers must
+ * still validate every field.
+ *
+ * Returns null on any transport, timeout, empty or unparseable response so the
+ * caller can fall back to manual entry.
+ */
+export async function callGeminiJson(
+  parts: GeminiPart[],
+  options: {
+    schema?: Record<string, unknown>
+    temperature?: number
+    maxOutputTokens?: number
+    timeoutMs?: number
+  } = {}
+): Promise<unknown | null> {
+  const body: Record<string, unknown> = {
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: options.temperature ?? 0.1,
+      responseMimeType: 'application/json',
+      ...(options.schema ? { responseSchema: options.schema } : {}),
+      ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+    },
+  }
+  const raw = await fetchGemini(body, options.timeoutMs ?? GEMINI_VISION_TIMEOUT)
+  if (!raw) return null
+  // Models sometimes wrap JSON in a ```json fence despite the MIME type.
+  const cleaned = raw.replace(/^\s*```(?:json)?/i, '').replace(/```\s*$/, '').trim()
+  try {
+    return JSON.parse(cleaned)
+  } catch {
+    const match = cleaned.match(/[\[{][\s\S]*[\}\]]/)
+    if (!match) return null
+    try {
+      return JSON.parse(match[0])
+    } catch {
+      return null
+    }
+  }
+}
+
+export function hasGeminiKey(): boolean {
+  return !!process.env.GEMINI_API_KEY
 }
 
 const SEO_BLURB_FALLBACK = (category: string, location: string) =>
