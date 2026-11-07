@@ -56,52 +56,6 @@ export const CITY_COORDS: Record<string, [number, number]> = {
   redcliff: [-18.0333, 29.95],
 }
 
-export type TileLayerId = 'voyager' | 'osm' | 'satellite' | 'dark'
-
-export interface TileLayerConfig {
-  id: TileLayerId
-  name: string
-  description: string
-  url: string
-  attribution: string
-  maxZoom: number
-}
-
-export const MAP_TILE_LAYERS: TileLayerConfig[] = [
-  {
-    id: 'voyager',
-    name: 'Clean Street',
-    description: 'Crisp & modern light map',
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    maxZoom: 19,
-  },
-  {
-    id: 'osm',
-    name: 'Standard OSM',
-    description: 'Detailed classic street map',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
-  },
-  {
-    id: 'satellite',
-    name: 'Satellite',
-    description: 'High-res aerial imagery',
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Tiles &copy; Esri, Earthstar Geographics',
-    maxZoom: 18,
-  },
-  {
-    id: 'dark',
-    name: 'Night Mode',
-    description: 'High-contrast dark map',
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-    maxZoom: 19,
-  },
-]
-
 export function calculateDistanceKm(
   lat1: number,
   lon1: number,

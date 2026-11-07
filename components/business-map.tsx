@@ -1,11 +1,19 @@
 'use client'
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import {
+  Map as MaplibreMap,
+  Popup,
+  AttributionControl,
+  type Map as MlMap,
+  type MapMouseEvent,
+  type GeoJSONSource,
+  type LayerSpecification,
+  type StyleSpecification,
+} from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
 import {
   Search,
   MapPin,
@@ -34,6 +42,7 @@ import {
   ArrowUpRight,
   LocateFixed,
   List,
+  LayoutGrid,
   Map as MapIcon,
   Filter,
   Sparkles,
@@ -58,143 +67,255 @@ import {
   ZIMBABWE_CENTER,
   ZIMBABWE_DEFAULT_ZOOM,
   MAJOR_ZIMBABWE_CITIES,
-  MAP_TILE_LAYERS,
   calculateDistanceKm,
   formatDistance,
-  type TileLayerId,
-  type CityCenter,
 } from '@/lib/map-locations'
-
-// Category icon helper
-function getCategoryEmoji(businessCategories: string[] = []): string {
-  for (const catName of businessCategories) {
-    const found = categories.find((c) => c.name.toLowerCase() === (catName || '').toLowerCase())
-    if (found?.icon) return found.icon
-  }
-  return '🏢'
-}
-
-// Custom Leaflet DivIcon for Business Pin
-function createBusinessMarkerIcon(
-  emoji: string,
-  isSelected: boolean,
-  isHovered: boolean,
-  isFeatured: boolean
-) {
-  const isHighlighted = isSelected || isHovered
-  const bgGradient = isSelected
-    ? 'linear-gradient(135deg, #075E54 0%, #128C7E 100%)'
-    : isHovered
-    ? 'linear-gradient(135deg, #128C7E 0%, #25D366 100%)'
-    : 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)'
-
-  const ringStyle = isSelected
-    ? 'ring-4 ring-whatsapp-400 ring-offset-2 ring-offset-white scale-125 z-[1000]'
-    : isHovered
-    ? 'ring-2 ring-whatsapp-500 scale-110 z-[900]'
-    : 'shadow-lg hover:scale-105'
-
-  const pingEffect = isSelected
-    ? '<span class="absolute -inset-1 rounded-2xl bg-whatsapp-400 opacity-60 animate-ping"></span>'
-    : ''
-
-  const starBadge = isFeatured
-    ? `<span class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-400 border border-white rounded-full flex items-center justify-center text-[9px] font-bold text-amber-950 shadow-sm">★</span>`
-    : ''
-
-  return L.divIcon({
-    className: 'custom-map-pin',
-    html: `
-      <div class="relative flex flex-col items-center group cursor-pointer transition-all duration-200">
-        ${pingEffect}
-        <div class="relative w-9 h-9 sm:w-10 sm:h-10 rounded-2xl flex items-center justify-center border-2 border-white shadow-md transition-all duration-200 ${ringStyle}"
-             style="background: ${bgGradient};">
-          <span class="text-base sm:text-lg select-none leading-none pointer-events-none drop-shadow-sm">${emoji}</span>
-          ${starBadge}
-        </div>
-        <div class="w-2.5 h-2.5 rotate-45 -mt-1.5 border-r border-b border-white/60 shadow-sm"
-             style="background: ${isSelected ? '#075E54' : '#128C7E'};"></div>
-      </div>
-    `,
-    iconSize: [40, 46],
-    iconAnchor: [20, 44],
-    popupAnchor: [0, -44],
-  })
-}
-
-// Custom User GPS Pin
-function createUserLocationMarkerIcon() {
-  return L.divIcon({
-    className: 'user-gps-pin',
-    html: `
-      <div class="relative flex items-center justify-center">
-        <div class="absolute w-9 h-9 rounded-full bg-sky-400/40 animate-ping"></div>
-        <div class="w-6 h-6 rounded-full bg-sky-500 border-2 border-white shadow-xl flex items-center justify-center ring-4 ring-sky-300/50">
-          <div class="w-2 h-2 rounded-full bg-white animate-pulse"></div>
-        </div>
-      </div>
-    `,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-  })
-}
-
-// Controller to smoothly animate to coordinate targets
-function MapController({
-  target,
-  bounds,
-  zoom,
-}: {
-  target: [number, number] | null
-  bounds: L.LatLngBoundsExpression | null
-  zoom?: number
-}) {
-  const map = useMap()
-
-  useEffect(() => {
-    if (bounds) {
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15, animate: true, duration: 1 })
-    } else if (target) {
-      map.flyTo(target, zoom ?? 14, { duration: 1.2, easeLinearity: 0.25 })
-    }
-  }, [target, bounds, zoom, map])
-
-  return null
-}
-
-// Event listener for user interaction with map (pan, zoom, click)
-function MapEventsHandler({
-  onBoundsChange,
-  onMapClick,
-}: {
-  onBoundsChange: (bounds: L.LatLngBounds) => void
-  onMapClick: () => void
-}) {
-  const map = useMapEvents({
-    moveend: () => {
-      onBoundsChange(map.getBounds())
-    },
-    zoomend: () => {
-      onBoundsChange(map.getBounds())
-    },
-    click: (e) => {
-      // If clicking empty map area, dismiss selected
-      const target = e.originalEvent.target as HTMLElement
-      if (target?.classList?.contains('leaflet-container')) {
-        onMapClick()
-      }
-    },
-  })
-
-  useEffect(() => {
-    onBoundsChange(map.getBounds())
-  }, [map, onBoundsChange])
-
-  return null
-}
+import {
+  MAP_PROVIDERS,
+  MAP_DEFAULT_PROVIDER,
+  getMapProvider,
+  type MapProviderId,
+} from '@/lib/map-providers'
+import CategoryIcon from '@/components/map/category-icon'
+import { doodleFor } from '@/lib/category-style'
+import {
+  registerPinImages,
+  sanitizeKey,
+} from '@/components/map/category-pin'
 
 interface BusinessMapProps {
   businesses: Business[]
+}
+
+interface MapBounds {
+  south: number
+  north: number
+  west: number
+  east: number
+}
+
+// Leaf flavour of marker data lives on GeoJSON features.
+interface WaMarkerProperties {
+  uid: string // feature key - always String(slug || id), used by the selected-pin filter
+  bRef: string // business id used for selection lookup
+  catKey: string // sanitized category -> pin image key
+  name: string
+  featured: boolean
+  cluster?: boolean
+  cluster_id?: number
+  point_count?: number
+  point_count_abbreviated?: string
+}
+
+const BUSINESS_SOURCE = 'wa-businesses'
+const USER_SOURCE = 'wa-user'
+const EMPTY_FC = { type: 'FeatureCollection', features: [] }
+const MOVE_BOUNCE_MS = 800 // easeTo duration - smooth fly-to parity with Leaflet
+
+function getBoundsSnapshot(map: MlMap): MapBounds | null {
+  try {
+    const b = map.getBounds()
+    if (!b) return null
+    return {
+      south: b.getSouth(),
+      north: b.getNorth(),
+      west: b.getWest(),
+      east: b.getEast(),
+    }
+  } catch {
+    return null
+  }
+}
+
+function boundsContainPoint(b: MapBounds | null, lat: number, lng: number): boolean {
+  if (!b) return false
+  return lat >= b.south && lat <= b.north && lng >= b.west && lng <= b.east
+}
+
+// Primary category for the pin glyph: first recognisable name from the
+// business categories (same order rule as everywhere else in the app).
+function catKeyFor(businessCategories: string[] = []): string {
+  return sanitizeKey(doodleFor(businessCategories)?.name || 'Other')
+}
+
+function toFeatureCollection(list: Business[]): {
+  type: 'FeatureCollection'
+  features: Array<{
+    type: 'Feature'
+    id: string
+    geometry: { type: 'Point'; coordinates: [number, number] }
+    properties: WaMarkerProperties
+  }>
+} {
+  return {
+    type: 'FeatureCollection',
+    features: list
+      .filter((b) => typeof b.lat === 'number' && typeof b.lng === 'number')
+      .map((b) => ({
+        type: 'Feature' as const,
+        id: String(b.slug || b.id),
+        geometry: { type: 'Point' as const, coordinates: [b.lng as number, b.lat as number] },
+        properties: {
+          uid: String(b.slug || b.id),
+          bRef: String(b.slug || b.id),
+          catKey: catKeyFor(b.category || []),
+          name: b.name || '',
+          featured: !!b.featured_eligible,
+        },
+      })),
+  }
+}
+
+// Idempotently install the runtime GeoJSON source + symbol layers (both
+// states of every pin, cluster circles/labels, featured badge) and the
+// user-location layers. Safe across setStyle() style swaps.
+function ensureSourcesAndLayers(map: MlMap): void {
+  if (!map.getSource(BUSINESS_SOURCE)) {
+    map.addSource(BUSINESS_SOURCE, {
+      type: 'geojson',
+      data: toFeatureCollection([]) as never,
+      cluster: true,
+      clusterMaxZoom: 14,
+      clusterRadius: 55,
+    })
+  }
+
+  if (!map.getLayer('wa-clusters-halo')) {
+    map.addLayer({
+      id: 'wa-clusters-halo',
+      type: 'circle',
+      source: BUSINESS_SOURCE,
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-radius': 17,
+        'circle-color': '#FFFFFF',
+        'circle-opacity': 0.45,
+        'circle-stroke-width': 4,
+        'circle-stroke-color': '#FFFFFF',
+        'circle-stroke-opacity': 0.35,
+      },
+    } as LayerSpecification)
+  }
+  if (!map.getLayer('wa-clusters')) {
+    map.addLayer({
+      id: 'wa-clusters',
+      type: 'circle',
+      source: BUSINESS_SOURCE,
+      filter: ['has', 'point_count'],
+      paint: {
+        'circle-radius': 12.5,
+        'circle-color': '#FFFFFF',
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 1.5,
+        'circle-stroke-color': 'rgba(100, 116, 139, 0.3)',
+      },
+    } as LayerSpecification)
+  }
+  if (!map.getLayer('wa-cluster-count')) {
+    map.addLayer({
+      id: 'wa-cluster-count',
+      type: 'symbol',
+      source: BUSINESS_SOURCE,
+      filter: ['has', 'point_count'],
+      layout: {
+        'text-field': ['get', 'point_count_abbreviated'],
+        'text-font': ['Noto Sans Bold'],
+        'text-size': 11,
+      },
+      paint: {
+        'text-color': '#334155',
+        'text-halo-color': 'rgba(255, 255, 255, 0.9)',
+        'text-halo-width': 1,
+      },
+    } as LayerSpecification)
+  }
+
+  if (!map.getLayer('wa-pins')) {
+    map.addLayer({
+      id: 'wa-pins',
+      type: 'symbol',
+      source: BUSINESS_SOURCE,
+      filter: ['!', ['has', 'point_count']],
+      layout: {
+        'icon-image': ['concat', 'wa-pin-default-', ['get', 'catKey']],
+        'icon-anchor': 'bottom',
+        'icon-offset': [0, 4],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+      paint: {
+        'icon-opacity': [
+          'case',
+          ['feature-state', 'hover'],
+          0.7,
+          1.0,
+        ],
+      },
+    } as LayerSpecification)
+  }
+  // Selected look is a second layer narrowed by feature-id filter: layout
+  // expressions cannot read feature-state, but a cheap shim filter can.
+  if (!map.getLayer('wa-pins-selected')) {
+    map.addLayer({
+      id: 'wa-pins-selected',
+      type: 'symbol',
+      source: BUSINESS_SOURCE,
+      filter: ['==', ['get', 'uid'], '__none__'],
+      layout: {
+        'icon-image': ['concat', 'wa-pin-selected-', ['get', 'catKey']],
+        'icon-anchor': 'bottom',
+        'icon-offset': [0, 4],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    } as LayerSpecification)
+  }
+  if (!map.getLayer('wa-featured-badge')) {
+    map.addLayer({
+      id: 'wa-featured-badge',
+      type: 'symbol',
+      source: BUSINESS_SOURCE,
+      filter: ['all', ['!', ['has', 'point_count']], ['==', ['get', 'featured'], true]],
+      layout: {
+        'icon-image': 'wa-featured-badge',
+        'icon-anchor': 'center',
+        'icon-offset': [17, -44],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+      },
+    } as LayerSpecification)
+  }
+
+  if (!map.getSource(USER_SOURCE)) {
+    map.addSource(USER_SOURCE, { type: 'geojson', data: EMPTY_FC as never })
+  }
+  if (!map.getLayer('wa-user-pulse')) {
+    map.addLayer({
+      id: 'wa-user-pulse',
+      type: 'circle',
+      source: USER_SOURCE,
+      paint: {
+        'circle-radius': 9,
+        'circle-color': '#38BDF8',
+        'circle-opacity': 0.35,
+        'circle-stroke-color': 'rgba(56, 189, 248, 0.45)',
+        'circle-stroke-width': 1.5,
+      },
+    } as LayerSpecification)
+  }
+  if (!map.getLayer('wa-user-core')) {
+    map.addLayer({
+      id: 'wa-user-core',
+      type: 'circle',
+      source: USER_SOURCE,
+      paint: {
+        'circle-radius': 5.5,
+        'circle-color': '#0EA5E9',
+        'circle-stroke-width': 2.5,
+        'circle-stroke-color': '#FFFFFF',
+      },
+    } as LayerSpecification)
+  }
 }
 
 export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
@@ -205,14 +326,15 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
   const [selected, setSelected] = useState<Business | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
-  // Map state
-  const [targetCoord, setTargetCoord] = useState<[number, number] | null>(null)
-  const [targetZoom, setTargetZoom] = useState<number | undefined>(undefined)
-  const [fitBounds, setFitBounds] = useState<L.LatLngBoundsExpression | null>(null)
-  const [activeTileId, setActiveTileId] = useState<TileLayerId>('voyager')
+  // Map runtime
+  const [mapReady, setMapReady] = useState(false)
+  const [installTick, setInstallTick] = useState(0) // bumped after every layer install
+  const mapRef = useRef<MlMap | null>(null)
+  const mapDivRef = useRef<HTMLDivElement>(null)
+  const mapContainerRef = useRef<HTMLDivElement>(null)
+  const [activeProviderId, setActiveProviderId] = useState<MapProviderId>(MAP_DEFAULT_PROVIDER)
   const [showLayerMenu, setShowLayerMenu] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const mapContainerRef = useRef<HTMLDivElement>(null)
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('')
@@ -223,9 +345,10 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
   // User Geolocation
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null)
   const [isLocating, setIsLocating] = useState(false)
+  const userPopupRef = useRef<Popup | null>(null)
 
   // "Search This Area" & Viewport tracking
-  const [currentBounds, setCurrentBounds] = useState<L.LatLngBounds | null>(null)
+  const [currentBounds, setCurrentBounds] = useState<MapBounds | null>(null)
   const [isAreaFiltered, setIsAreaFiltered] = useState(false)
   const [showSearchAreaPill, setShowSearchAreaPill] = useState(false)
   const [isAreaFilteringLoading, setIsAreaFilteringLoading] = useState(false)
@@ -236,6 +359,26 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [copiedLink, setCopiedLink] = useState(false)
   const [navigatingSlug, setNavigatingSlug] = useState<string | null>(null)
+
+  // Sidebar row refs for list <-> map selection scroll-sync
+  const sidebarRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
+
+  // Latest values for map event handlers (avoid stale closures)
+  const businessesRef = useRef(businesses)
+  useEffect(() => {
+    businessesRef.current = businesses
+  }, [businesses])
+
+  const filteredRef = useRef<Business[]>([])
+
+  const handlersRef = useRef<{
+    onBoundsChange?: (b: MapBounds | null) => void
+    handleSelectNone?: () => void
+    handleSelectBusiness?: (b: Business) => void
+  }>({})
+
+  const hoverStateRef = useRef<string | null>(null)
+  const deepLinkDoneRef = useRef(false)
 
   // Trigger feedback toast helper
   const showToast = useCallback(
@@ -261,17 +404,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
       }
     }
     const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1])
-    return [
-      { name: 'All', icon: '🌟', count: businesses.length },
-      ...sorted.map(([name, count]) => {
-        const found = categories.find((c) => c.name.toLowerCase() === name.toLowerCase())
-        return {
-          name,
-          icon: found?.icon || '🏢',
-          count,
-        }
-      }),
-    ]
+    return [{ name: 'All', count: businesses.length }, ...sorted.map(([name, count]) => ({ name, count }))]
   }, [businesses])
 
   // Filter and sort businesses
@@ -314,7 +447,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
 
         // Bounds filter (when user clicked "Search This Area")
         if (isAreaFiltered && currentBounds) {
-          if (!currentBounds.contains([b.lat, b.lng])) {
+          if (!boundsContainPoint(currentBounds, b.lat, b.lng)) {
             return false
           }
         }
@@ -352,6 +485,40 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
     sortBy,
   ])
 
+  useEffect(() => {
+    filteredRef.current = filteredBusinesses
+  }, [filteredBusinesses])
+
+  // Drag the map to a business, with smooth easing (FlyTo parity).
+  const flyToBusiness = useCallback((b: Business, zoom = 15) => {
+    if (typeof b.lat === 'number' && typeof b.lng === 'number') {
+      mapRef.current?.easeTo({ center: [b.lng, b.lat], zoom, duration: MOVE_BOUNCE_MS })
+    }
+  }, [])
+
+  // Select business pin (from list row OR map feature) - keeps both in sync.
+  const handleSelectBusiness = useCallback(
+    (business: Business) => {
+      setSelected(business)
+      flyToBusiness(business)
+      requestAnimationFrame(() => {
+        sidebarRowRefs.current[business.id]?.scrollIntoView({
+          block: 'nearest',
+          behavior: 'smooth',
+        })
+      })
+    },
+    [flyToBusiness]
+  )
+
+  const handleSelectNone = useCallback(() => setSelected(null), [])
+
+  // Keep imperative handlers fresh without re-binding map listeners.
+  useEffect(() => {
+    handlersRef.current.handleSelectBusiness = handleSelectBusiness
+    handlersRef.current.handleSelectNone = handleSelectNone
+  }, [handleSelectBusiness, handleSelectNone])
+
   // Locate User via GPS
   const handleLocateMe = useCallback(() => {
     if (!navigator.geolocation) {
@@ -369,11 +536,10 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
           lng: position.coords.longitude,
         }
         setUserCoords(coords)
-        setTargetCoord([coords.lat, coords.lng])
-        setTargetZoom(14)
+        mapRef.current?.easeTo({ center: [coords.lng, coords.lat], zoom: 14, duration: 1000 })
         setIsLocating(false)
         setSortBy('distance')
-        showToast('📍 Located! Showing nearest verified businesses', 'success')
+        showToast('Located! Showing nearest verified businesses', 'success')
       },
       (error) => {
         setIsLocating(false)
@@ -392,8 +558,11 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
   // Fit All Bounds
   const handleFitAll = useCallback(() => {
     if (filteredBusinesses.length === 0) {
-      setTargetCoord(ZIMBABWE_CENTER)
-      setTargetZoom(ZIMBABWE_DEFAULT_ZOOM)
+      mapRef.current?.easeTo({
+        center: [ZIMBABWE_CENTER[1], ZIMBABWE_CENTER[0]],
+        zoom: ZIMBABWE_DEFAULT_ZOOM,
+        duration: 1000,
+      })
       return
     }
 
@@ -402,15 +571,13 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
 
     if (lats.length === 0) return
 
-    const minLat = Math.min(...lats)
-    const maxLat = Math.max(...lats)
-    const minLng = Math.min(...lngs)
-    const maxLng = Math.max(...lngs)
-
-    setFitBounds([
-      [minLat, minLng],
-      [maxLat, maxLng],
-    ])
+    mapRef.current?.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 60, maxZoom: 15, duration: 1000 }
+    )
     setIsAreaFiltered(false)
     setShowSearchAreaPill(false)
     showToast(`Refocused view to ${filteredBusinesses.length} places`, 'info')
@@ -425,22 +592,22 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
 
       const foundCity = MAJOR_ZIMBABWE_CITIES.find((c) => c.name === cityName)
       if (foundCity) {
-        setTargetCoord([foundCity.lat, foundCity.lng])
-        setTargetZoom(foundCity.zoom)
-        showToast(`Flying to ${cityName}`, 'info')
+        mapRef.current?.easeTo({
+          center: [foundCity.lng, foundCity.lat],
+          zoom: foundCity.zoom,
+          duration: 1100,
+        })
+        if (cityName !== 'All Zimbabwe') showToast(`Flying to ${cityName}`, 'info')
       } else {
-        setTargetCoord(ZIMBABWE_CENTER)
-        setTargetZoom(ZIMBABWE_DEFAULT_ZOOM)
+        mapRef.current?.easeTo({
+          center: [ZIMBABWE_CENTER[1], ZIMBABWE_CENTER[0]],
+          zoom: ZIMBABWE_DEFAULT_ZOOM,
+          duration: 1100,
+        })
       }
     },
     [showToast]
   )
-
-  // Bounds change handler from MapEventsHandler
-  const handleBoundsChange = useCallback((bounds: L.LatLngBounds) => {
-    setCurrentBounds(bounds)
-    setShowSearchAreaPill(true)
-  }, [])
 
   // "Search this area" button click
   const handleSearchThisArea = useCallback(() => {
@@ -454,7 +621,6 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
     }, 300)
   }, [showToast])
 
-  // Fullscreen toggle
   const handleToggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       mapContainerRef.current?.requestFullscreen().catch(() => {})
@@ -478,27 +644,340 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url.toString())
       setCopiedLink(true)
-      showToast('Map link copied to clipboard! 📋', 'success')
+      showToast('Map link copied to clipboard', 'success')
       setTimeout(() => setCopiedLink(false), 2500)
     }
   }, [selected, selectedCity, showToast])
 
-  // Select business pin
-  const handleSelectBusiness = useCallback(
-    (business: Business) => {
-      setSelected(business)
-      if (business.lat && business.lng) {
-        setTargetCoord([business.lat, business.lng])
-        setTargetZoom(15)
-      }
-    },
-    []
+  const activeProvider = useMemo(() => getMapProvider(activeProviderId), [activeProviderId])
+
+  const providerButtons = useMemo(
+    () =>
+      MAP_PROVIDERS.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => {
+            setActiveProviderId(p.id)
+            setShowLayerMenu(false)
+            showToast(`Switched to ${p.name} map`, 'info')
+          }}
+          className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors text-xs font-semibold ${
+            activeProviderId === p.id
+              ? 'bg-whatsapp-50 text-whatsapp-800'
+              : 'hover:bg-slate-50 text-slate-700'
+          }`}
+        >
+          <div>
+            <p className="leading-tight">{p.name}</p>
+            <p className="text-[10px] text-slate-400 font-normal">{p.description}</p>
+          </div>
+          {activeProviderId === p.id && <Check className="w-4 h-4 text-whatsapp-600 shrink-0" />}
+        </button>
+      )),
+    [activeProviderId, showToast]
   )
 
-  // Active tile configuration
-  const activeTile = useMemo(() => {
-    return MAP_TILE_LAYERS.find((t) => t.id === activeTileId) || MAP_TILE_LAYERS[0]
-  }, [activeTileId])
+  // ---------------------------------------------------------------------
+  // MAP BOOTSTRAP
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!mounted) return
+    const container = mapDivRef.current
+    if (!container) return
+
+    const map = new MaplibreMap({
+      container,
+      style: getMapProvider(MAP_DEFAULT_PROVIDER).buildStyle() as StyleSpecification,
+      center: [ZIMBABWE_CENTER[1], ZIMBABWE_CENTER[0]],
+      zoom: ZIMBABWE_DEFAULT_ZOOM,
+      maxZoom: 19,
+      attributionControl: false,
+    })
+    mapRef.current = map
+
+    map.addControl(new AttributionControl({ compact: true }), 'bottom-right')
+    try {
+      map.dragRotate.disable()
+      map.touchZoomRotate.disableRotation()
+    } catch {
+      /* ignore */
+    }
+
+    const onDataApplied = (installTickResult: number) => {
+      setInstallTick(installTickResult)
+    }
+
+    // Clamp our custom controls & click delegation to the latest handlers.
+    const handleClick = (e: MapMouseEvent) => {
+      const h = handlersRef.current
+      const feats = map.queryRenderedFeatures(e.point, {
+        layers: ['wa-pins', 'wa-pins-selected', 'wa-featured-badge', 'wa-clusters'],
+      })
+      if (feats.length === 0) {
+        h.handleSelectNone?.()
+        return
+      }
+      const f = feats[0]
+      if (f.properties?.cluster) {
+        const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
+        const coords = (f.geometry as { coordinates?: [number, number] })?.coordinates
+        if (!src || !coords) return
+        src
+          .getClusterExpansionZoom(f.properties.cluster_id as number)
+          .then((zoom) => {
+            map.easeTo({
+              center: coords as [number, number],
+              zoom,
+              duration: 550,
+            })
+          })
+          .catch(() => {
+            map.easeTo({
+              center: coords as [number, number],
+              zoom: map.getZoom() + 2,
+              duration: 550,
+            })
+          })
+        return
+      }
+      const bRef = f.properties?.bRef as string | undefined
+      const biz =
+        businessesRef.current.find((b) => String(b.slug || b.id) === bRef) ||
+        filteredRef.current.find((b) => String(b.slug || b.id) === bRef)
+      if (biz) h.handleSelectBusiness?.(biz)
+    }
+
+    // Hover highlight via feature-state (zero React re-renders). A single
+    // mousemove listener owns the hover state so layer- and map-level
+    // listeners can never fight over it.
+    const onMapMouseMove = (e: MapMouseEvent) => {
+      const hit = map.queryRenderedFeatures(e.point, {
+        layers: ['wa-pins', 'wa-pins-selected', 'wa-featured-badge'],
+      })[0]
+      const id = (hit?.properties?.bRef as string | undefined) || null
+      if (id === hoverStateRef.current) return
+      if (hoverStateRef.current) {
+        try {
+          map.setFeatureState(
+            { source: BUSINESS_SOURCE, id: hoverStateRef.current },
+            { hover: false }
+          )
+        } catch {
+          /* ignore */
+        }
+      }
+      hoverStateRef.current = id
+      if (id) {
+        try {
+          map.setFeatureState({ source: BUSINESS_SOURCE, id }, { hover: true })
+        } catch {
+          /* ignore */
+        }
+      }
+      map.getCanvas().style.cursor = id ? 'pointer' : ''
+    }
+
+    const onBoundsEvent = () => {
+      handlersRef.current.onBoundsChange?.(getBoundsSnapshot(map))
+    }
+
+    // Re-install runtime layers after every style swap (basemap change).
+    const onStyleLoad = () => {
+      void registerPinImages(map, PIN_CATALOG)
+        .then(() => {
+          ensureSourcesAndLayers(map)
+          const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
+          if (src) src.setData(toFeatureCollection(filteredRef.current) as never)
+          setInstallTick((v) => v + 1)
+        })
+        .catch(() => {})
+    }
+
+    map.on('moveend', onBoundsEvent)
+    map.on('zoomend', onBoundsEvent)
+    map.on('click', handleClick)
+    map.on('mousemove', onMapMouseMove)
+    map.on('style.load', onStyleLoad)
+    map.on('load', () => {
+      setMapReady(true)
+      onBoundsEvent() // parity: Leaflet fired bounds once on mount
+    })
+
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+      try {
+        map.resize()
+      } catch {
+        /* ignore */
+      }
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      try {
+        map.remove()
+      } catch {
+        /* ignore */
+      }
+      mapRef.current = null
+      userPopupRef.current = null
+      setMapReady(false)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mounted])
+
+  // keep bounds handler fresh
+  const handleBoundsChange = useCallback((bounds: MapBounds | null) => {
+    setCurrentBounds(bounds)
+    setShowSearchAreaPill(true)
+  }, [])
+  useEffect(() => {
+    handlersRef.current.onBoundsChange = handleBoundsChange
+  }, [handleBoundsChange])
+
+  // ---------------------------------------------------------------------
+  // DATA SYNC: filtered businesses -> GeoJSON source (cached rasterizer)
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !map) return
+    let cancelled = false
+    void registerPinImages(map, PIN_CATALOG)
+      .then(() => {
+        if (cancelled) return
+        ensureSourcesAndLayers(map)
+        const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
+        if (src) src.setData(toFeatureCollection(filteredBusinesses) as never)
+        setInstallTick((v) => v + 1)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, filteredBusinesses])
+
+  // ---------------------------------------------------------------------
+  // SELECTION / HOVER -> feature-state (smooth, no DOM churn)
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !installTick) {
+      return
+    }
+    const selectedId = selected ? String(selected.slug || selected.id) : null
+
+    try {
+      // Selected pins are a filter-narrowed overlay layer ('wa-pins-selected');
+      // feature-state selected would not be legal on symbol layout props.
+      map.setFilter('wa-pins-selected', ['==', ['get', 'uid'], selectedId ?? '__none__'])
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, installTick])
+
+  // ---------------------------------------------------------------------
+  // USER LOCATION -> user GeoJSON + "You are here" callout
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !installTick) return
+    try {
+      const src = map.getSource(USER_SOURCE) as GeoJSONSource | undefined
+      if (!src) return
+      src.setData(
+        userCoords
+          ? {
+              type: 'FeatureCollection',
+              features: [
+                {
+                  type: 'Feature',
+                  geometry: {
+                    type: 'Point',
+                    coordinates: [userCoords.lng, userCoords.lat],
+                  },
+                  properties: {},
+                },
+              ],
+            }
+          : (EMPTY_FC as never)
+      )
+
+      if (userCoords) {
+        userPopupRef.current?.remove()
+        userPopupRef.current = new Popup({
+          closeButton: false,
+          offset: [0, -10],
+          maxWidth: '220px',
+        })
+          .setLngLat([userCoords.lng, userCoords.lat])
+          .setHTML('<div class="wa-user-callout">You are here</div>')
+          .addTo(map)
+      } else if (userPopupRef.current) {
+        userPopupRef.current.remove()
+        userPopupRef.current = null
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [userCoords, installTick])
+
+  // Radar pulse animation around the user dot.
+  useEffect(() => {
+    if (!userCoords || !mapReady) return
+    let raf = 0
+    let t0: number | null = null
+    const step = (now: number) => {
+      if (t0 === null) t0 = now
+      const phase = ((now - t0) % 2000) / 2000
+      try {
+        const map = mapRef.current
+        if (map?.getLayer('wa-user-pulse')) {
+          map.setPaintProperty('wa-user-pulse', 'circle-radius', 8 + phase * 20)
+          map.setPaintProperty('wa-user-pulse', 'circle-opacity', 0.38 * (1 - phase) + 0.04)
+        }
+      } catch {
+        return
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [userCoords, mapReady, installTick])
+
+  // ---------------------------------------------------------------------
+  // BASEMAP SWAP
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    const map = mapRef.current
+    if (!mapReady || !map) return
+    map.setStyle(getMapProvider(activeProviderId).buildStyle() as StyleSpecification)
+    setInstallTick((v) => v + 1) // style.load continues the reinstall
+  }, [activeProviderId, mapReady])
+
+  // ---------------------------------------------------------------------
+  // SHARE-URL DEEP LINK (?b=<slug|id>&city=<city>)
+  // ---------------------------------------------------------------------
+  useEffect(() => {
+    if (!mapReady || deepLinkDoneRef.current) return
+    deepLinkDoneRef.current = true
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const cityParam = params.get('city')
+      if (cityParam && MAJOR_ZIMBABWE_CITIES.some((c) => c.name === cityParam)) {
+        handleSelectCity(cityParam)
+      }
+      const bParam = params.get('b')
+      if (bParam) {
+        const biz = businesses.find((b) => b.slug === bParam || b.id === bParam)
+        if (biz) handleSelectBusiness(biz)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [mapReady, businesses, handleSelectCity, handleSelectBusiness])
 
   if (!mounted) {
     return (
@@ -608,7 +1087,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
               >
                 {MAJOR_ZIMBABWE_CITIES.map((c) => (
                   <option key={c.name} value={c.name}>
-                    📍 {c.name}
+                    {c.name}
                   </option>
                 ))}
               </select>
@@ -618,15 +1097,15 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
             <div className="relative w-36">
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
+                onChange={(e) => setSortBy(e.target.value as never)}
                 className="w-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200/70 border-none rounded-xl px-2 py-2 appearance-none cursor-pointer pr-6 transition-colors focus:ring-2 focus:ring-whatsapp-500/20 outline-none"
               >
-                <option value="rating">⭐ Top Rated</option>
+                <option value="rating">Top Rated</option>
                 <option value="distance" disabled={!userCoords}>
-                  📍 Nearest {userCoords ? '' : '(GPS off)'}
+                  Nearest {userCoords ? '' : '(GPS off)'}
                 </option>
-                <option value="reviews">💬 Most Reviews</option>
-                <option value="name">🔤 A - Z</option>
+                <option value="reviews">Most Reviews</option>
+                <option value="name">A - Z</option>
               </select>
               <ChevronDown className="w-3 h-3 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
@@ -649,7 +1128,11 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                       : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
-                  <span>{cat.icon}</span>
+                  {cat.name === 'All' ? (
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                  ) : (
+                    <CategoryIcon categories={[cat.name]} className="w-3.5 h-3.5" />
+                  )}
                   <span>{cat.name}</span>
                   <span className={`text-[9px] px-1 rounded-full ${active ? 'bg-whatsapp-800 text-white' : 'bg-slate-200 text-slate-600'}`}>
                     {cat.count}
@@ -686,10 +1169,12 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
           ) : (
             filteredBusinesses.map((b) => {
               const isSelected = selected?.id === b.id
-              const emoji = getCategoryEmoji(b.category || [])
               return (
                 <div
                   key={b.id}
+                  ref={(el) => {
+                    sidebarRowRefs.current[b.id] = el
+                  }}
                   onClick={() => handleSelectBusiness(b)}
                   onMouseEnter={() => setHoveredId(b.id)}
                   onMouseLeave={() => setHoveredId(null)}
@@ -701,13 +1186,13 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                 >
                   <div className="flex items-start gap-3">
                     <div
-                      className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 text-xl shadow-sm transition-all ${
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all ${
                         isSelected
                           ? 'bg-gradient-to-br from-whatsapp-600 to-whatsapp-800 text-white ring-2 ring-whatsapp-500'
-                          : 'bg-slate-100'
+                          : 'bg-slate-100 text-slate-600'
                       }`}
                     >
-                      {emoji}
+                      <CategoryIcon categories={b.category || []} className="w-5 h-5" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -727,7 +1212,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                       <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-600">
                         {b.rating > 0 && (
                           <span className="font-bold text-amber-700 flex items-center gap-0.5">
-                            ⭐ {b.rating.toFixed(1)}
+                            {b.rating.toFixed(1)}
                             <span className="text-[10px] text-slate-400">({b.review_count || 1})</span>
                           </span>
                         )}
@@ -736,14 +1221,15 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                           {b.area ? `${b.area}, ` : ''}
                           {b.city || 'Zimbabwe'}
                         </span>
-                        {(b as any).distanceKm !== undefined && (b as any).distanceKm !== null && (
-                          <>
-                            <span className="text-slate-300">·</span>
-                            <span className="text-whatsapp-700 font-semibold shrink-0">
-                              {formatDistance((b as any).distanceKm)}
-                            </span>
-                          </>
-                        )}
+                        {(b as { distanceKm?: number | null }).distanceKm !== undefined &&
+                          (b as { distanceKm?: number | null }).distanceKm !== null && (
+                            <>
+                              <span className="text-slate-300">·</span>
+                              <span className="text-whatsapp-700 font-semibold shrink-0">
+                                {formatDistance((b as { distanceKm?: number }).distanceKm!)}
+                              </span>
+                            </>
+                          )}
                       </div>
                     </div>
                   </div>
@@ -815,6 +1301,9 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
 
       {/* MAIN MAP WORKSPACE */}
       <main className="flex-1 relative w-full h-full overflow-hidden">
+        {/* MAPLIBRE CANVAS */}
+        <div ref={mapDivRef} className="absolute inset-0 z-0 h-full w-full" />
+
         {/* TOP FLOATING SEARCH & CONTROLS ON MOBILE */}
         <div className="md:hidden absolute top-2 left-2 right-2 z-[1000] space-y-2 pointer-events-none">
           <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-2 pointer-events-auto flex items-center gap-2">
@@ -875,7 +1364,11 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                       : 'bg-white/90 text-slate-700 hover:bg-white'
                   }`}
                 >
-                  <span>{cat.icon}</span>
+                  {cat.name === 'All' ? (
+                    <LayoutGrid className="w-3 h-3" />
+                  ) : (
+                    <CategoryIcon categories={[cat.name]} className="w-3 h-3" />
+                  )}
                   <span>{cat.name}</span>
                 </button>
               )
@@ -939,30 +1432,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                 <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-1">
                   Map Style
                 </p>
-                {MAP_TILE_LAYERS.map((layer) => {
-                  const isActive = activeTileId === layer.id
-                  return (
-                    <button
-                      key={layer.id}
-                      onClick={() => {
-                        setActiveTileId(layer.id)
-                        setShowLayerMenu(false)
-                        showToast(`Switched to ${layer.name} map`, 'info')
-                      }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-colors text-xs font-semibold ${
-                        isActive
-                          ? 'bg-whatsapp-50 text-whatsapp-800'
-                          : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <p className="leading-tight">{layer.name}</p>
-                        <p className="text-[10px] text-slate-400 font-normal">{layer.description}</p>
-                      </div>
-                      {isActive && <Check className="w-4 h-4 text-whatsapp-600 shrink-0" />}
-                    </button>
-                  )
-                })}
+                {providerButtons}
               </div>
             )}
           </div>
@@ -970,20 +1440,14 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
           {/* Zoom In & Out */}
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
             <button
-              onClick={() => {
-                const mapEl = document.querySelector('.leaflet-container') as any
-                if (mapEl?._leaflet_map) mapEl._leaflet_map.zoomIn()
-              }}
+              onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
               className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-slate-50 border-b border-slate-100 transition-all active:scale-90"
               title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button
-              onClick={() => {
-                const mapEl = document.querySelector('.leaflet-container') as any
-                if (mapEl?._leaflet_map) mapEl._leaflet_map.zoomOut()
-              }}
+              onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
               className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-slate-50 transition-all active:scale-90"
               title="Zoom Out"
             >
@@ -1023,61 +1487,6 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
           </button>
         </div>
 
-        {/* LEAFLET MAP CONTAINER */}
-        <MapContainer
-          center={ZIMBABWE_CENTER}
-          zoom={ZIMBABWE_DEFAULT_ZOOM}
-          zoomControl={false}
-          className="w-full h-full z-0"
-        >
-          <TileLayer
-            key={activeTile.id}
-            url={activeTile.url}
-            attribution={activeTile.attribution}
-            maxZoom={activeTile.maxZoom}
-          />
-
-          <MapController target={targetCoord} bounds={fitBounds} zoom={targetZoom} />
-
-          <MapEventsHandler
-            onBoundsChange={handleBoundsChange}
-            onMapClick={() => setSelected(null)}
-          />
-
-          {/* User Location Radar Marker */}
-          {userCoords && (
-            <Marker
-              position={[userCoords.lat, userCoords.lng]}
-              icon={createUserLocationMarkerIcon()}
-            >
-              <Popup>
-                <div className="p-1 text-center font-bold text-xs text-sky-800">
-                  📍 You are here
-                </div>
-              </Popup>
-            </Marker>
-          )}
-
-          {/* Business Markers */}
-          {filteredBusinesses.map((b) => {
-            if (!b.lat || !b.lng) return null
-            const isSelected = selected?.id === b.id
-            const isHovered = hoveredId === b.id
-            const emoji = getCategoryEmoji(b.category || [])
-
-            return (
-              <Marker
-                key={b.id}
-                position={[b.lat, b.lng]}
-                icon={createBusinessMarkerIcon(emoji, isSelected, isHovered, !!b.featured_eligible)}
-                eventHandlers={{
-                  click: () => handleSelectBusiness(b),
-                }}
-              />
-            )
-          })}
-        </MapContainer>
-
         {/* SELECTED BUSINESS PREVIEW CARD / MODAL (FLOATING) */}
         {selected && (
           <div className="absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-[380px] z-[1000] animate-slide-up">
@@ -1095,8 +1504,8 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
               </button>
 
               <div className="flex items-start gap-3 mt-1">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-whatsapp-600 to-whatsapp-500 text-white flex items-center justify-center text-2xl shrink-0 shadow-md shadow-whatsapp-600/30">
-                  {getCategoryEmoji(selected.category || [])}
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-whatsapp-600 to-whatsapp-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-whatsapp-600/30">
+                  <CategoryIcon categories={selected.category || []} className="w-6 h-6" strokeWidth={2.2} />
                 </div>
 
                 <div className="flex-1 min-w-0 pr-6">
@@ -1118,7 +1527,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                   <div className="flex items-center gap-2 mt-1 text-xs">
                     {selected.rating > 0 && (
                       <span className="font-extrabold text-amber-700 flex items-center gap-0.5">
-                        ⭐ {selected.rating.toFixed(1)}
+                        {selected.rating.toFixed(1)}
                         <span className="text-[10px] text-slate-400 font-normal">
                           ({selected.review_count || 1})
                         </span>
@@ -1133,14 +1542,15 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                         </span>
                       </>
                     )}
-                    {(selected as any).distanceKm !== undefined && (selected as any).distanceKm !== null && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-whatsapp-700 font-bold">
-                          {formatDistance((selected as any).distanceKm)}
-                        </span>
-                      </>
-                    )}
+                    {(selected as { distanceKm?: number | null }).distanceKm !== undefined &&
+                      (selected as { distanceKm?: number | null }).distanceKm !== null && (
+                        <>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-whatsapp-700 font-bold">
+                            {formatDistance((selected as { distanceKm?: number }).distanceKm!)}
+                          </span>
+                        </>
+                      )}
                   </div>
                 </div>
               </div>
@@ -1222,7 +1632,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                   ) : (
                     <>
                       <span>Full Profile</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRightIcon />
                     </>
                   )}
                 </Link>
@@ -1268,6 +1678,9 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
               {filteredBusinesses.map((b) => (
                 <div
                   key={b.id}
+                  ref={(el) => {
+                    sidebarRowRefs.current[b.id] = el
+                  }}
                   onClick={() => {
                     handleSelectBusiness(b)
                     setMobileTab('map')
@@ -1275,8 +1688,8 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                   className="p-3 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-whatsapp-100 text-whatsapp-800 flex items-center justify-center text-xl shrink-0">
-                      {getCategoryEmoji(b.category || [])}
+                    <div className="w-10 h-10 rounded-xl bg-whatsapp-100 text-whatsapp-800 flex items-center justify-center shrink-0">
+                      <CategoryIcon categories={b.category || []} className="w-5 h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
@@ -1288,7 +1701,7 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
                       </p>
                       {b.rating > 0 && (
                         <p className="text-xs text-amber-700 font-bold mt-0.5">
-                          ⭐ {b.rating.toFixed(1)}
+                          {b.rating.toFixed(1)}
                         </p>
                       )}
                     </div>
@@ -1332,10 +1745,16 @@ export default function BusinessMap({ businesses = [] }: BusinessMapProps) {
   )
 }
 
-function ArrowRight({ className }: { className?: string }) {
+function ArrowRightIcon() {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
     </svg>
   )
 }
+
+// All built-in categories, so every pin image exists before any business
+// arrives (also covers the "Other" fallback glyph).
+const PIN_CATALOG: string[] = [...categories.map((c) => c.name), 'Other']
+
+export { PIN_CATALOG }
