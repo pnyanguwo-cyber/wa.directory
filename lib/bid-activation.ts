@@ -5,16 +5,11 @@
 // and, as the live auction's winner, it takes over the #1 spot instantly:
 // the previous holder's active spot is expired and the winner's spot is
 // inserted with payment_confirmed_at set.
+// Bids are ONE-TIME payments; you hold #1 indefinitely until outbid.
 
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
-
-function monthEnd(): string {
-  const now = new Date()
-  const d = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return d.toISOString().slice(0, 10)
-}
 
 export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupabase>, bidId: string) {
   const { data: bid } = await supabase
@@ -33,6 +28,16 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
     .eq('id', bid.business_id)
     .maybeSingle()
 
+  // Get the current #1 holder BEFORE expiring (for notification)
+  const { data: oldHolder } = await supabase
+    .from('rank_spots')
+    .select('business_id, monthly_fee')
+    .eq('category', bid.category)
+    .eq('city', bid.city)
+    .eq('position', 1)
+    .eq('status', 'active')
+    .maybeSingle()
+
   // Expire the current #1 holder in the same scope.
   await supabase
     .from('rank_spots')
@@ -43,6 +48,8 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
     .eq('status', 'active')
 
   const periodStart = new Date().toISOString().slice(0, 10)
+  // period_end is set far in the future (year 2099) = indefinite until outbid
+  const periodEnd = '2099-12-31'
   const { error: spotError } = await supabase
     .from('rank_spots')
     .insert({
@@ -52,7 +59,7 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
       position: 1,
       monthly_fee: bid.amount,
       period_start: periodStart,
-      period_end: monthEnd(),
+      period_end: periodEnd,
       status: 'active',
       payment_confirmed_at: new Date().toISOString(),
     })
@@ -81,11 +88,35 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
         '🎉 *You are now #1!*',
         '',
         `Your business is the top result for *${bid.category}*${bid.city ? ` in ${bid.city}` : ''}.`,
-        `Monthly fee: $${Number(bid.amount).toFixed(2)} · until ${monthEnd()}`,
+        `One-time fee paid: $${Number(bid.amount).toFixed(2)} — you hold #1 until someone outbids you.`,
         '',
         'Manage it anytime in your portal.',
       ].join('\n')
     ).catch(() => {})
+  }
+
+  // Notify the previous #1 holder they've been outbid.
+  if (oldHolder && oldHolder.business_id !== bid.business_id) {
+    const { data: oldBusiness } = await supabase
+      .from('businesses')
+      .select('name, phone')
+      .eq('id', oldHolder.business_id)
+      .maybeSingle()
+
+    if (oldBusiness?.phone) {
+      sendWhatsAppMessage(
+        oldBusiness.phone,
+        [
+          '📉 *You\'ve been outbid*',
+          '',
+          `Your #1 spot for *${bid.category}*${bid.city ? ` in ${bid.city}` : ''} was taken over.`,
+          `Your previous fee: $${Number(oldHolder.monthly_fee).toFixed(2)}`,
+          `New #1 fee: $${Number(bid.amount).toFixed(2)}`,
+          '',
+          'Type `bid` to place a new bid and reclaim the top spot.',
+        ].join('\n')
+      ).catch(() => {})
+    }
   }
 
   return { activated: true }
