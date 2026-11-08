@@ -51,6 +51,7 @@ import {
   Info,
   CheckCircle2,
   AlertCircle,
+  Grid,
 } from 'lucide-react'
 
 import { categories } from '@/data/categories'
@@ -88,7 +89,7 @@ interface BusinessMapProps {
   businesses: Business[]
   // Products mode reuses this map: markers are sellers that have matching
   // products, and the preview shows those products.
-  mode?: 'products' | 'services'
+  mode?: 'all' | 'products' | 'services'
 }
 
 interface MapBounds {
@@ -156,7 +157,7 @@ function productCatKeyFor(productCategory: string, businessCategories?: string[]
   return sanitizeKey('Other')
 }
 
-function toFeatureCollection(list: Business[], mode: 'products' | 'services' = 'services'): {
+function toFeatureCollection(list: Business[], mode: 'all' | 'products' | 'services' = 'services'): {
   type: 'FeatureCollection'
   features: Array<{
     type: 'Feature'
@@ -194,12 +195,12 @@ function toFeatureCollection(list: Business[], mode: 'products' | 'services' = '
 // Idempotently install the runtime GeoJSON source + symbol layers (both
 // states of every pin, cluster circles/labels, featured badge) and the
 // user-location layers. Safe across setStyle() style swaps.
-function ensureSourcesAndLayers(map: MlMap, mode: 'products' | 'services' = 'services'): void {
+function ensureSourcesAndLayers(map: MlMap, mode: 'all' | 'products' | 'services' = 'services', enableClustering: boolean = false): void {
   if (!map.getSource(BUSINESS_SOURCE)) {
     map.addSource(BUSINESS_SOURCE, {
       type: 'geojson',
       data: toFeatureCollection([], mode) as never,
-      cluster: true,
+      cluster: enableClustering,
       clusterMaxZoom: 14,
       clusterRadius: 55,
     })
@@ -384,6 +385,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
   const [toast, setToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [copiedLink, setCopiedLink] = useState(false)
   const [navigatingSlug, setNavigatingSlug] = useState<string | null>(null)
+  const [clusteringEnabled, setClusteringEnabled] = useState(false)
 
   // Sidebar row refs for list <-> map selection scroll-sync
   const sidebarRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -810,7 +812,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
     const onStyleLoad = () => {
       void registerPinImages(map, PIN_CATALOG)
         .then(() => {
-          ensureSourcesAndLayers(map, mode)
+          ensureSourcesAndLayers(map, mode, clusteringEnabled)
           const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
           if (src) src.setData(toFeatureCollection(filteredRef.current, mode) as never)
           setInstallTick((v) => v + 1)
@@ -871,7 +873,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
     void registerPinImages(map, PIN_CATALOG)
       .then(() => {
         if (cancelled) return
-        ensureSourcesAndLayers(map, mode)
+        ensureSourcesAndLayers(map, mode, clusteringEnabled)
         const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
         if (src) src.setData(toFeatureCollection(filteredBusinesses, mode) as never)
         setInstallTick((v) => v + 1)
@@ -881,7 +883,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, filteredBusinesses, mode])
+  }, [mapReady, filteredBusinesses, mode, clusteringEnabled])
 
   // ---------------------------------------------------------------------
   // SELECTION / HOVER -> feature-state (smooth, no DOM churn)
@@ -1044,12 +1046,12 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
 
       {/* DESKTOP SIDEBAR EXPLORER PANEL */}
       <aside
-        className={`hidden md:flex flex-col shrink-0 bg-white/95 backdrop-blur-xl border-r border-slate-200/80 transition-all duration-300 z-20 shadow-xl relative ${
+        className={`hidden md:flex flex-col shrink-0 bg-white/90 backdrop-blur-xl border-r border-white/80 transition-all duration-300 z-20 shadow-xl relative ${
           isSidebarOpen ? 'w-96 lg:w-[420px]' : 'w-0 overflow-hidden border-none'
         }`}
       >
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-slate-100 space-y-3 bg-gradient-to-b from-whatsapp-50/50 to-transparent">
+        <div className="p-4 border-b border-white/80 space-y-3 bg-gradient-to-b from-white/70 to-transparent">
           <div className="flex items-center justify-between gap-2">
             <Link
               href="/"
@@ -1089,12 +1091,12 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search solar, plumbers, clinics..."
-              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-100/80 hover:bg-slate-100 focus:bg-white rounded-xl border border-transparent focus:border-whatsapp-500 focus:ring-2 focus:ring-whatsapp-500/20 transition-all outline-none text-slate-800 placeholder:text-slate-400"
+              className="w-full pl-9 pr-8 py-2 text-xs bg-white/70 hover:bg-white focus:bg-white rounded-xl border border-white/80 focus:border-whatsapp-500 focus:ring-2 focus:ring-whatsapp-500/20 transition-all outline-none text-slate-800 placeholder:text-slate-400"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="w-5 h-5 absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full hover:bg-slate-200 text-slate-400 flex items-center justify-center text-xs transition-colors"
+                className="w-5 h-5 absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full hover:bg-slate-100 text-slate-400 flex items-center justify-center text-xs transition-colors"
                 title="Clear search"
               >
                 <X className="w-3 h-3" />
@@ -1137,7 +1139,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           </div>
 
           {/* Quick Categories Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 map-scrollbar">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 map-scrollbar bg-white/50 backdrop-blur-sm rounded-xl px-2 py-1.5 border border-white/80">
             {categoryList.slice(0, 8).map((cat) => {
               const active = selectedCategory.toLowerCase() === cat.name.toLowerCase()
               return (
@@ -1169,10 +1171,10 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
         </div>
 
         {/* Scrollable Listings */}
-        <div className="flex-1 overflow-y-auto map-scrollbar divide-y divide-slate-100 p-2 space-y-1">
+        <div className="flex-1 overflow-y-auto map-scrollbar divide-y divide-white/80 p-2 space-y-1 bg-white/30 backdrop-blur-sm rounded-xl">
           {filteredBusinesses.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-6 text-slate-500">
-              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mb-3 text-slate-400">
+              <div className="w-12 h-12 rounded-2xl bg-white/80 backdrop-blur-sm flex items-center justify-center mb-3 text-slate-400 border border-white/80">
                 <Search className="w-6 h-6" />
               </div>
               <p className="text-sm font-bold text-slate-800">No businesses found</p>
@@ -1205,8 +1207,8 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
                   onMouseLeave={() => setHoveredId(null)}
                   className={`p-3 rounded-2xl cursor-pointer transition-all ${
                     isSelected
-                      ? 'bg-whatsapp-50/90 border border-whatsapp-500/40 shadow-sm'
-                      : 'hover:bg-slate-50 border border-transparent'
+                      ? 'bg-white/90 backdrop-blur-md border border-whatsapp-500/40 shadow-sm'
+                      : 'hover:bg-white/60 backdrop-blur-sm border border-transparent'
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -1214,7 +1216,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
                       className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm transition-all ${
                         isSelected
                           ? 'bg-gradient-to-br from-whatsapp-600 to-whatsapp-800 text-white ring-2 ring-whatsapp-500'
-                          : 'bg-slate-100 text-slate-600'
+                          : 'bg-white/80 backdrop-blur-sm text-slate-600 border border-white/80'
                       }`}
                     >
                       <CategoryIcon categories={b.category || []} className="w-5 h-5" />
@@ -1306,7 +1308,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
       >
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="bg-white/95 backdrop-blur-md text-slate-700 hover:text-whatsapp-700 hover:bg-white border border-slate-200/80 shadow-lg w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
+          className="bg-white/90 backdrop-blur-xl text-slate-700 hover:text-whatsapp-700 hover:bg-white border border-white/80 shadow-lg w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90"
           title={isSidebarOpen ? 'Collapse sidebar' : 'Open places panel'}
         >
           {isSidebarOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
@@ -1315,7 +1317,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
         {!isSidebarOpen && (
           <Link
             href="/"
-            className="flex items-center gap-1.5 bg-white/95 backdrop-blur-md hover:bg-white text-slate-800 hover:text-whatsapp-700 px-3.5 py-2 rounded-2xl shadow-xl border border-slate-200/90 text-xs font-bold transition-all active:scale-95 hover:shadow-card hover:-translate-y-0.5"
+            className="flex items-center gap-1.5 bg-white/90 backdrop-blur-xl hover:bg-white text-slate-800 hover:text-whatsapp-700 px-3.5 py-2 rounded-2xl shadow-xl border border-white/80 text-xs font-bold transition-all active:scale-95 hover:shadow-card hover:-translate-y-0.5"
             title="Go back to Home screen"
           >
             <ArrowLeft className="w-4 h-4 text-whatsapp-600" />
@@ -1331,7 +1333,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
 
         {/* TOP FLOATING SEARCH & CONTROLS ON MOBILE */}
         <div className="md:hidden absolute top-2 left-2 right-2 z-[1000] space-y-2 pointer-events-none">
-          <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-xl border border-slate-200/80 p-2 pointer-events-auto flex items-center gap-2">
+          <div className="bg-white/90 backdrop-blur-xl rounded-2xl shadow-xl border border-white/80 p-2 pointer-events-auto flex items-center gap-2">
             <Link
               href="/"
               className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-whatsapp-50 border border-slate-200/80 text-slate-700 hover:text-whatsapp-700 flex items-center justify-center shrink-0 transition-all active:scale-90"
@@ -1347,7 +1349,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search places in Zimbabwe..."
-                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-100 rounded-xl outline-none text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-whatsapp-500"
+                className="w-full pl-8 pr-7 py-1.5 text-xs bg-slate-100/80 rounded-xl outline-none text-slate-800 placeholder:text-slate-400 focus:bg-white focus:ring-1 focus:ring-whatsapp-500"
               />
               {searchQuery && (
                 <button
@@ -1362,7 +1364,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
             <select
               value={selectedCity}
               onChange={(e) => handleSelectCity(e.target.value)}
-              className="text-[11px] font-semibold bg-slate-100 text-slate-700 px-2 py-1.5 rounded-xl border-none outline-none max-w-[110px] truncate"
+              className="text-[11px] font-semibold bg-slate-100/80 text-slate-700 px-2 py-1.5 rounded-xl border-none outline-none max-w-[110px] truncate"
             >
               {MAJOR_ZIMBABWE_CITIES.map((c) => (
                 <option key={c.name} value={c.name}>
@@ -1373,7 +1375,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           </div>
 
           {/* Quick Category Pills on Mobile */}
-          <div className="flex items-center gap-1.5 overflow-x-auto map-scrollbar pointer-events-auto px-1">
+          <div className="flex items-center gap-1.5 overflow-x-auto map-scrollbar pointer-events-auto px-1 bg-white/50 backdrop-blur-sm rounded-xl p-1.5 border border-white/80">
             {categoryList.slice(0, 10).map((cat) => {
               const active = selectedCategory.toLowerCase() === cat.name.toLowerCase()
               return (
@@ -1407,7 +1409,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
             <button
               onClick={handleSearchThisArea}
               disabled={isAreaFilteringLoading}
-              className="flex items-center gap-2 bg-white/95 hover:bg-white text-slate-800 hover:text-whatsapp-700 px-4 py-2 rounded-full shadow-2xl border border-slate-200/90 text-xs font-bold transition-all active:scale-95 hover:shadow-card hover:-translate-y-0.5"
+              className="flex items-center gap-2 bg-white/90 hover:bg-white backdrop-blur-xl text-slate-800 hover:text-whatsapp-700 px-4 py-2 rounded-full shadow-2xl border border-white/80 text-xs font-bold transition-all active:scale-95 hover:shadow-card hover:-translate-y-0.5"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-whatsapp-600 ${isAreaFilteringLoading ? 'animate-spin' : ''}`} />
               <span>Search this area</span>
@@ -1416,17 +1418,17 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
         )}
 
         {/* TOP-RIGHT MAP CONTROLS CLUSTER */}
-        <div className="absolute top-16 md:top-4 right-3 z-[1000] flex flex-col gap-2">
+        <div className="absolute top-16 md:top-4 right-3 z-[1000] flex flex-col gap-2 bg-white/90 backdrop-blur-xl rounded-2xl border border-white/80 shadow-xl p-1.5">
           {/* GPS Locate Me Button */}
           <button
             onClick={handleLocateMe}
             disabled={isLocating}
-            className={`w-10 h-10 rounded-2xl shadow-xl flex items-center justify-center border transition-all active:scale-90 ${
+            className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all active:scale-90 ${
               isLocating
                 ? 'bg-whatsapp-600 text-white border-whatsapp-700'
                 : userCoords
                 ? 'bg-sky-500 text-white border-sky-600 shadow-sky-500/25 ring-2 ring-sky-300'
-                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                : 'bg-white/80 hover:bg-white text-slate-700 border-white/80'
             }`}
             title="Locate me via GPS"
           >
@@ -1441,10 +1443,10 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           <div className="relative">
             <button
               onClick={() => setShowLayerMenu(!showLayerMenu)}
-              className={`w-10 h-10 rounded-2xl shadow-xl flex items-center justify-center border transition-all active:scale-90 ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-all active:scale-90 ${
                 showLayerMenu
                   ? 'bg-whatsapp-600 text-white border-whatsapp-700'
-                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                  : 'bg-white/80 hover:bg-white text-slate-700 border-white/80'
               }`}
               title="Change Map Style"
             >
@@ -1453,7 +1455,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
 
             {/* Layer Popover Menu */}
             {showLayerMenu && (
-              <div className="absolute right-0 top-12 w-52 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-slate-200 p-2 space-y-1 animate-slide-up z-50">
+              <div className="absolute right-0 top-12 w-52 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/80 p-2 space-y-1 animate-slide-up z-50">
                 <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider px-2 py-1">
                   Map Style
                 </p>
@@ -1463,17 +1465,17 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           </div>
 
           {/* Zoom In & Out */}
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
+          <div className="bg-white/80 rounded-xl border border-white/80 overflow-hidden flex flex-col">
             <button
               onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
-              className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-slate-50 border-b border-slate-100 transition-all active:scale-90"
+              className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-white border-b border-white/80 transition-all active:scale-90"
               title="Zoom In"
             >
               <ZoomIn className="w-4 h-4" />
             </button>
             <button
               onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
-              className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-slate-50 transition-all active:scale-90"
+              className="w-10 h-9 flex items-center justify-center text-slate-700 hover:text-whatsapp-700 hover:bg-white transition-all active:scale-90"
               title="Zoom Out"
             >
               <ZoomOut className="w-4 h-4" />
@@ -1483,7 +1485,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           {/* Fit All Markers / Reset View Button */}
           <button
             onClick={handleFitAll}
-            className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 hover:text-whatsapp-700 rounded-2xl shadow-xl border border-slate-200 flex items-center justify-center transition-all active:scale-90"
+            className="w-10 h-10 bg-white/80 hover:bg-white text-slate-700 hover:text-whatsapp-700 rounded-xl shadow-lg border border-white/80 flex items-center justify-center transition-all active:scale-90"
             title="Fit all markers in view"
           >
             <Navigation className="w-4 h-4 -rotate-45" />
@@ -1492,10 +1494,10 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           {/* Share Map Button */}
           <button
             onClick={handleShareMap}
-            className={`w-10 h-10 rounded-2xl shadow-xl border flex items-center justify-center transition-all active:scale-90 ${
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all active:scale-90 ${
               copiedLink
-                ? 'bg-whatsapp-600 text-white border-whatsapp-700'
-                : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                ? 'bg-whatsapp-600 text-white border-whatsapp-700 shadow-whatsapp-500/25'
+                : 'bg-white/80 hover:bg-white text-slate-700 border-white/80'
             }`}
             title="Share this map"
           >
@@ -1505,24 +1507,37 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
           {/* Fullscreen Toggle Button */}
           <button
             onClick={handleToggleFullscreen}
-            className="w-10 h-10 bg-white hover:bg-slate-50 text-slate-700 hover:text-whatsapp-700 rounded-2xl shadow-xl border border-slate-200 hidden sm:flex items-center justify-center transition-all active:scale-90"
+            className="w-10 h-10 bg-white/80 hover:bg-white text-slate-700 hover:text-whatsapp-700 rounded-xl shadow-lg border border-white/80 hidden sm:flex items-center justify-center transition-all active:scale-90"
             title={isFullscreen ? 'Exit Fullscreen' : 'View Fullscreen'}
           >
             {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+          </button>
+
+          {/* Clustering Toggle Button */}
+          <button
+            onClick={() => setClusteringEnabled(!clusteringEnabled)}
+            className={`w-10 h-10 rounded-xl shadow-lg border flex items-center justify-center transition-all active:scale-90 ${
+              clusteringEnabled
+                ? 'bg-whatsapp-600 text-white border-whatsapp-700'
+                : 'bg-white/80 hover:bg-white text-slate-700 border-white/80'
+            }`}
+            title={clusteringEnabled ? 'Disable clustering (show all pins)' : 'Enable clustering (group nearby pins)'}
+          >
+            <Grid className="w-5 h-5" />
           </button>
         </div>
 
         {/* SELECTED BUSINESS PREVIEW CARD / MODAL (FLOATING) */}
         {selected && (
           <div className="absolute bottom-4 left-4 right-4 md:left-6 md:right-auto md:w-[380px] z-[1000] animate-slide-up">
-            <div className="bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200/90 p-4 relative overflow-hidden ring-1 ring-black/5">
+            <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border border-white/80 p-4 relative overflow-hidden ring-1 ring-black/5">
               {/* Top gradient accent */}
               <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-whatsapp-500 via-whatsapp-400 to-whatsapp-600" />
 
               {/* Close button */}
               <button
                 onClick={() => setSelected(null)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center absolute top-3.5 right-3.5 transition-all active:scale-90"
+                className="w-7 h-7 rounded-full bg-white/80 hover:bg-white backdrop-blur-sm text-slate-500 hover:text-slate-800 flex items-center justify-center absolute top-3.5 right-3.5 transition-all active:scale-90 border border-white/80"
                 title="Close card"
               >
                 <X className="w-4 h-4" />
@@ -1582,7 +1597,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
 
               {/* Bio / Description snippet */}
               {selected.bio && (
-                <p className="text-xs text-slate-600 line-clamp-2 mt-2.5 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                <p className="text-xs text-slate-600 line-clamp-2 mt-2.5 bg-white/70 backdrop-blur-sm p-2 rounded-xl border border-white/80">
                   {selected.bio}
                 </p>
               )}
@@ -1597,7 +1612,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
 
               {/* PRODUCTS MODE: the seller's matching products */}
               {mode === 'products' && (selected.products?.length ?? 0) > 0 && (
-                <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-2.5">
+                <div className="mt-3 rounded-xl border border-white/80 bg-white/70 backdrop-blur-sm p-2.5">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
                     {selected.productCount || selected.products!.length} matching{' '}
                     {(selected.productCount || selected.products!.length) === 1 ? 'product' : 'products'}

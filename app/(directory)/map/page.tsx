@@ -4,10 +4,10 @@ import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { CITY_COORDS } from '@/lib/map-locations'
 import { searchSellersWithProducts, type SellerWithProducts, resolveProductCategory } from '@/lib/products'
-import DiscoveryModeSwitch from '@/components/discovery-mode-switch'
 import type { Business } from '@/types'
 
 const BusinessMap = dynamicImport(() => import('@/components/business-map'), { ssr: false })
+const MapTopBar = dynamicImport(() => import('@/components/map-top-bar'), { ssr: false })
 
 export const metadata: Metadata = {
   title: 'Interactive Zimbabwe Business Map | WA Directory',
@@ -53,28 +53,20 @@ export default async function MapPage({
 }: {
   searchParams: { mode?: string }
 }) {
-  const mode = searchParams?.mode === 'products' ? 'products' : 'services'
+  const mode = (searchParams?.mode === 'products' ? 'products' : searchParams?.mode === 'all' ? 'all' : 'services') as 'all' | 'products' | 'services'
 
   let businesses: Business[] = []
 
   if (mode === 'products') {
-    // Products mode: one marker per SELLER, carrying its matching products.
-    // Individual items are never treated as separate physical locations.
-    // Pin icon/color uses the seller's primary product category (normalized to taxonomy).
     try {
       const sellers = await searchSellersWithProducts({ limit: 300 })
       const sellersWithCoords = withCoordinates(sellers as unknown as Record<string, unknown>[])
 
-      // Attach primary product category for pin styling in Products mode
-      // Normalize through resolveProductCategory to ensure it matches the taxonomy
       businesses = sellersWithCoords.map(seller => {
         const products = (seller as SellerWithProducts).products || []
         const firstProduct = products[0]
         const primaryProductCategory = firstProduct?.category || ''
-        // Use product name as fallback for better category matching
         const fallbackText = firstProduct?.name || primaryProductCategory
-        // Normalize against controlled taxonomy so map pins use correct icons
-        // If no match found (returns ''), fall back to seller's first business category
         const normalizedCategory = resolveProductCategory(primaryProductCategory, fallbackText)
         const sellerBusinessCategory = (seller.category?.[0] || '')
         return {
@@ -103,13 +95,7 @@ export default async function MapPage({
 
   return (
     <div className="h-[calc(100dvh-3.5rem)] -mb-16 md:mb-0 w-full relative overflow-hidden bg-slate-900 flex flex-col">
-      <div className="shrink-0 flex justify-center bg-slate-900/95 px-3 py-2 border-b border-white/10">
-        <DiscoveryModeSwitch
-          mode={mode}
-          productsHref="/map?mode=products"
-          servicesHref="/map"
-        />
-      </div>
+      <MapTopBar mode={mode} />
       <div className="flex-1 relative overflow-hidden">
         <BusinessMap businesses={businesses} mode={mode} />
       </div>

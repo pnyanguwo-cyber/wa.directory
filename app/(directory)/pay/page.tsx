@@ -7,6 +7,7 @@ import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import type { PlanType } from '@/types'
 import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
 import { digitsOnly } from '@/lib/phone'
+import AnimatedBlobBackground from '@/components/animated-blob-background'
 
 interface Business {
   id: string
@@ -277,8 +278,10 @@ export default function PayPage() {
   const shownResults = payMatch === 'all' ? results : results.filter(b => (b.match || 'name') === payMatch)
 
   return (
-    <div className="pay-flow min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50">
-      <div className="max-w-5xl mx-auto px-4 py-8 sm:py-16">
+    <div className="pay-flow min-h-screen bg-gradient-to-br from-green-50 via-white to-emerald-50 relative overflow-hidden">
+      {/* Animated blob background */}
+      <AnimatedBlobBackground blobs={2} baseColor="#25D366" />
+      <div className="max-w-5xl mx-auto px-4 py-8 sm:py-16 relative z-10">
         <Link
           href="/"
           className="inline-flex items-center gap-1 text-text-secondary hover:text-text-primary text-sm mb-8 transition-colors duration-150"

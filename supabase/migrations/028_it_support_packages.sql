@@ -4,7 +4,11 @@
 -- Safe to re-run. Follows the 005 lockdown convention: RLS on + no policies
 -- (service role keeps full access server-side).
 
-CREATE TYPE support_tier AS ENUM ('bronze', 'silver', 'gold');
+DO $$ BEGIN
+  CREATE TYPE support_tier AS ENUM ('bronze', 'silver', 'gold');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;  -- already exists from earlier manual setup
+END $$;
 
 CREATE TABLE IF NOT EXISTS support_subscriptions (
   id BIGSERIAL PRIMARY KEY,

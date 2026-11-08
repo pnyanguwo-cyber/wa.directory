@@ -197,19 +197,20 @@ export default async function SearchPage({
     ? (searchParams.match as string)
     : 'all'
 
-  // One shell, two modes. `services` is the default so old links and shared
+  // One shell, three modes. `all` is the default so old links and shared
   // URLs keep resolving to the directory they were built for.
-  const mode = searchParams.mode === 'products' ? 'products' : 'services'
+  const mode = (searchParams.mode === 'products' ? 'products' : searchParams.mode === 'all' ? 'all' : 'services') as 'all' | 'products' | 'services'
   const page = Math.max(Number.parseInt(searchParams.page || '1', 10) || 1, 1)
   const category = searchParams.category || ''
   const availability = searchParams.availability || ''
 
-  const modeHref = (next: 'products' | 'services') => {
+  const modeHref = (next: 'all' | 'products' | 'services') => {
     const params = new URLSearchParams()
     if (next === 'products') params.set('mode', 'products')
+    if (next === 'all') params.set('mode', 'all')
     if (q) params.set('q', q)
-    if (next === 'products' && category) params.set('category', category)
-    if (next === 'products' && availability) params.set('availability', availability)
+    if ((next === 'products' || next === 'all') && category) params.set('category', category)
+    if ((next === 'products' || next === 'all') && availability) params.set('availability', availability)
     if (next === 'services' && verified) params.set('verified', 'true')
     if (next === 'services' && sort !== 'rating') params.set('sort', sort)
     const query = params.toString()
@@ -221,6 +222,7 @@ export default async function SearchPage({
       <div className="flex justify-center mb-4">
         <DiscoveryModeSwitch
           mode={mode}
+          allHref={modeHref('all')}
           productsHref={modeHref('products')}
           servicesHref={modeHref('services')}
         />

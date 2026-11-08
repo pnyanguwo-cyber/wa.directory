@@ -2,7 +2,9 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getPortalActor } from '@/lib/org-auth'
 import { getSubscription } from '@/lib/portal'
-import PortalTabs from '@/components/portal-tabs'
+import PortalShell, { type ShellNavGroup, type ShellNavItem } from '@/components/portal/shell'
+
+export const dynamic = 'force-dynamic'
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const actor = await getPortalActor()
@@ -13,69 +15,99 @@ export default async function PortalLayout({ children }: { children: React.React
   const paid = sub?.status === 'active' && (!sub.expiresAt || new Date(sub.expiresAt) > new Date())
   const isHq = actor.role === 'org-hq'
 
+  const nav: ShellNavGroup[] = [
+    {
+      title: 'Workspace',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', href: '/portal' },
+        { id: 'chats', label: 'Chats', icon: 'chats', href: '/portal/conversations' },
+        { id: 'analytics', label: 'Analytics', icon: 'analytics', href: '/portal/analytics' },
+      ],
+    },
+    {
+      title: 'Listing',
+      items: [
+        ...(isHq
+          ? ([
+              { id: 'branches', label: 'Branches', icon: 'branches', href: '/portal/branches' },
+              { id: 'businesses', label: 'My Businesses', icon: 'businesses', href: '/portal/businesses' },
+            ] as ShellNavItem[])
+          : []),
+        { id: 'ranking', label: 'Ranking', icon: 'ranking', href: '/portal/ranking' },
+        { id: 'improve', label: 'Improve', icon: 'improve', href: '/portal/improve' },
+        { id: 'site', label: 'Site', icon: 'site', href: '/portal/site' },
+      ],
+    },
+    {
+      title: 'Commerce',
+      items: [
+        { id: 'billing', label: 'Billing', icon: 'billing', href: '/portal/billing' },
+        { id: 'shop', label: 'Shop', icon: 'shop', href: '/portal/shop' },
+        { id: 'card', label: 'Card & QR', icon: 'card', href: '/portal/card' },
+      ],
+    },
+    {
+      title: 'Account',
+      items: [
+        { id: 'settings', label: 'Settings', icon: 'settings', href: '/portal/settings' },
+        { id: 'help', label: 'Help & Support', icon: 'help', href: '/portal/help' },
+      ],
+    },
+  ]
+
+  const eyebrow = isHq
+    ? 'Organization Portal · HQ'
+    : actor.role === 'org-branch'
+      ? `${actor.orgName} · Branch`
+      : 'Business Portal'
+
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-8">
-      <div className="bg-gradient-to-br from-white/85 via-white/80 to-whatsapp-50/20 backdrop-blur-xl sm:rounded-3xl border border-white/70 shadow-soft-lift p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="min-w-0">
-            <span className="text-xs font-bold uppercase tracking-wider text-whatsapp-700">
-              {isHq ? 'Organization Portal · HQ' : actor.role === 'org-branch' ? `${actor.orgName} · Branch Portal` : 'Business Portal'}
-            </span>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-text-primary tracking-tight truncate">{business.name}</h1>
-            <p className="text-xs text-text-secondary mt-0.5">
-              {paid ? (
-                <span className="inline-flex items-center gap-1.5 font-medium text-whatsapp-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-whatsapp-500" /> Premium subscription active
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 font-medium text-text-secondary">
-                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" /> Free plan: 7 days of history, 3 tips
-                </span>
-              )}
-              {actor.role === 'org-branch' && (
-                <span className="ml-2 text-text-secondary">Part of {actor.orgName}</span>
-              )}
-            </p>
-            {isHq && (
-              <p className="text-[11px] text-whatsapp-700 mt-1 font-medium">
-                HQ account: you can view and manage every branch of {actor.orgName}.
-              </p>
-            )}
+    <PortalShell
+      brand={business.name}
+      eyebrow={eyebrow}
+      subtitle={isHq ? 'HQ workspace · every branch' : paid ? 'Premium workspace' : 'Free plan workspace'}
+      nav={nav}
+      footer={
+        <div className="rounded-xl bg-whatsapp-50/80 p-2.5">
+          <p className="flex items-center gap-1.5 text-[10.5px] font-bold text-whatsapp-800">
+            <span className={`h-1.5 w-1.5 rounded-full ${paid ? 'bg-whatsapp-500' : 'bg-gray-400'}`} />
+            {paid ? 'Premium active' : 'Free plan'}
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-text-secondary">
+            {paid ? 'Full history, chats and analytics.' : '7 days of history, 3 improvement tips.'}
+          </p>
+          <Link href="/portal/billing" className="mt-1.5 inline-block text-[10.5px] font-semibold text-whatsapp-700 hover:underline">
+            Manage plan
+          </Link>
+        </div>
+      }
+    >
+      {!business.verified && (
+        <div className="mb-3 rounded-2xl border border-amber-200 bg-amber-50 p-3.5">
+          <p className="flex items-center gap-2 text-[12px] font-bold text-amber-800">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+            Your listing is pending approval
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+            Customers can&apos;t find you yet. An admin will review your listing shortly: you&apos;ll see it go live here.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link
+              href={`/edit?token=${business.edit_token}`}
+              className="rounded-lg bg-amber-600 px-2.5 py-1.5 text-[10.5px] font-semibold text-white hover:bg-amber-700"
+            >
+              Edit listing
+            </Link>
+            <Link
+              href={`/my-qr/${business.slug || business.id}`}
+              className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[10.5px] font-semibold text-amber-800 hover:bg-amber-100"
+            >
+              Get your QR codes
+            </Link>
           </div>
         </div>
-
-        <PortalTabs isHq={isHq} />
-
-        {!business.verified && (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
-            <p className="text-sm font-bold text-amber-800 flex items-center gap-2">
-              <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
-              </svg>
-              Your listing is pending approval
-            </p>
-            <p className="text-xs text-amber-800 leading-relaxed">
-              Customers can&apos;t find you yet. An admin will review your listing shortly: you&apos;ll be notified here once you&apos;re live.
-            </p>
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Link
-                href={`/edit?token=${business.edit_token}`}
-                className="text-xs font-semibold bg-amber-600 text-white rounded-xl px-3.5 py-2 hover:bg-amber-700 transition-colors"
-              >
-                Edit listing
-              </Link>
-              <Link
-                href={`/my-qr/${business.slug || business.id}`}
-                className="text-xs font-semibold bg-white border border-amber-300 text-amber-800 rounded-xl px-3.5 py-2 hover:bg-amber-100 transition-colors"
-              >
-                Get your QR codes
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {children}
-      </div>
-    </div>
+      )}
+      {children}
+    </PortalShell>
   )
 }
