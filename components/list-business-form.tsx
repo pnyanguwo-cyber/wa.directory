@@ -16,6 +16,7 @@ import { PasswordStrengthMeter, validatePassword } from '@/components/password-s
 import { Smartphone, PhoneCall, MessageSquare, Phone } from 'lucide-react'
 import { toFullPhone, normalizeVoicePhone, digitsOnly } from '@/lib/phone'
 import { normalizeUsername } from '@/lib/username'
+import { buildCategoryOptions } from '@/lib/utils'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 
 // Lazy: heavy portal-only pieces stay out of the main bundle.
@@ -222,16 +223,7 @@ export default function ListBusinessForm({
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
   const isWholeCountry = form.city === '*'
 
-  const allCategoryOptions = (() => {
-    const merged = new Map<string, string>()
-    for (const c of staticCategories) merged.set(c.name, c.icon)
-    for (const c of categoryOptions) merged.set(c.value, c.label.replace(/^\S+\s/, ''))
-    const list: { value: string; label: string }[] = []
-    merged.forEach((icon, name) => {
-      list.push({ value: name, label: `${icon} ${name}` })
-    })
-    return list.sort((a, b) => a.label.localeCompare(b.label))
-  })()
+  const allCategoryOptions = buildCategoryOptions(staticCategories, categoryOptions)
 
   const categoryHints = (() => {
     const hints = new Map<string, string>()
@@ -319,14 +311,10 @@ export default function ListBusinessForm({
   const hasPhysical = !!form.city || areas.length > 0
   const hasLocation = form.isRemote || hasPhysical
   const locationMissing = (!form.isPhysical && !form.isRemote) || (needsPhysical && !hasPhysical)
-  const isValidStep1 = !!(
-    form.name.trim() &&
-    !phoneError &&
-    // Need either a phone number (voice) OR whatsapp_username (WhatsApp)
-    // When phoneWhatsapp is true, whatsapp_username is required
-    // When phoneWhatsapp is false, phone is required
-    (phoneWhatsapp ? form.whatsapp_username.trim() : form.phone.trim())
-  )
+  // A phone number is always required — it is how customers reach the
+  // business. The WhatsApp Business username is optional and must never
+  // block the Next button.
+  const isValidStep1 = !!(form.name.trim() && form.phone.trim() && !phoneError)
   const isValidStep2 = !!(form.description.trim() && categories.length > 0 && !locationMissing)
   const passwordError = !form.password
     ? 'Create a portal password. It unlocks your statistics portal.'
@@ -1388,7 +1376,9 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
               label="Country Code"
             />
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Phone Number</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
+                Phone Number <span className="text-danger">*</span>
+              </label>
               <input
                 ref={phoneRef}
                 type="tel"

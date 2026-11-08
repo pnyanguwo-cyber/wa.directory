@@ -68,6 +68,12 @@ export default function LoginPage() {
       setError(data.error || 'Could not send code')
       return
     }
+    // No stored password yet (WhatsApp sign-up): nothing to reset, so the
+    // setup link is sent instead and we stay on this screen.
+    if (data.needsSetup) {
+      setNotice(data.message || 'We sent you a link on WhatsApp to create your password.')
+      return
+    }
     setNotice('Code sent to your WhatsApp. It expires in 10 minutes.')
     if (mode === 'otp') setMode('verify')
     else setMode('reset')

@@ -50,6 +50,7 @@ export async function POST(request: Request) {
         slug: business.slug,
         id: String(id),
         username: business.username ?? null,
+        editToken: business.edit_token ?? null,
       })
     }
 

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import type { Business } from '@/types'
 import { categories as staticCategories } from '@/data/categories'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
-import { dedupeCategories } from '@/lib/utils'
+import { dedupeCategories, buildCategoryOptions } from '@/lib/utils'
 import SearchSelect from '@/components/search-select'
 import MultiSearchSelect from '@/components/multi-search-select'
 import { PasswordStrengthMeter } from '@/components/password-strength'
@@ -111,16 +111,7 @@ export default function EditBusinessForm({
 
   const selectedCity = zimbabweCities.find(c => c.name === form.city)
 
-  const allCategoryOptions = (() => {
-    const merged = new Map<string, string>()
-    for (const c of staticCategories) merged.set(c.name, c.icon)
-    for (const c of categoryOptions) merged.set(c.value, c.label.replace(/^\S+\s/, ''))
-    const list: { value: string; label: string }[] = []
-    merged.forEach((icon, name) => {
-      list.push({ value: name, label: `${icon} ${name}` })
-    })
-    return list.sort((a, b) => a.label.localeCompare(b.label))
-  })()
+  const allCategoryOptions = buildCategoryOptions(staticCategories, categoryOptions)
 
   const areaOptions = form.city && form.city !== '*'
     ? [

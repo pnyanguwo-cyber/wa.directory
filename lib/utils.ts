@@ -56,3 +56,33 @@ export function dedupeCategories(cats: unknown): string[] {
   }
   return result.slice(0, 4)
 }
+
+/**
+ * Build the category picker options from the built-in list plus the approved
+ * DB categories. DB options arrive as "<emoji> <name>" labels, so only the
+ * emoji is lifted out of the label — using the whole label as the "icon"
+ * rendered names twice ("Baker Baker"). Matches are case-insensitive so the
+ * same category never appears in two casings.
+ */
+export function buildCategoryOptions(
+  staticCategories: { name: string; icon?: string }[],
+  approved: { value: string; label: string }[]
+): { value: string; label: string }[] {
+  const merged = new Map<string, { name: string; icon: string }>()
+  for (const c of staticCategories) {
+    if (!c.name) continue
+    merged.set(c.name.toLowerCase(), { name: c.name, icon: c.icon || '' })
+  }
+  for (const c of approved) {
+    const name = (c.value || '').trim()
+    if (!name) continue
+    const key = name.toLowerCase()
+    const remainder = c.label.replace(name, '').trim()
+    const icon = remainder && !/[a-z0-9]/i.test(remainder) ? remainder : ''
+    const existing = merged.get(key)
+    merged.set(key, { name: existing?.name || name, icon: icon || existing?.icon || '' })
+  }
+  return Array.from(merged.values())
+    .map(({ name, icon }) => ({ value: name, label: icon ? `${icon} ${name}` : name }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}

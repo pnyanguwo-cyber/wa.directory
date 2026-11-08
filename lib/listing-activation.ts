@@ -9,6 +9,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
 import { getBotSetting } from '@/lib/bot-settings'
 import { renderChannelPitch } from '@/lib/bot-templates'
+import { portalAccessLines } from '@/lib/portal-invite'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -69,7 +70,7 @@ export async function activateListingSubscription(
   {
     const { data: business } = await supabase
       .from('businesses')
-      .select('name, phone, username, slug')
+      .select('name, phone, username, slug, edit_token')
       .eq('id', sub.business_id)
       .maybeSingle()
 
@@ -78,11 +79,16 @@ export async function activateListingSubscription(
       // Throw the owner their links immediately: listing, auto-website,
       // portal — the paying moment is the best onboarding window we get.
       const bizSlug = business.slug || business.username || ''
+      const editToken = (business as { edit_token?: string | null }).edit_token || ''
       const links = [
         `🏢 Profile: ${siteUrl}/business/${bizSlug}`,
         `🌐 Website: ${siteUrl}/site/${bizSlug}`,
-        `🔑 Portal: ${siteUrl}/portal (log in with @${business.username || 'N/A'})`,
-      ].filter(l => !l.includes('/N/A')) // no usernames on file → skip that line
+        ...(await portalAccessLines(supabase, {
+          id: sub.business_id,
+          username: business.username,
+          editToken,
+        })),
+      ]
       sendWhatsAppMessage(
         business.phone,
         [
@@ -93,8 +99,18 @@ export async function activateListingSubscription(
           '',
           ...links,
           '',
+          ...(editToken
+            ? [`📱 Your QR codes (chat + portal) — print them for customers: ${siteUrl}/my-qr/${bizSlug}`, '']
+            : []),
           `Renew anytime: ${siteUrl}/pay`,
-          '📸 After go-live: send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
+          '',
+          '📦 *How to list your products & prices*',
+          'Send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf, beautifully formatted: your description quoted, the name bolded, the price inline-coded.',
+          'Add extra details in the caption, like *"i make home deliveries and customize cakes to your liking"*. Products without photos are fully accepted too!',
+          '',
+          '📸 *Photo tips:* While optional, we strongly recommend uploading original photos of your actual products - this builds customer trust. Please avoid internet-sourced or AI-generated images. If we detect non-original images, they may be removed.',
+          '',
+          'Reply *help* anytime.',
         ].join('\n')
       ).catch(() => {})
 

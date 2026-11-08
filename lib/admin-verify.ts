@@ -4,6 +4,7 @@ import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import { getBotSetting } from '@/lib/bot-settings'
 import { renderChannelPitch } from '@/lib/bot-templates'
+import { portalAccessLines } from '@/lib/portal-invite'
 
 // Shared admin-verify engine: the WhatsApp bot and the dashboard mirror the
 // same rules here — fuzzy name lookup, day-based grants, and the "you are
@@ -164,10 +165,20 @@ export async function notifyBusinessLive(biz: {
   slug: string | null
   id: string
   username?: string | null
+  editToken?: string | null
 }): Promise<void> {
   if (!biz.phone) return
   const to = '+' + digitsOnly(biz.phone)
   const slug = biz.slug || biz.id
+
+  // Businesses registered through WhatsApp never chose a password, so a
+  // "log in with @username" line alone leaves them locked out of the portal.
+  // Send the account-setup link instead when no portal account exists yet.
+  const portalLines = await portalAccessLines(getSupabase(), {
+    id: biz.id,
+    username: biz.username ?? null,
+    editToken: biz.editToken ?? null,
+  })
 
   sendWhatsAppTemplate(
     to,
@@ -178,7 +189,7 @@ export async function notifyBusinessLive(biz: {
   const links = [
     `🏢 Profile: ${SITE_URL}/business/${slug}`,
     `🌐 Website: ${SITE_URL}/site/${slug}`,
-    ...(biz.username ? [`🔑 Portal: ${SITE_URL}/portal (log in with @${biz.username})`] : []),
+    ...portalLines,
     '📸 Send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
   ]
   sendWhatsAppMessage(
