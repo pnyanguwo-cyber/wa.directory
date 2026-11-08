@@ -34,6 +34,7 @@ import {
   type ChatMessage,
   type ChatThread,
 } from '@/lib/chat'
+import WhatsAppText from './whatsapp-text'
 
 function chatMessageKey(message: ChatMessage): string {
   return `${message.id}|${message.at || ''}|${message.direction}`
@@ -559,10 +560,10 @@ export default function ChatWorkspace({
         </div>
       )}
 
-      <div className="relative flex h-[calc(100dvh-11rem)] min-h-[540px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-card lg:grid lg:h-[calc(100vh-8rem)] lg:grid-cols-[minmax(240px,30fr)_minmax(0,70fr)] xl:grid-cols-[minmax(228px,27fr)_minmax(0,50fr)_minmax(238px,23fr)]">
+      <div className="relative flex h-[calc(100dvh-11rem)] min-h-[540px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-card lg:grid lg:h-[calc(100vh-8rem)] lg:grid-cols-[minmax(240px,30fr)_minmax(0,70fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(228px,27fr)_minmax(0,50fr)_minmax(238px,23fr)]">
         {/* Left: inbox */}
         <aside
-          className={`${selectedPhone ? 'hidden lg:flex' : 'flex'} w-full min-w-0 flex-col border-r border-gray-100 lg:w-auto`}
+          className={`${selectedPhone ? 'hidden lg:flex' : 'flex'} w-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-gray-100 lg:w-auto`}
           aria-label="Chat inbox"
         >
           <div className="border-b border-gray-100 px-3 py-2.5">
@@ -721,7 +722,7 @@ export default function ChatWorkspace({
         </aside>
 
         {/* Centre: conversation */}
-        <section className={`${selectedPhone ? 'flex' : 'hidden lg:flex'} min-w-0 flex-col bg-[#fbfcfb]`} aria-label="Conversation">
+        <section className={`${selectedPhone ? 'flex' : 'hidden lg:flex'} min-w-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#fbfcfb]`} aria-label="Conversation">
           {!selectedThread ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-whatsapp-50 text-whatsapp-600">
@@ -872,7 +873,7 @@ export default function ChatWorkspace({
                 </div>
               </header>
 
-              <div ref={messagesRef} className="flex-1 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
+              <div ref={messagesRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
                 {detailLoading && !detail ? (
                   <div className="space-y-2">
                     {[1, 2, 3, 4].map(index => (
@@ -1078,15 +1079,15 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`flex ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3 py-2 text-[11.5px] leading-relaxed shadow-sm sm:max-w-[76%] ${
+        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-[11.5px] leading-relaxed shadow-[0_1px_2px_rgba(11,20,26,0.08)] sm:max-w-[76%] ${
           outgoing
-            ? 'rounded-br-md border border-whatsapp-200 bg-whatsapp-50 text-text-primary'
-            : 'rounded-bl-md border border-gray-200 bg-white text-text-primary'
+            ? 'rounded-br-[5px] border border-whatsapp-100 bg-gradient-to-b from-whatsapp-50 to-whatsapp-100 text-text-primary'
+            : 'rounded-bl-[5px] border border-gray-200/80 bg-white text-text-primary'
         }`}
       >
         {message.preview && <MessagePreview preview={message.preview} />}
         {message.text && !(message.preview?.kind === 'media' && !message.text) && (
-          <p className="whitespace-pre-wrap break-words">{message.text}</p>
+          <WhatsAppText text={message.text} />
         )}
         <div className={`mt-1 flex items-center justify-end gap-1 text-[9px] ${outgoing ? 'text-whatsapp-700/70' : 'text-gray-400'}`}>
           {message.at && <span>{formatTime(message.at)}</span>}

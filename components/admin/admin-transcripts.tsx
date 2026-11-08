@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminSectionHeader, adminFetch } from './shared'
+import WhatsAppText from '../chat/whatsapp-text'
 
 interface Caller {
   phone: string
@@ -90,7 +91,7 @@ export default function AdminTranscripts() {
           <div className="space-y-1.5 max-h-[32rem] overflow-auto">
             {messages.map((m, i) => (
               <div key={i} className={`rounded-xl px-3 py-2 text-xs max-w-[85%] ${m.dir === 'in' ? 'bg-white border border-gray-200' : 'bg-emerald-50 ml-auto'}`}>
-                <p className="whitespace-pre-wrap break-words">{m.body}</p>
+                <WhatsAppText text={m.body} />
                 <p className="text-[10px] text-text-secondary mt-1">
                   {m.dir === 'in' ? '← them' : 'bot →'} {m.kind} · {fmtWhen(m.created_at)}
                 </p>
