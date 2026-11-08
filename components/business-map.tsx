@@ -142,7 +142,21 @@ function catKeyFor(businessCategories: string[] = []): string {
   return sanitizeKey(doodleFor(businessCategories)?.name || 'Other')
 }
 
-function toFeatureCollection(list: Business[]): {
+// For Products mode: use the seller's primary product category for the pin.
+// Falls back to the seller's business category if product category is empty/invalid.
+function productCatKeyFor(productCategory: string, businessCategories?: string[]): string {
+  if (productCategory && productCategory.trim()) {
+    const hit = doodleFor([productCategory])
+    if (hit) return sanitizeKey(hit.name)
+  }
+  // Fall back to seller's business category
+  if (businessCategories && businessCategories.length > 0) {
+    return sanitizeKey(doodleFor(businessCategories)?.name || 'Other')
+  }
+  return sanitizeKey('Other')
+}
+
+function toFeatureCollection(list: Business[], mode: 'products' | 'services' = 'services'): {
   type: 'FeatureCollection'
   features: Array<{
     type: 'Feature'
@@ -155,29 +169,36 @@ function toFeatureCollection(list: Business[]): {
     type: 'FeatureCollection',
     features: list
       .filter((b) => typeof b.lat === 'number' && typeof b.lng === 'number')
-      .map((b) => ({
-        type: 'Feature' as const,
-        id: String(b.slug || b.id),
-        geometry: { type: 'Point' as const, coordinates: [b.lng as number, b.lat as number] },
-        properties: {
-          uid: String(b.slug || b.id),
-          bRef: String(b.slug || b.id),
-          catKey: catKeyFor(b.category || []),
-          name: b.name || '',
-          featured: !!b.featured_eligible,
-        },
-      })),
+      .map((b) => {
+        // In Products mode, use productCategory for pin icon/color, falling back to business category
+        const productCategory = mode === 'products' && (b as Business & { productCategory?: string }).productCategory
+        const catKey = productCategory
+          ? productCatKeyFor(productCategory, b.category || [])
+          : catKeyFor(b.category || [])
+        return {
+          type: 'Feature' as const,
+          id: String(b.slug || b.id),
+          geometry: { type: 'Point' as const, coordinates: [b.lng as number, b.lat as number] },
+          properties: {
+            uid: String(b.slug || b.id),
+            bRef: String(b.slug || b.id),
+            catKey,
+            name: b.name || '',
+            featured: !!b.featured_eligible,
+          },
+        }
+      }),
   }
 }
 
 // Idempotently install the runtime GeoJSON source + symbol layers (both
 // states of every pin, cluster circles/labels, featured badge) and the
 // user-location layers. Safe across setStyle() style swaps.
-function ensureSourcesAndLayers(map: MlMap): void {
+function ensureSourcesAndLayers(map: MlMap, mode: 'products' | 'services' = 'services'): void {
   if (!map.getSource(BUSINESS_SOURCE)) {
     map.addSource(BUSINESS_SOURCE, {
       type: 'geojson',
-      data: toFeatureCollection([]) as never,
+      data: toFeatureCollection([], mode) as never,
       cluster: true,
       clusterMaxZoom: 14,
       clusterRadius: 55,
@@ -789,9 +810,9 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
     const onStyleLoad = () => {
       void registerPinImages(map, PIN_CATALOG)
         .then(() => {
-          ensureSourcesAndLayers(map)
+          ensureSourcesAndLayers(map, mode)
           const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
-          if (src) src.setData(toFeatureCollection(filteredRef.current) as never)
+          if (src) src.setData(toFeatureCollection(filteredRef.current, mode) as never)
           setInstallTick((v) => v + 1)
         })
         .catch(() => {})
@@ -850,9 +871,9 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
     void registerPinImages(map, PIN_CATALOG)
       .then(() => {
         if (cancelled) return
-        ensureSourcesAndLayers(map)
+        ensureSourcesAndLayers(map, mode)
         const src = map.getSource(BUSINESS_SOURCE) as GeoJSONSource | undefined
-        if (src) src.setData(toFeatureCollection(filteredBusinesses) as never)
+        if (src) src.setData(toFeatureCollection(filteredBusinesses, mode) as never)
         setInstallTick((v) => v + 1)
       })
       .catch(() => {})
@@ -860,7 +881,7 @@ export default function BusinessMap({ businesses = [], mode = 'services' }: Busi
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapReady, filteredBusinesses])
+  }, [mapReady, filteredBusinesses, mode])
 
   // ---------------------------------------------------------------------
   // SELECTION / HOVER -> feature-state (smooth, no DOM churn)

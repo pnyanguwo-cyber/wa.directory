@@ -3,7 +3,7 @@ import dynamicImport from 'next/dynamic'
 import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import { CITY_COORDS } from '@/lib/map-locations'
-import { searchSellersWithProducts } from '@/lib/products'
+import { searchSellersWithProducts, type SellerWithProducts, resolveProductCategory } from '@/lib/products'
 import DiscoveryModeSwitch from '@/components/discovery-mode-switch'
 import type { Business } from '@/types'
 
@@ -60,9 +60,28 @@ export default async function MapPage({
   if (mode === 'products') {
     // Products mode: one marker per SELLER, carrying its matching products.
     // Individual items are never treated as separate physical locations.
+    // Pin icon/color uses the seller's primary product category (normalized to taxonomy).
     try {
       const sellers = await searchSellersWithProducts({ limit: 300 })
-      businesses = withCoordinates(sellers as unknown as Record<string, unknown>[])
+      const sellersWithCoords = withCoordinates(sellers as unknown as Record<string, unknown>[])
+
+      // Attach primary product category for pin styling in Products mode
+      // Normalize through resolveProductCategory to ensure it matches the taxonomy
+      businesses = sellersWithCoords.map(seller => {
+        const products = (seller as SellerWithProducts).products || []
+        const firstProduct = products[0]
+        const primaryProductCategory = firstProduct?.category || ''
+        // Use product name as fallback for better category matching
+        const fallbackText = firstProduct?.name || primaryProductCategory
+        // Normalize against controlled taxonomy so map pins use correct icons
+        // If no match found (returns ''), fall back to seller's first business category
+        const normalizedCategory = resolveProductCategory(primaryProductCategory, fallbackText)
+        const sellerBusinessCategory = (seller.category?.[0] || '')
+        return {
+          ...seller,
+          productCategory: normalizedCategory || sellerBusinessCategory
+        } as Business & { productCategory: string }
+      })
     } catch (e) {
       console.error('Error fetching product sellers for map:', e)
     }
