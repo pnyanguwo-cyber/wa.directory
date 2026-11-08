@@ -1086,7 +1086,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         }`}
       >
         {message.preview && <MessagePreview preview={message.preview} />}
-        {message.text && !(message.preview?.kind === 'media' && !message.text) && (
+        {message.text && message.text !== message.preview?.title && (
           <WhatsAppText text={message.text} />
         )}
         <div className={`mt-1 flex items-center justify-end gap-1 text-[9px] ${outgoing ? 'text-whatsapp-700/70' : 'text-gray-400'}`}>
@@ -1099,6 +1099,47 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 }
 
 function MessagePreview({ preview }: { preview: NonNullable<ChatMessage['preview']> }) {
+  if (preview.kind === 'buttons' && preview.buttons?.length) {
+    return (
+      <div className="mb-1.5 flex flex-wrap gap-1.5">
+        {preview.buttons.map((label, index) => (
+          <span
+            key={`${label}-${index}`}
+            className="rounded-full border border-whatsapp-200 bg-whatsapp-50 px-2.5 py-1 text-[10px] font-semibold text-whatsapp-800"
+          >
+            {label}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  if (preview.kind === 'rows' && preview.rows?.length) {
+    return (
+      <div className="mb-1.5 overflow-hidden rounded-lg border border-gray-200 bg-white">
+        {preview.rows.map((row, index) => (
+          <p
+            key={`${row}-${index}`}
+            className={`px-2.5 py-1.5 text-[10.5px] font-medium text-text-primary ${index ? 'border-t border-gray-100' : ''}`}
+          >
+            {row}
+          </p>
+        ))}
+      </div>
+    )
+  }
+  if (preview.kind === 'link' && preview.href) {
+    return (
+      <a
+        href={preview.href}
+        target="_blank"
+        rel="noreferrer"
+        className="mb-1.5 flex items-center justify-center gap-1.5 rounded-lg border border-whatsapp-200 bg-white px-2.5 py-1.5 text-[10.5px] font-bold text-whatsapp-700 transition-colors hover:bg-whatsapp-50"
+      >
+        <ExternalLink className="h-3 w-3" />
+        {preview.title || preview.href}
+      </a>
+    )
+  }
   if (preview.kind === 'business') {
     return (
       <a

@@ -502,6 +502,26 @@ export async function sendWhatsAppImage(
 }
 
 /**
+ * Resolve an inbound WhatsApp media id to its public URL (valid ~45 days).
+ * Used to keep inbound photos alive in the admin chat transcripts.
+ * Best-effort: returns null on any failure.
+ */
+export async function fetchMediaUrl(mediaId: string): Promise<string | null> {
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+  if (!mediaId || !accessToken || process.env.WHATSAPP_DRY_RUN === '1') return null
+  try {
+    const res = await fetch(`${WHATSAPP_API}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { url?: string }
+    return data.url || null
+  } catch {
+    return null
+  }
+}
+
+/**
  * Sends an image message, falling back to a plain text message when the
  * image send fails (so the customer always receives content).
  * Returns true when the image was actually sent.

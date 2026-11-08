@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import { fetchBusinessesByIds } from '@/lib/business-select'
 import {
   mergeMessages,
+  normalizeMessage,
   normalizeMessages,
   readableValue,
   type ChatDetail,
@@ -90,7 +91,7 @@ export async function listAdminChats(): Promise<ChatThread[]> {
       .limit(400),
     supabase
       .from('bot_messages')
-      .select('phone, dir, body, created_at')
+      .select('phone, dir, kind, body, created_at')
       .order('created_at', { ascending: false })
       .limit(1200),
     supabase
@@ -107,16 +108,31 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const logs = logsRes.data || []
 
   const sessionByPhone = new Map(sessions.map(row => [row.phone, row]))
-  const lastByPhone = new Map<string, { text: string; at: string; dir: string }>()
+  // Rows are newest-first: track the latest activity for sorting/unread, but
+  // pick the inbox preview from the latest message that carries real
+  // conversation text — tap row ids ("list_publish"), reactions ("wamid…")
+  // and raw structured tails are references, not a conversation preview.
+  const lastAnyByPhone = new Map<string, { at: string; dir: string }>()
+  const lastTextByPhone = new Map<string, string>()
   const recentCount = new Map<string, number>()
   for (const row of recent) {
     recentCount.set(row.phone, (recentCount.get(row.phone) || 0) + 1)
-    if (!lastByPhone.has(row.phone)) {
-      lastByPhone.set(row.phone, {
-        text: (row.body || '').slice(0, 220),
-        at: row.created_at,
-        dir: row.dir,
-      })
+    if (!lastAnyByPhone.has(row.phone)) {
+      lastAnyByPhone.set(row.phone, { at: row.created_at, dir: row.dir })
+    }
+    if (!lastTextByPhone.has(row.phone)) {
+      const kind = (row.kind || 'text').toLowerCase()
+      if (kind !== 'tap' && kind !== 'reaction') {
+        const message = normalizeMessage(
+          { dir: row.dir, kind: row.kind, body: row.body, created_at: row.created_at },
+          0,
+          row.phone
+        )
+        const previewText = message.preview?.title && !message.text ? message.preview.title : message.text
+        if (previewText && previewText !== 'Unsupported message') {
+          lastTextByPhone.set(row.phone, previewText.slice(0, 220))
+        }
+      }
     }
   }
 
@@ -138,7 +154,7 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const phones = new Set<string>([
     ...contacts.map(row => row.phone),
     ...sessions.map(row => row.phone),
-    ...lastByPhone.keys(),
+    ...lastAnyByPhone.keys(),
     ...logByPhone.keys(),
   ])
 
@@ -147,16 +163,16 @@ export async function listAdminChats(): Promise<ChatThread[]> {
     if (!phone) continue
     const contact = contacts.find(row => row.phone === phone)
     const session = sessionByPhone.get(phone)
-    const last = lastByPhone.get(phone)
+    const lastAny = lastAnyByPhone.get(phone)
     const log = logByPhone.get(phone)
     const flag = flags.get(phone)
     const business = log?.businessId ? businessById.get(log.businessId) : null
     const updatedAt =
-      last?.at || session?.updated_at || contact?.last_seen || log?.at || null
+      lastAny?.at || session?.updated_at || contact?.last_seen || log?.at || null
     const status = flag?.status || 'active'
-    const lastDir = last?.dir || ''
+    const lastDir = lastAny?.dir || ''
     const lastText =
-      last?.text ||
+      lastTextByPhone.get(phone) ||
       (session?.step ? `Bot step: ${session.step}` : '') ||
       (log?.foundVia ? `Found via ${log.foundVia}` : '') ||
       'No transcript yet'

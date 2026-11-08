@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { getSupabase } from '@/lib/supabase-server'
-import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons } from '@/lib/whatsapp'
+import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons, fetchMediaUrl } from '@/lib/whatsapp'
 import { logBotMessage } from '@/lib/bot-log'
 import {
   handleBidCommand,
@@ -65,6 +65,45 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ status: 'ok' })
 }
 
+/**
+ * Transcript logging for inbound media: Meta sends only a media id, so we
+ * resolve it to a short-lived public URL and store that (or a friendly
+ * placeholder when resolution fails). Returns true when the message was
+ * media and has been logged.
+ */
+async function inboundMediaLog(phone: string, msg: any, text: string): Promise<boolean> {
+  const type: string = msg.type || ''
+  if (type === 'image' || type === 'sticker' || type === 'video') {
+    const media = msg[type]
+    const url = media?.id ? await fetchMediaUrl(media.id) : null
+    const caption = (media?.caption || text || '').trim()
+    // Body is the URL when we have one (the workspace renders it as an
+    // image); otherwise keep the caption so the transcript still reads.
+    await logBotMessage(phone, 'in', type, url || caption || (type === 'image' ? 'Photo' : type))
+    return true
+  }
+  if (type === 'audio' || type === 'voice' || type === 'ptt') {
+    const media = msg[type]
+    const url = media?.id ? await fetchMediaUrl(media.id) : null
+    await logBotMessage(phone, 'in', 'voice', url || 'Voice message')
+    return true
+  }
+  if (type === 'document') {
+    const media = msg.document
+    const url = media?.id ? await fetchMediaUrl(media.id) : null
+    const name = media?.filename || 'Document'
+    await logBotMessage(phone, 'in', 'document', url || `${name} (${media?.mime_type || 'file'})`)
+    return true
+  }
+  if (type === 'location' && msg.location) {
+    const { latitude, longitude, name, address } = msg.location
+    const coords = latitude != null && longitude != null ? `${latitude}, ${longitude}` : 'Shared location'
+    await logBotMessage(phone, 'in', 'location', [name || address, coords].filter(Boolean).join(' · '))
+    return true
+  }
+  return false
+}
+
 async function handleMessages(value: any) {
   const contacts = value.contacts || []
   const messages = value.messages || []
@@ -73,6 +112,12 @@ async function handleMessages(value: any) {
     const phone = msg.from // already in international format (e.g. "263771234567")
     const text = msg.text?.body?.trim() || ''
     const msgId = msg.id
+
+    // Inbound media must reach the transcript too, not just text: without
+    // this, admin/business chat views show numbers and references for
+    // anything the customer sent as a photo, voice note or location.
+    const media = await inboundMediaLog(phone, msg, text)
+    if (media) continue
 
     if (!text) continue
 

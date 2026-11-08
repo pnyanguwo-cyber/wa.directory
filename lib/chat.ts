@@ -14,7 +14,7 @@
 export type ChatDirection = 'in' | 'out' | 'system'
 
 export interface ChatPreview {
-  kind: 'business' | 'search' | 'location' | 'call' | 'media'
+  kind: 'business' | 'search' | 'location' | 'call' | 'media' | 'buttons' | 'rows' | 'link'
   title?: string
   subtitle?: string
   href?: string
@@ -23,6 +23,8 @@ export interface ChatPreview {
   lng?: number
   imageUrl?: string
   items?: { title: string; subtitle?: string; href?: string }[]
+  buttons?: string[]
+  rows?: string[]
 }
 
 export interface ChatMessage {
@@ -106,6 +108,111 @@ function labelForKey(key: string): string {
   return key
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, ch => ch.toUpperCase())
+}
+
+const URL_RE = /^https?:\/\/\S+$/i
+
+/** Friendly label for a bot tap row id (list_publish → Publish, sel_3 → Result 3). */
+function humanTapLabel(id: string): string {
+  const raw = (id || '').trim()
+  if (/^sel_\d+$/.test(raw)) return `Result ${raw.slice(4)}`
+  const base = raw.replace(/^list_/, '').replace(/^btn_/, '')
+  const label = base.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
+  return label || 'Option'
+}
+
+/**
+ * The bot stores transcript bodies as plain display text plus short
+ * structured tails it appends itself:
+ *   buttons kind → trailing line "[A | B | C]"
+ *   list kind    → trailing line "↳ rows: A | B | C"
+ *   cta kind     → trailing line "→ https://…"
+ * Those tails are transport scaffolding, not chat text — lift them into a
+ * renderable preview and strip them from the bubble text.
+ */
+function parseTranscriptMarkers(
+  kind: string,
+  text: string
+): { text: string; preview?: ChatPreview; system?: string } {
+  if (kind === 'buttons') {
+    const m = text.match(/\n\[([^\]\n]+)\]\s*$/)
+    if (m) {
+      return {
+        text: text.slice(0, m.index).trim(),
+        preview: { kind: 'buttons', buttons: m[1].split('|').map(s => s.trim()).filter(Boolean) },
+      }
+    }
+  }
+  if (kind === 'list') {
+    const m = text.match(/\n↳ rows:\s*([\s\S]*)$/)
+    if (m) {
+      return {
+        text: text.slice(0, m.index).trim(),
+        preview: { kind: 'rows', rows: m[1].split('|').map(s => s.trim()).filter(Boolean) },
+      }
+    }
+  }
+  if (kind === 'cta') {
+    const m = text.match(/\n→\s*(https?:\/\/\S+)\s*$/)
+    if (m) {
+      const without = text.slice(0, m.index).trim()
+      return {
+        text: without,
+        preview: { kind: 'link', title: 'Open link', href: m[1] },
+      }
+    }
+  }
+  if (kind === 'tap') {
+    const id = text.trim()
+    if (id && !/\s/.test(id)) return { text, system: `Tapped: ${humanTapLabel(id)}` }
+  }
+  if (kind === 'reaction') {
+    const m = text.match(/^\[(.+?)\]\s*on\s+wamid\./)
+    if (m) return { text, system: `Reacted with ${m[1].trim()}` }
+  }
+  if (kind === 'document') {
+    const m = text.match(/^(.*?)\s*\(([^^()]+)\)\s*$/)
+    if (m) {
+      return {
+        text: text.trim(),
+        preview: { kind: 'media', title: m[1].trim() || 'Document', subtitle: m[2].trim() },
+      }
+    }
+  }
+  if (kind === 'location') {
+    const m = text.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/)
+    if (m) {
+      return {
+        text: 'Shared location',
+        preview: { kind: 'location', title: 'Shared location', lat: Number(m[1]), lng: Number(m[2]) },
+      }
+    }
+  }
+  if (kind === 'image' || kind === 'sticker' || kind === 'video') {
+    const trimmed = text.trim()
+    if (trimmed && URL_RE.test(trimmed)) {
+      return {
+        text: 'Photo',
+        preview: {
+          kind: 'media',
+          title: kind === 'image' ? 'Photo' : kind === 'sticker' ? 'Sticker' : 'Video',
+          imageUrl: kind === 'video' ? undefined : trimmed,
+        },
+      }
+    }
+    return {
+      text: trimmed || (kind === 'image' ? 'Photo' : kind === 'sticker' ? 'Sticker' : 'Video'),
+      preview: { kind: 'media', title: kind === 'image' ? 'Photo' : kind === 'sticker' ? 'Sticker' : 'Video' },
+    }
+  }
+  if (kind === 'audio' || kind === 'voice' || kind === 'ptt') {
+    const trimmed = text.trim()
+    return {
+      text: trimmed && !URL_RE.test(trimmed) ? trimmed : 'Voice message',
+      preview: { kind: 'media', title: 'Voice message' },
+    }
+  }
+  return { text }
 }
 
 function firstString(obj: Record<string, unknown>, keys: string[]): string {
@@ -270,6 +377,21 @@ export function normalizeMessage(raw: unknown, index = 0, fallbackPhone = ''): C
   }
 
   let resolvedText = text
+  // Flat bot_messages rows store scaffold tails (buttons/list/cta rows, tap
+  // ids, reactions) after the display text — parse them into real previews
+  // so the UI never shows raw references like "list_publish".
+  if (kind && kind !== 'text') {
+    const parsed = parseTranscriptMarkers(kind, text)
+    if (parsed.system) {
+      direction = 'system'
+      resolvedText = parsed.system
+    } else {
+      if (parsed.text) resolvedText = parsed.text
+      // The flat transcript parser knows the exact bot conventions, so it
+      // outranks the generic object-shape preview for these rows.
+      if (parsed.preview) preview = parsed.preview
+    }
+  }
   const isEventMarker = text.includes('opened your chat') || obj.event === true
   if (isEventMarker) {
     direction = 'system'
