@@ -328,6 +328,73 @@ export async function sendInteractiveButtons(
 }
 
 /**
+ * WhatsApp Flow launch message: opens a native Flow inside WhatsApp.
+ * Requires a published Flow ID from Meta Business Manager.
+ * Uses interactive type "flow" with flow_action "navigate".
+ */
+export async function sendWhatsAppFlow(
+  to: string,
+  flowId: string,
+  body: string,
+  flowToken: string,
+  flowAction: 'navigate' = 'navigate',
+  flowCta: string = 'Open',
+  flowMessageVersion: string = '3.0',
+  replyTo?: string
+): Promise<boolean> {
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
+
+  if (!phoneNumberId || !accessToken) {
+    console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
+    return false
+  }
+
+  const cleanBody = clip(body, 1024)
+
+  if (process.env.WHATSAPP_DRY_RUN === '1') {
+    console.log(
+      `[whatsapp][dry-run][flow] to=${to} flow_id=${flowId} action=${flowAction} cta="${flowCta}"\n${cleanBody}`
+    )
+    return true
+  }
+
+  const ok = await postToWhatsApp(phoneNumberId, accessToken, {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'interactive',
+    interactive: {
+      type: 'flow',
+      body: { text: cleanBody },
+      action: {
+        name: 'flow',
+        parameters: {
+          flow_message_version: flowMessageVersion,
+          flow_token: flowToken,
+          flow_id: flowId,
+          flow_cta: flowCta,
+          flow_action: flowAction,
+          flow_action_payload: JSON.stringify({}),
+        },
+      },
+    },
+    ...(replyTo ? { context: { message_id: replyTo } } : {}),
+  })
+
+  if (!ok) {
+    console.error('[whatsapp] Flow launch failed, falling back to text')
+    await postToWhatsApp(phoneNumberId, accessToken, {
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: cleanBody },
+    })
+  }
+
+  return ok
+}
+
+/**
  * Product card: image + body + quick-reply buttons in ONE interactive
  * message, so the button always travels with the picture. Degrades to the
  * image/caption (then buttons) path when the interactive post fails.
