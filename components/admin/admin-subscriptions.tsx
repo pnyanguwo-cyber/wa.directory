@@ -33,6 +33,11 @@ interface ListingSubscription {
   paynow_reference: string | null
   paynow_paid_at: string | null
   auto_confirmed_at: string | null
+  trial_eligible: boolean
+  trial_activated_at: string | null
+  trial_expires_at: string | null
+  trial_reminder_sent_7d: boolean
+  trial_reminder_sent_3d: boolean
   business: { id: string; name: string; slug: string; phone: string; business_id: string; username: string; city: string; payment_status: string } | null
 }
 

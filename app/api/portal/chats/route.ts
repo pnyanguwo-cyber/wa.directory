@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { getActingPortalBusiness, isPaidSubscriber } from '@/lib/portal'
+import { getActingPortalBusiness } from '@/lib/portal'
+import { isPremiumActive } from '@/lib/premium-entitlement'
 import {
   getBusinessChat,
   listBusinessChats,
@@ -11,13 +12,15 @@ const ACTIONS: ChatAction[] = ['read', 'resolve', 'reopen', 'archive', 'unarchiv
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const session = await getActingPortalBusiness(url.searchParams.get('branch'))
+  const branchId = url.searchParams.get('branch')
+  const session = await getActingPortalBusiness(branchId)
   if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
 
-  const business = session.business
-  if (!(await isPaidSubscriber(business.id))) {
+  if (!(await isPremiumActive(branchId))) {
     return NextResponse.json({ error: 'Conversations require an active subscription' }, { status: 403 })
   }
+
+  const business = session.business
 
   try {
     const phone = url.searchParams.get('phone') || ''
@@ -38,9 +41,10 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   const body = await request.json().catch(() => ({}))
-  const session = await getActingPortalBusiness(body?.branch_id)
+  const branchId = body?.branch_id || null
+  const session = await getActingPortalBusiness(branchId)
   if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-  if (!(await isPaidSubscriber(session.business.id))) {
+  if (!(await isPremiumActive(branchId))) {
     return NextResponse.json({ error: 'Conversations require an active subscription' }, { status: 403 })
   }
 

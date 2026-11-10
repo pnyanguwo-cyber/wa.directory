@@ -6,10 +6,12 @@
 // in search instantly.
 
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
+import { sendCategoryEducationalImage } from '@/lib/category-education'
 import { SITE_URL } from '@/lib/site-url'
 import { getBotSetting } from '@/lib/bot-settings'
 import { renderChannelPitch } from '@/lib/bot-templates'
 import { portalAccessLines } from '@/lib/portal-invite'
+import { clearConversationState } from '@/lib/bot-state'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -70,7 +72,7 @@ export async function activateListingSubscription(
   {
     const { data: business } = await supabase
       .from('businesses')
-      .select('name, phone, username, slug, edit_token')
+      .select('name, phone, username, slug, edit_token, category')
       .eq('id', sub.business_id)
       .maybeSingle()
 
@@ -89,12 +91,23 @@ export async function activateListingSubscription(
           editToken,
         })),
       ]
-      sendWhatsAppMessage(
+
+      // Determine plan details for the message
+      const planLabels: Record<string, string> = {
+        '1m': '1 Month ($2.00)',
+        '6m': '6 Months ($10.00)',
+        '12m': '12 Months ($20.00)',
+      }
+      const planLabel = planLabels[sub.plan] || sub.plan
+
+      // Main confirmation message (clean, focused on review/publishing)
+      await sendWhatsAppMessage(
         business.phone,
         [
           '🎉 *Payment received — you are live!*',
           '',
           `${business.name} (@${business.username || 'N/A'}) is now visible on WA Directory.`,
+          `Plan: ${planLabel}`,
           `Active until ${expiresAt.toISOString().slice(0, 10)}.`,
           '',
           ...links,
@@ -104,15 +117,17 @@ export async function activateListingSubscription(
             : []),
           `Renew anytime: ${siteUrl}/pay`,
           '',
-          '📦 *How to list your products & prices*',
-          'Send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf, beautifully formatted: your description quoted, the name bolded, the price inline-coded.',
-          'Add extra details in the caption, like *"i make home deliveries and customize cakes to your liking"*. Products without photos are fully accepted too!',
-          '',
-          '📸 *Photo tips:* While optional, we strongly recommend uploading original photos of your actual products - this builds customer trust. Please avoid internet-sourced or AI-generated images. If we detect non-original images, they may be removed.',
+          'Your listing is live! Customers can now find you in search.',
           '',
           'Reply *help* anytime.',
         ].join('\n')
       ).catch(() => {})
+
+      // Send category-specific educational image (post-submission onboarding)
+      await sendCategoryEducationalImage(business.phone, business.category).catch(() => {})
+
+      // Clear conversation state - onboarding complete
+      clearConversationState(business.phone).catch(() => {})
 
       // Channel pitch: now that the supplier is live, tell them where buyer
       // leads surface (free-form while the session window is open).

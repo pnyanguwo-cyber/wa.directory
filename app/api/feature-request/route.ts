@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 
+export const dynamic = 'force-dynamic'
+
 // Public endpoint: businesses request a new category or area while listing/editing
 export async function POST(request: Request) {
   try {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface SessionRow {
   phone: string
@@ -131,7 +132,7 @@ export default function AdminChatSessions() {
                       ? fields.map(([k, v]) => `${k}: ${v}`).join(' · ')
                       : 'No form data yet'}
                   </p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">Last activity: {new Date(s.updated_at).toLocaleString()}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">Last activity: {formatHarareDateTime(s.updated_at)}</p>
                 </div>
                 <button
                   onClick={() => toggleHold(s)}

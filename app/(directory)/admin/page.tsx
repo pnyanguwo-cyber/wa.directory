@@ -23,12 +23,16 @@ import AdminNeeds from '@/components/admin/admin-needs'
 import AdminTranscripts from '@/components/admin/admin-transcripts'
 import AdminSettings from '@/components/admin/admin-settings'
 import AdminHelp from '@/components/admin/admin-help'
+import AdminAiUsage from '@/components/admin/admin-ai-usage'
+import AdminAiControls from '@/components/admin/admin-ai-controls'
 import AnalyticsPanel from '@/components/portal/analytics-view'
 import Splash from '@/components/splash'
 
 type Tab =
   | 'stats'
   | 'analytics'
+  | 'ai-usage'
+  | 'ai-controls'
   | 'listings'
   | 'categories'
   | 'areas'
@@ -54,6 +58,8 @@ const NAV: ShellNavGroup[] = [
     items: [
       { id: 'stats', label: 'Statistics', icon: 'dashboard' },
       { id: 'analytics', label: 'Analytics', icon: 'analytics' },
+      { id: 'ai-usage', label: 'AI Usage', icon: 'analytics' },
+      { id: 'ai-controls', label: 'AI Controls', icon: 'settings' },
     ],
   },
   {
@@ -101,7 +107,7 @@ const NAV: ShellNavGroup[] = [
   },
 ]
 
-const FLUSH_TABS: Tab[] = ['chats', 'harvest', 'analytics']
+const FLUSH_TABS: Tab[] = ['chats', 'harvest', 'analytics', 'ai-usage']
 
 export default function AdminPage() {
   const router = useRouter()
@@ -157,6 +163,8 @@ export default function AdminPage() {
             subtitle="Conversation volume, search demand and response performance across all businesses."
           />
         )}
+        {tab === 'ai-usage' && <AdminAiUsage />}
+        {tab === 'ai-controls' && <AdminAiControls />}
         {tab === 'listings' && <AdminListings />}
         {tab === 'rankings' && <AdminRankings />}
         {tab === 'payments' && <AdminPaymentEvents />}

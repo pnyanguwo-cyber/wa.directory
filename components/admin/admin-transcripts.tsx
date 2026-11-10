@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AdminSectionHeader, adminFetch } from './shared'
 import WhatsAppText from '../chat/whatsapp-text'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface Caller {
   phone: string
@@ -47,7 +48,7 @@ export default function AdminTranscripts() {
   const filtered = callers.filter(c => !query || c.phone.includes(query.replace(/\D/g, '')))
 
   function fmtWhen(iso: string) {
-    return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+    return formatHarareDateTime(iso)
   }
 
   return (

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { getActingPortalBusiness, getSubscription, getListingSubscription } from '@/lib/portal'
+import { getActingPortalBusiness, getListingSubscription } from '@/lib/portal'
+import { getPremiumSubscription } from '@/lib/premium-entitlement'
 import PortalBilling from '@/components/portal/billing'
 
 export const dynamic = 'force-dynamic'
@@ -9,9 +10,10 @@ export default async function PortalBillingPage({ searchParams }: { searchParams
   const session = await getActingPortalBusiness(searchParams?.branch)
   if (!session) redirect('/login')
   const business = session.business
+  const branchId = searchParams?.branch || null
 
   const [sub, listingSub] = await Promise.all([
-    getSubscription(business.id),
+    getPremiumSubscription(branchId),
     getListingSubscription(business.id),
   ])
 

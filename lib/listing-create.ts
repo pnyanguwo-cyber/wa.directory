@@ -7,6 +7,7 @@ import { normalizeUsername, suggestUsername } from '@/lib/username'
 import { generateSiteContent } from '@/lib/site-generation'
 import { SITE_URL } from '@/lib/site-url'
 import { slugify, dedupeCategories } from '@/lib/utils'
+import { setConversationState } from '@/lib/bot-state'
 
 // Yellow Pages (special public-service) categories get a priority admin alert
 // so councils/police/fire listings are verified fast.
@@ -273,6 +274,16 @@ export async function createListing(body: Partial<ListingInput>): Promise<Listin
 
     const { sendWhatsAppMessage, sendWhatsAppTemplate } = await import('@/lib/whatsapp')
 
+    // Set conversation state for onboarding flow (unless Yellow Pages which is auto-approved)
+    if (!isYellowPages) {
+      await setConversationState(fullPhone, 'AWAITING_ADMIN_REVIEW', {
+        businessId: inserted.id,
+        businessName: name.trim(),
+        category: cleanCategories[0],
+        city: cleanCity,
+      })
+    }
+
     if (isYellowPages) {
       const statusText = 'received: public-service listings get priority review'
       const tpl = process.env.WHATSAPP_TEMPLATE_SUBMITTED
@@ -297,18 +308,20 @@ export async function createListing(body: Partial<ListingInput>): Promise<Listin
         ).catch(() => {})
       }
     } else {
+      // Standard onboarding flow - awaiting admin review
       sendWhatsAppMessage(
         fullPhone,
         [
-          `✅ *LISTING CREATED: ${name.trim()}*`,
+          `✅ *LISTING SUBMITTED: ${name.trim()}*`,
           '',
           `Business ID: ${businessId}`,
           `Username: @${normalizedUsername}`,
           '',
-          `Pay USD 1 via EcoCash to go live.`,
-          `Anyone can pay for you at: ${payLink}`,
+          `Status: ⏳ *Awaiting Admin Review*`,
           '',
-          'Your listing will appear once admin confirms the payment.',
+          'Our team will review your listing within 24 hours.',
+          'Once approved, you\'ll receive a message to select a subscription plan',
+          'and complete payment via EcoCash.',
           '',
           'Edit your listing anytime with your private link:',
           editLink,

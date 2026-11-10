@@ -8,6 +8,8 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
 import type { PlanType } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 // Thin wrapper over lib/pay-lookup + the shared @wa-directory/shared
 // createListingPayment engine (the same engine the WhatsApp bot pay flow uses).
 

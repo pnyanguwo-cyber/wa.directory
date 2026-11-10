@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface NameContest {
   id: string
@@ -145,7 +146,7 @@ export default function AdminNameContests() {
                         {c.reason && (
                           <p className="text-xs text-text-secondary mt-1 italic">Reason: {c.reason}</p>
                         )}
-                        <p className="text-[10px] text-text-secondary mt-1">{new Date(c.created_at).toLocaleString()}</p>
+                        <p className="text-[10px] text-text-secondary mt-1">{formatHarareDateTime(c.created_at)}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button

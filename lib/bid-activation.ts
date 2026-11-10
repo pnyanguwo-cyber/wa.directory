@@ -10,6 +10,7 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
+import { getHarareStartOfDay, formatHarareDateTimeFull } from '@/lib/date-utils'
 
 export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupabase>, bidId: string) {
   const { data: bid } = await supabase
@@ -47,7 +48,7 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
     .eq('position', 1)
     .eq('status', 'active')
 
-  const periodStart = new Date().toISOString().slice(0, 10)
+  const periodStart = getHarareStartOfDay().slice(0, 10)
   // period_end is set far in the future (year 2099) = indefinite until outbid
   const periodEnd = '2099-12-31'
   const { error: spotError } = await supabase
@@ -61,7 +62,7 @@ export async function activateBidAsNumberOne(supabase: ReturnType<typeof getSupa
       period_start: periodStart,
       period_end: periodEnd,
       status: 'active',
-      payment_confirmed_at: new Date().toISOString(),
+      payment_confirmed_at: formatHarareDateTimeFull(new Date()),
     })
 
   if (spotError) return { error: spotError.message }
@@ -133,7 +134,7 @@ export async function markBidPaid(supabase: ReturnType<typeof getSupabase>, bidI
   if (bid.paynow_paid_at) return { flipped: false }
   const { error } = await supabase
     .from('bids')
-    .update({ status: 'paid', paynow_paid_at: new Date().toISOString() })
+    .update({ status: 'paid', paynow_paid_at: formatHarareDateTimeFull(new Date()) })
     .eq('id', bidId)
   if (error) return { error: error.message }
   return { flipped: true }

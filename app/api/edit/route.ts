@@ -3,6 +3,8 @@ import { getSupabase } from '@/lib/supabase-server'
 import { toFullPhone, normalizeVoicePhone } from '@/lib/phone'
 import { slugify, dedupeCategories } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()

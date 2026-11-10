@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
@@ -100,6 +101,9 @@ export async function POST(request: Request) {
         ].filter(Boolean).join('\n')
       ).catch(() => {})
     }
+
+    revalidatePath('/portal')
+    revalidatePath('/portal/billing')
 
     return NextResponse.json({
       success: true,

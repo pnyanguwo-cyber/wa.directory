@@ -5,6 +5,8 @@ import { isAdmin } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import { activateListingForDays, notifyBusinessLive } from '@/lib/admin-verify'
+import { notifyAdminApproval, notifyTrialActivation, notifyRejection } from '@/app/api/webhook/route'
+import { isTrialEligible } from '@/lib/trial-helpers'
 
 export async function POST(request: Request) {
   try {
@@ -18,77 +20,63 @@ export async function POST(request: Request) {
 
     const { data: business } = await supabase
       .from('businesses')
-      .select('id, name, phone, slug, username, edit_token, payment_status')
+      .select('id, name, phone, slug, username, edit_token, payment_status, category')
       .eq('id', id)
       .single()
 
-    // Approving a business makes it live: search only shows listings with
-    // payment_status = 'active'. Mirror the bot `verify` command: a fresh
-    // approval grants 30 days (the cron reminder + expiry machinery takes
-    // over); an already-active (paid) listing is just verified, never
-    // extended for free.
-    const paidThrough = business?.payment_status !== 'active'
-    if (verified && paidThrough) {
-      const grant = await activateListingForDays(String(id), 30)
-      if (grant.error) {
-        return NextResponse.json({ error: grant.error }, { status: 500 })
+    if (!business) {
+      return NextResponse.json({ error: 'Business not found' }, { status: 404 })
+    }
+
+    if (verified) {
+      // NEW FLOW: Offer trial option instead of requiring immediate payment
+      // Only auto-grant if payment_status is already 'active' (already paid)
+      const alreadyPaid = business.payment_status === 'active'
+
+      if (alreadyPaid) {
+        // Already paid - just verify and activate
+        const grant = await activateListingForDays(String(id), 30)
+        if (grant.error) {
+          return NextResponse.json({ error: grant.error }, { status: 500 })
+        }
+
+        await notifyBusinessLive({
+          name: business.name,
+          phone: business.phone,
+          slug: business.slug,
+          id: String(id),
+          username: business.username ?? null,
+          editToken: business.edit_token ?? null,
+        })
+      } else if (reason?.toLowerCase().includes('trial')) {
+        // Admin explicitly approved as trial
+        await notifyTrialActivation(business.id, reason)
+      } else {
+        // Check if business is eligible for trial before offering payment selection
+        const trialCheck = await isTrialEligible(String(id))
+
+        if (trialCheck.eligible) {
+          // Offer trial option to the business owner
+          await notifyAdminApproval(business.id, reason, true)
+        } else {
+          // Offer direct package selection (business not eligible for trial)
+          await notifyAdminApproval(business.id, reason, false)
+        }
       }
     } else {
-      const { error } = await supabase
+      // Rejection flow
+      await notifyRejection(business.id, reason || 'Your listing was not approved')
+
+      // Update business record
+      await supabase
         .from('businesses')
-        .update({ verified })
+        .update({ verified: false, payment_status: 'rejected', rejection_reason: reason })
         .eq('id', id)
-      if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
-    }
-
-    if (verified && business?.phone) {
-      await notifyBusinessLive({
-        name: business.name,
-        phone: business.phone,
-        slug: business.slug,
-        id: String(id),
-        username: business.username ?? null,
-        editToken: business.edit_token ?? null,
-      })
-    }
-
-    // Rejected / unverified: tell the owner why (optional admin note) and
-    // give them their private edit link so they can fix and resubmit.
-    if (!verified && business?.phone) {
-      const to = '+' + digitsOnly(business.phone)
-      const editLink = business.edit_token
-        ? `${SITE_URL}/edit?token=${business.edit_token}`
-        : `${SITE_URL}/business/${business.slug || id}`
-      const note = typeof reason === 'string' && reason.trim() ? reason.trim() : ''
-      const tpl = process.env.WHATSAPP_TEMPLATE_REJECTED
-      if (tpl) {
-        sendWhatsAppTemplate(
-          to,
-          tpl,
-          [business.name, note || 'Your listing was not approved', editLink]
-        ).catch(err => console.error('[verify] rejection notification failed:', err))
-      } else {
-        sendWhatsAppMessage(
-          to,
-          [
-            `⚠️ *LISTING UPDATE: ${business.name}*`,
-            '',
-            'Your listing on WA Directory is currently NOT verified.',
-            note ? `Admin note: ${note}` : '',
-            '',
-            'You can review and update your listing anytime with your private link:',
-            editLink,
-            '',
-            'Once updated, our team can verify it again.',
-          ].filter(Boolean).join('\n')
-        ).catch(err => console.error('[verify] rejection notification failed:', err))
-      }
     }
 
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (err) {
+    console.error('[verify] Error:', err)
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 }

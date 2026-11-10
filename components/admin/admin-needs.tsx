@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { AdminSectionHeader, adminFetch } from './shared'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface QuoteLite {
   id: number
@@ -55,9 +56,8 @@ export default function AdminNeeds() {
     load()
   }
 
-  function fmtWhen(iso: string) {
-    const d = new Date(iso)
-    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+function fmtWhen(iso: string) {
+    return formatHarareDateTime(iso)
   }
 
   // ── Digest card ──────────────────────────────────────────────────────

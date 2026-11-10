@@ -5,6 +5,7 @@ import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import { logBotMessage } from '@/lib/bot-log'
 import { logPaymentEvent } from '@/lib/payment-events'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 // Minimum gap over the current #1 fee (10 cents).
 const MIN_BID_GAP = 0.1
@@ -467,7 +468,7 @@ export async function handleMyBidsCommand(phone: string) {
     message += `${statusEmoji} *${bid.category}* ${bid.city ? `in ${bid.city}` : '(nationwide)'}\n`
     message += `  Bid: $${Number(bid.amount).toFixed(2)} (one-time) | Status: ${bid.status}\n`
     if (bid.paynow_paid_at) {
-      message += `  Paid: ${new Date(bid.paynow_paid_at).toLocaleString()}\n`
+      message += `  Paid: ${formatHarareDateTime(bid.paynow_paid_at)}\n`
     }
     message += '\n'
   }

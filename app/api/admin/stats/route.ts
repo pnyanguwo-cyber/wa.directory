@@ -3,6 +3,19 @@ import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { adminGuard } from '@/lib/admin-auth'
 import { fetchBusinessesByIds } from '@/lib/business-select'
+import {
+  getHarareStartOfDay,
+  getHarareStartOfDaysAgo,
+  getHarareStartOfMonthsAgo,
+  getHarareStartOfCurrentMonth,
+  getHarareStartOfCurrentWeek,
+  getHarareStartOfCurrentYear,
+} from '@/lib/date-utils'
+import {
+  getConfirmedPayments,
+  getRevenueSummary,
+  type PaymentSource,
+} from '@/lib/financial-reporting'
 
 export async function GET(request: Request) {
   const denied = adminGuard()
@@ -12,10 +25,14 @@ export async function GET(request: Request) {
   const businessId = searchParams.get('business_id')
 
   const supabase = getSupabase()
-  const today = new Date().toISOString().slice(0, 10)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
+  // Use Africa/Harare calendar boundaries for all reporting periods
+  const todayStart = getHarareStartOfDay()
+  const sevenDaysAgo = getHarareStartOfDaysAgo(7)
+  const thirtyDaysAgo = getHarareStartOfDaysAgo(30)
+  const ninetyDaysAgo = getHarareStartOfDaysAgo(90)
+  const thisMonthStart = getHarareStartOfCurrentMonth()
+  const thisWeekStart = getHarareStartOfCurrentWeek()
+  const thisYearStart = getHarareStartOfCurrentYear()
 
   if (businessId) {
     const [businessRes, statsRes] = await Promise.all([
@@ -72,6 +89,7 @@ export async function GET(request: Request) {
     })
   }
 
+  // Get unified financial data
   const [
     eventsToday,
     views7d,
@@ -83,32 +101,64 @@ export async function GET(request: Request) {
     categoryData,
     cityData,
     dailyTraffic,
-    revenueData,
     premiumCount,
   ] = await Promise.all([
     supabase
       .from('stats_events')
       .select('type')
-      .gte('created_at', `${today}T00:00:00`),
+      .gte('created_at', todayStart),
     supabase
       .from('daily_stats')
       .select('type, count')
-      .gte('date', sevenDaysAgo),
+      .gte('date', sevenDaysAgo.slice(0, 10)),
     supabase
       .from('daily_stats')
       .select('business_id, count')
       .eq('type', 'profile_view')
-      .gte('date', thirtyDaysAgo),
+      .gte('date', thirtyDaysAgo.slice(0, 10)),
     supabase.from('business_accounts').select('id', { count: 'exact', head: true }),
     supabase.from('businesses').select('id', { count: 'exact', head: true }).eq('verified', true),
     supabase.from('businesses').select('id', { count: 'exact', head: true }),
     supabase.from('businesses').select('created_at').gte('created_at', ninetyDaysAgo).order('created_at', { ascending: true }),
     supabase.from('businesses').select('category').eq('verified', true),
     supabase.from('businesses').select('city').eq('verified', true),
-    supabase.from('daily_stats').select('date, type, count').gte('date', thirtyDaysAgo).order('date', { ascending: true }),
-    supabase.from('subscriptions').select('amount, created_at').eq('status', 'active').gte('created_at', ninetyDaysAgo).order('created_at', { ascending: true }),
+    supabase.from('daily_stats').select('date, type, count').gte('date', thirtyDaysAgo.slice(0, 10)).order('date', { ascending: true }),
     supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
   ])
+
+  // Use unified financial reporting
+  const financialSummary = await getRevenueSummary({ period: 'monthly', businessId: undefined, includeGrowth: true })
+  const paymentsData = await getConfirmedPayments({ from: thisMonthStart, to: new Date().toISOString(), limit: 50 })
+
+  // Group payments by source
+  const revenueBySource: Record<string, number> = {
+    premium_subscription: 0,
+    listing_payment: 0,
+    rank_spot_payment: 0,
+    support_subscription: 0,
+    bid_payment: 0
+  }
+
+  for (const p of paymentsData) {
+    revenueBySource[p.source] = (revenueBySource[p.source] || 0) + p.amount
+  }
+
+  // Get revenue from the last 7 days, 30 days, and year
+  const recentPayments = await getConfirmedPayments({ from: ninetyDaysAgo, limit: 500 })
+
+  // Calculate revenue for this month
+  const revenueThisMonth = revenueBySource.premium_subscription + revenueBySource.listing_payment +
+                          revenueBySource.rank_spot_payment + revenueBySource.support_subscription +
+                          revenueBySource.bid_payment
+
+  // Weekly revenue (last 7 days)
+  const sevenDaysAgoDate = getHarareStartOfDaysAgo(7)
+  const weeklyPayments = await getConfirmedPayments({ from: sevenDaysAgoDate, limit: 500 })
+  const revenueThisWeek = weeklyPayments.reduce((sum, p) => sum + p.amount, 0)
+
+  // Yearly revenue
+  const yearlyPayments = await getConfirmedPayments({ from: thisYearStart, limit: 1000 })
+  const revenueThisYear = yearlyPayments.reduce((sum, p) => sum + p.amount, 0)
 
   const byType = new Map<string, number>()
   for (const r of eventsToday.data || []) {
@@ -164,11 +214,60 @@ export async function GET(request: Request) {
     .map(([date, types]) => ({ date, ...types }))
 
   const revenueMap = new Map<string, number>()
-  for (const r of revenueData.data || []) {
-    const month = r.created_at.slice(0, 7)
-    revenueMap.set(month, (revenueMap.get(month) || 0) + Number(r.amount))
+  for (const p of paymentsData) {
+    const month = p.createdAt.slice(0, 7)
+    revenueMap.set(month, (revenueMap.get(month) || 0) + p.amount)
   }
   const revenue = [...revenueMap.entries()].map(([month, amount]) => ({ month, amount }))
+
+  // Average weekly revenue (based on last 12 weeks)
+  const twelveWeeksAgo = getHarareStartOfDaysAgo(84)
+  const recentSubsSummary = await getRevenueSummary({ from: twelveWeeksAgo, period: 'monthly' })
+
+  // revenueThisMonth already calculated from revenueBySource
+  // revenueThisWeek and revenueThisYear already calculated above
+
+  // Payment performance from actual payments
+  const paymentStats = {
+    success: paymentsData.filter(p => p.status === 'confirmed').length,
+    failed: paymentsData.filter(p => p.status === 'failed' || p.status === 'cancelled').length,
+    pending: paymentsData.filter(p => p.status === 'pending').length,
+    total_amount: paymentsData.reduce((sum, p) => sum + p.amount, 0)
+  }
+
+  // Recent payments with business names
+  const recentPaymentsData = await Promise.all(
+    (paymentsData || []).map(async (p) => {
+      let businessName = 'Unknown'
+      if (p.businessId) {
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('name')
+          .eq('id', p.businessId)
+          .maybeSingle()
+        businessName = biz?.name || 'Unknown'
+      }
+      return {
+        id: p.id,
+        status: p.status,
+        amount: p.amount,
+        reference: p.reference,
+        business_name: businessName,
+        created_at: p.createdAt,
+        source: p.source
+      }
+    })
+  )
+
+  // Group by source for display
+  const sources: PaymentSource[] = ['premium_subscription', 'listing_payment', 'rank_spot_payment', 'support_subscription', 'bid_payment']
+  const sourceLabels: Record<PaymentSource, string> = {
+    premium_subscription: 'Premium Portal',
+    listing_payment: 'Listing Subscriptions',
+    rank_spot_payment: 'Rank Spot Payments',
+    support_subscription: 'Support Subscriptions',
+    bid_payment: 'Bid Payments'
+  }
 
   return NextResponse.json({
     macro: {
@@ -179,6 +278,25 @@ export async function GET(request: Request) {
       verifiedBusinesses: verifiedCount.count || 0,
       totalBusinesses: totalCount.count || 0,
       premiumBusinesses: premiumCount.count || 0,
+    },
+    // Financial analytics - UPFDATED
+    financial: {
+      revenue: {
+        this_month: revenueThisMonth,
+        this_week: revenueThisWeek,
+        this_year: revenueThisYear,
+        by_source: revenueBySource,
+        source_labels: sourceLabels,
+        avg_weekly: financialSummary.avgTransactionValue,
+      },
+      registrations: {
+        this_month: 0, // Registration counts not yet implemented in financial reporting
+        this_week: 0,
+        this_year: 0,
+      },
+      premium_members: premiumCount.count || 0,
+      payment_performance: paymentStats,
+      recent_payments: recentPaymentsData,
     },
     topBusinesses: topBusinesses.map(([id, views]) => ({
       ...(topBiz || []).find(b => b.id === id),

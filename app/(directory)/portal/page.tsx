@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { getActingPortalBusiness, getDailyStats, getLifetimeTotals, isPaidSubscriber, buildChartData } from '@/lib/portal'
+import { getActingPortalBusiness, getDailyStats, getLifetimeTotals, buildChartData } from '@/lib/portal'
+import { isPremiumActive } from '@/lib/premium-entitlement'
 import PortalOverview from '@/components/portal/overview'
 
 export const dynamic = 'force-dynamic'
@@ -8,9 +9,10 @@ export default async function PortalPage({ searchParams }: { searchParams: { bra
   const session = await getActingPortalBusiness(searchParams?.branch)
   if (!session) redirect('/login')
   const business = session.business
+  const branchId = searchParams?.branch || null
 
   const [paid, rows, lifetime] = await Promise.all([
-    isPaidSubscriber(business.id),
+    isPremiumActive(branchId),
     getDailyStats(business.id, 90),
     getLifetimeTotals(business.id),
   ])

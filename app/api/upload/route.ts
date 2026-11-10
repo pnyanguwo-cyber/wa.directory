@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server'
 import { sniffImage, uploadLogoImage, MAX_LOGO_BYTES } from '@/lib/image-storage'
 import { imageLuminanceFromBytes } from '@/lib/image-luminance'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()

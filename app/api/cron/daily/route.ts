@@ -401,7 +401,7 @@ async function hideExpiredListings(supabase: ReturnType<typeof getSupabase>) {
           '',
           `${biz.name} (@${biz.username || 'N/A'}) is no longer visible in the directory.`,
           '',
-          `Pay USD 1 to restore it:`,
+          `Pay to restore it:`,
           `${SITE_URL}/pay`,
         ].join('\n')
       ).catch(() => {})
@@ -409,6 +409,188 @@ async function hideExpiredListings(supabase: ReturnType<typeof getSupabase>) {
     }
   }
   return { hidden }
+}
+
+// === TRIAL SUBSCRIPTION HANDLING ===
+
+/**
+ * Notify businesses with trials expiring in 7 days
+ */
+async function notifyExpiringTrialSubs(supabase: ReturnType<typeof getSupabase>) {
+  const now = new Date()
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000).toISOString()
+  const tomorrow = new Date(now.getTime() + 1 * 86400000).toISOString()
+
+  const { data: expiringTrials } = await supabase
+    .from('listing_subscriptions')
+    .select('business_id, trial_expires_at, trial_reminder_sent_7d')
+    .eq('trial_eligible', false)
+    .eq('status', 'active')
+    .not('trial_expires_at', 'is', null)
+    .gte('trial_expires_at', now.toISOString())
+    .lte('trial_expires_at', sevenDaysFromNow)
+    .eq('trial_reminder_sent_7d', false)
+    .limit(100)
+
+  if (!expiringTrials?.length) return { notified: 0 }
+
+  const ids = [...new Set(expiringTrials.map(s => s.business_id))]
+  const { data: businesses } = await supabase
+    .from('businesses')
+    .select('id, name, phone, business_id')
+    .in('id', ids)
+  const bizById = new Map((businesses || []).map(b => [b.id, b]))
+
+  let notified = 0
+  for (const trial of expiringTrials) {
+    const biz = bizById.get(trial.business_id)
+    if (!biz?.phone) continue
+
+    await sendWhatsAppMessage(
+      biz.phone,
+      `⏳ *Trial Expiring in 7 Days*
+
+Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
+
+To continue your listing:
+• Visit ${SITE_URL}/pay?business_id=${biz.business_id}
+• Or reply *paid* to see subscription options
+
+Your listing will become inactive after the trial ends.`
+    ).catch(() => {})
+
+    await supabase
+      .from('listing_subscriptions')
+      .update({ trial_reminder_sent_7d: true })
+      .eq('business_id', trial.business_id)
+
+    notified++
+  }
+
+  return { notified }
+}
+
+/**
+ * Notify businesses with trials expiring in 3 days
+ */
+async function notifyExpiringTrialSubs3Day(supabase: ReturnType<typeof getSupabase>) {
+  const now = new Date()
+  const threeDaysFromNow = new Date(now.getTime() + 3 * 86400000).toISOString()
+  const twoDaysAgo = new Date(now.getTime() - 2 * 86400000).toISOString()
+
+  const { data: expiringTrials } = await supabase
+    .from('listing_subscriptions')
+    .select('business_id, trial_expires_at, trial_reminder_sent_3d')
+    .eq('trial_eligible', false)
+    .eq('status', 'active')
+    .not('trial_expires_at', 'is', null)
+    .gte('trial_expires_at', now.toISOString())
+    .lte('trial_expires_at', threeDaysFromNow)
+    .eq('trial_reminder_sent_3d', false)
+    .limit(100)
+
+  if (!expiringTrials?.length) return { notified: 0 }
+
+  const ids = [...new Set(expiringTrials.map(s => s.business_id))]
+  const { data: businesses } = await supabase
+    .from('businesses')
+    .select('id, name, phone, business_id')
+    .in('id', ids)
+  const bizById = new Map((businesses || []).map(b => [b.id, b]))
+
+  let notified = 0
+  for (const trial of expiringTrials) {
+    const biz = bizById.get(trial.business_id)
+    if (!biz?.phone) continue
+
+    await sendWhatsAppMessage(
+      biz.phone,
+      `⚠️ *Trial Ends in 3 Days*
+
+Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
+
+Time to choose:
+• Reply *paid* for subscription options
+• Or visit ${SITE_URL}/pay?business_id=${biz.business_id}
+
+Your listing will become inactive after the trial ends.`
+    ).catch(() => {})
+
+    await supabase
+      .from('listing_subscriptions')
+      .update({ trial_reminder_sent_3d: true })
+      .eq('business_id', trial.business_id)
+
+    notified++
+  }
+
+  return { notified }
+}
+
+/**
+ * Process expired trials - set status to expired and notify
+ */
+async function processExpiredTrialSubs(supabase: ReturnType<typeof getSupabase>) {
+  const now = new Date()
+
+  const { data: expiredTrials } = await supabase
+    .from('listing_subscriptions')
+    .select('business_id, trial_expires_at, trial_reminder_sent_3d')
+    .eq('trial_eligible', false)
+    .eq('status', 'active')
+    .lt('trial_expires_at', now.toISOString())
+    .limit(100)
+
+  if (!expiredTrials?.length) return { processed: 0 }
+
+  const ids = [...new Set(expiredTrials.map(s => s.business_id))]
+
+  // Expire the subscriptions
+  await supabase
+    .from('listing_subscriptions')
+    .update({ status: 'expired' })
+    .in('business_id', ids)
+
+  // Hide the businesses
+  await supabase
+    .from('businesses')
+    .update({ payment_status: 'expired' })
+    .in('id', ids)
+
+  const { data: businesses } = await supabase
+    .from('businesses')
+    .select('id, name, phone, business_id')
+    .in('id', ids)
+  const bizById = new Map((businesses || []).map(b => [b.id, b]))
+
+  let processed = 0
+  for (const trial of expiredTrials) {
+    const biz = bizById.get(trial.business_id)
+    if (!biz?.phone) continue
+
+    await sendWhatsAppMessage(
+      biz.phone,
+      `⏰ *Your Free Trial Has Expired*
+
+Your 90-day trial ended on ${trial.trial_expires_at?.slice(0, 10)}.
+
+Your listing is no longer visible in the directory.
+
+To go live again:
+• Visit ${SITE_URL}/pay?business_id=${biz.business_id}
+• Or reply *paid* to choose a plan
+
+$2/month — 1 Month
+$10 — 6 Months (most popular, save $2)
+$20 — 12 Months (save $4)
+
+Contact support if you need help.`
+    ).catch(() => {})
+
+    processed++
+  }
+
+  return { processed }
 }
 
 export async function GET(request: Request) {
@@ -430,6 +612,11 @@ export async function GET(request: Request) {
   results.listingNotified = await notifyExpiringListings(supabase)
   results.listingWarned = await warnExpiredListings(supabase)
   results.listingHidden = await hideExpiredListings(supabase)
+
+  // Trial notifications
+  results.trial7Day = await notifyExpiringTrialSubs(supabase)
+  results.trial3Day = await notifyExpiringTrialSubs3Day(supabase)
+  results.trialExpired = await processExpiredTrialSubs(supabase)
 
   return NextResponse.json(results)
 }

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { getActingPortalBusiness, getDailyStats, isPaidSubscriber } from '@/lib/portal'
+import { getActingPortalBusiness, getDailyStats } from '@/lib/portal'
+import { isPremiumActive } from '@/lib/premium-entitlement'
 import { getSupabase } from '@/lib/supabase-server'
 import { dedupeCategories } from '@/lib/utils'
 
@@ -97,10 +98,11 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
   const session = await getActingPortalBusiness(searchParams?.branch)
   if (!session) redirect('/login')
   const business = session.business
+  const branchId = searchParams?.branch || null
 
   const cleanCats = dedupeCategories(business.category || [])
 
-  const paid = await isPaidSubscriber(business.id)
+  const paid = await isPremiumActive(branchId)
   const { tips, comparison } = await buildTips(business.id, business as unknown as Record<string, any>, paid)
 
   const visible = paid ? tips : tips.slice(0, 3)

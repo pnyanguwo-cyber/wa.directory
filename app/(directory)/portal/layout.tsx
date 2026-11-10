@@ -1,19 +1,22 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { getPortalActor } from '@/lib/org-auth'
-import { getSubscription } from '@/lib/portal'
+import { isPremiumActive, getPremiumSubscription } from '@/lib/premium-entitlement'
 import PortalShell, { type ShellNavGroup, type ShellNavItem } from '@/components/portal/shell'
 
 export const dynamic = 'force-dynamic'
 
-export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+export default async function PortalLayout({ children, searchParams }: { children: React.ReactNode; searchParams?: { branch?: string } }) {
   const actor = await getPortalActor()
   if (!actor) redirect('/login')
 
   const business = actor.business
-  const sub = await getSubscription(business.id)
-  const paid = sub?.status === 'active' && (!sub.expiresAt || new Date(sub.expiresAt) > new Date())
   const isHq = actor.role === 'org-hq'
+  const branchId = searchParams?.branch || null
+
+  // Use the single authoritative premium check (handles org-scoped branch resolution)
+  const paid = await isPremiumActive(branchId)
+  const sub = await getPremiumSubscription(branchId)
 
   const nav: ShellNavGroup[] = [
     {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
 import { getEventLabel, STAT_EVENT_COLORS } from '@/lib/stats-format'
 import { dedupeCategories } from '@/lib/utils'
+import { formatHarareDateTime } from '@/lib/date-utils'
 import {
   LineChart, Line, AreaChart, Area, PieChart, Pie, Cell,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
@@ -18,6 +19,35 @@ interface Macro {
   verifiedBusinesses: number
   totalBusinesses: number
   premiumBusinesses: number
+}
+
+interface Financial {
+  revenue: {
+    this_month: number
+    this_week: number
+    this_year: number
+    avg_weekly: number
+  }
+  registrations: {
+    this_month: number
+    this_week: number
+    this_year: number
+  }
+  premium_members: number
+  payment_performance: {
+    success: number
+    failed: number
+    pending: number
+    total_amount: number
+  }
+  recent_payments: Array<{
+    id: string
+    status: string
+    amount: number
+    reference: string
+    business_name: string
+    created_at: string
+  }>
 }
 
 interface TopBusiness {
@@ -57,6 +87,7 @@ function ChartCard({ title, children, className = '' }: { title: string; childre
 export default function AdminStats() {
   const router = useRouter()
   const [macro, setMacro] = useState<Macro | null>(null)
+  const [financial, setFinancial] = useState<Financial | null>(null)
   const [top, setTop] = useState<TopBusiness[]>([])
   const [charts, setCharts] = useState<Charts | null>(null)
   const [loading, setLoading] = useState(true)
@@ -71,6 +102,7 @@ export default function AdminStats() {
       return
     }
     setMacro(data.macro)
+    setFinancial(data.financial)
     setTop(data.topBusinesses || [])
     setCharts(data.charts)
     setLoading(false)
@@ -120,7 +152,7 @@ export default function AdminStats() {
                 <tbody>
                   {[...detail.rows].reverse().map((r, i) => (
                     <tr key={i} className="border-b border-gray-100 last:border-0">
-                      <td className="py-1.5 pr-3 text-text-primary whitespace-nowrap">{r.date}</td>
+                      <td className="py-1.5 pr-3 text-text-primary whitespace-nowrap">{formatHarareDateTime(r.date)}</td>
                       <td className="py-1.5 pr-3 text-text-secondary">{getEventLabel(r.type)}</td>
                       <td className="py-1.5 font-semibold text-right text-whatsapp-700">{r.count}</td>
                     </tr>
@@ -139,7 +171,94 @@ export default function AdminStats() {
         </div>
       ) : (
         <>
-          {/* KPI Cards */}
+          {/* Financial Analytics KPI Cards */}
+          {financial && (
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-text-primary mb-2">Financial Overview</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                <div className="neo-card p-4 border-l-4 border-amber-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Revenue This Month</p>
+                  <p className="text-2xl font-extrabold text-amber-600 mt-1">${financial.revenue.this_month.toFixed(2)}</p>
+                </div>
+                <div className="neo-card p-4 border-l-4 border-whatsapp-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Revenue This Week</p>
+                  <p className="text-2xl font-extrabold text-whatsapp-600 mt-1">${financial.revenue.this_week.toFixed(2)}</p>
+                </div>
+                <div className="neo-card p-4 border-l-4 border-blue-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Revenue This Year</p>
+                  <p className="text-2xl font-extrabold text-blue-600 mt-1">${financial.revenue.this_year.toFixed(2)}</p>
+                </div>
+                <div className="neo-card p-4 border-l-4 border-purple-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Avg Weekly Revenue</p>
+                  <p className="text-2xl font-extrabold text-purple-600 mt-1">${financial.revenue.avg_weekly.toFixed(2)}</p>
+                </div>
+                <div className="neo-card p-4 border-l-4 border-green-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Registrations This Month</p>
+                  <p className="text-2xl font-extrabold text-green-600 mt-1">{financial.registrations.this_month}</p>
+                </div>
+                <div className="neo-card p-4 border-l-4 border-indigo-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Premium Members</p>
+                  <p className="text-2xl font-extrabold text-indigo-600 mt-1">{financial.premium_members}</p>
+                </div>
+              </div>
+
+              {/* Payment Performance & Recent Payments */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <ChartCard title="Payment Performance (30d)">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-green-700">Successful</p>
+                      <p className="text-xl font-extrabold text-green-800 mt-0.5">{financial.payment_performance.success}</p>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-red-700">Failed</p>
+                      <p className="text-xl font-extrabold text-red-800 mt-0.5">{financial.payment_performance.failed}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-amber-700">Pending</p>
+                      <p className="text-xl font-extrabold text-amber-800 mt-0.5">{financial.payment_performance.pending}</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                      <p className="text-[10px] font-semibold text-blue-700">Total Amount</p>
+                      <p className="text-xl font-extrabold text-blue-800 mt-0.5">${financial.payment_performance.total_amount.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </ChartCard>
+
+                <ChartCard title="Recent Payments">
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {financial.recent_payments.length === 0 ? (
+                      <p className="text-xs text-text-secondary text-center py-4">No recent payments</p>
+                    ) : (
+                      financial.recent_payments.map((p, i) => (
+                        <div key={i} className="flex items-center justify-between p-2.5 rounded-xl bg-surface/50 border border-gray-200/50">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-text-primary truncate">{p.business_name}</p>
+                            <p className="text-[11px] text-text-secondary truncate">{p.reference}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              p.status === 'paid' || p.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              p.status === 'failed' ? 'bg-red-100 text-red-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {p.status}
+                            </span>
+                            <span className="text-sm font-extrabold text-text-primary whitespace-nowrap">${p.amount.toFixed(2)}</span>
+                            <span className="text-[10px] text-text-secondary whitespace-nowrap">
+                              {formatHarareDateTime(p.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ChartCard>
+              </div>
+            </div>
+          )}
+
+          {/* Standard KPI Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div className="neo-card p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Events today</p>

@@ -132,7 +132,8 @@ export async function generateSiteSections(input: {
   try {
     const { callGemini } = await import('./gemini')
     const text = await callGemini(
-      `Write website copy for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Return ONLY a JSON object: {"tagline": "<max 10 words>", "faq": [{"q": "<question>", "a": "<max 240 chars>"} x 4]} covering what customers usually ask (services, quote, areas, payment/delivery). No markdown, no extra keys, no explanation.`
+      `Write website copy for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Return ONLY a JSON object: {"tagline": "<max 10 words>", "faq": [{"q": "<question>", "a": "<max 240 chars>"} x 4]} covering what customers usually ask (services, quote, areas, payment/delivery). No markdown, no extra keys, no explanation.`,
+      { feature: 'seo_blurb', channel: 'web' }
     ) || ''
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {
@@ -194,7 +195,8 @@ export async function generateSiteDesign(input: {
   try {
     const { callGemini } = await import('./gemini')
     const text = await callGemini(
-      `Pick an auto-website template and font for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Choose design from exactly: classic, maison, bolt, craft (maison=editorial luxury serif, bolt=bold startup energy, craft=warm local maker, classic=clean default). Choose font from exactly: modern, editorial, grotesk, warm. Return ONLY JSON: {"design":"<one>","font":"<one>"}.`
+      `Pick an auto-website template and font for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Choose design from exactly: classic, maison, bolt, craft (maison=editorial luxury serif, bolt=bold startup energy, craft=warm local maker, classic=clean default). Choose font from exactly: modern, editorial, grotesk, warm. Return ONLY JSON: {"design":"<one>","font":"<one>"}.`,
+      { feature: 'seo_blurb', channel: 'web' }
     ) || ''
     const match = text.match(/\{[\s\S]*\}/)
     if (match) {

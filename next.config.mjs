@@ -2,6 +2,7 @@
 const serverExternals = ['sharp', '@wa-directory/shared', 'wa-directory-shared'];
 
 const nextConfig = {
+  output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: serverExternals,
   },

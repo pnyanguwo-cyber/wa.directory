@@ -479,48 +479,28 @@ export function initials(raw: string | null | undefined): string {
   return digits ? digits.slice(-2) : 'WA'
 }
 
+import {
+  formatHarareTime,
+  formatHarareDay,
+  formatHarareRelative,
+  formatHarareDateTime,
+} from './date-utils'
+
 export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  return formatHarareTime(iso)
 }
 
 export function formatDay(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const today = new Date()
-  const yesterday = new Date()
-  yesterday.setDate(today.getDate() - 1)
-  if (date.toDateString() === today.toDateString()) return 'Today'
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday'
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return formatHarareDay(iso)
 }
 
 export function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ''
-  const diff = Date.now() - date.getTime()
-  if (diff < 60_000) return 'now'
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m`
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h`
-  if (diff < 604_800_000) return `${Math.floor(diff / 86_400_000)}d`
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  return formatHarareRelative(iso)
 }
 
 export function formatFullDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const formatted = formatHarareDateTime(iso)
+  return formatted || '—'
 }
 
 export function escapeCsv(value: unknown): string {

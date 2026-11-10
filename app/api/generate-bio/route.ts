@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { callGemini } from '@/lib/gemini'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const { description } = await request.json()
@@ -14,7 +16,8 @@ export async function POST(request: Request) {
     const bio =
       process.env.GEMINI_API_KEY
         ? (await callGemini(
-            `Write a 1-2 sentence professional bio for a business that does: ${description}. Be concise, direct, no fluff. Just the bio, no introduction. Do not use em-dashes (—), use commas or colons instead.`
+            `Write a 1-2 sentence professional bio for a business that does: ${description}. Be concise, direct, no fluff. Just the bio, no introduction. Do not use em-dashes (—), use commas or colons instead.`,
+            { feature: 'seo_blurb', channel: 'web' }
           )) || `Professional ${description} services. Contact us today.`
         : `Professional ${description} services. Contact us today for reliable and affordable service.`
 

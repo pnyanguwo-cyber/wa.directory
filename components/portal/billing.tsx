@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import PaymentPlanModal from '@/components/payment-plan-modal'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
+import { formatHarareDate } from '@/lib/date-utils'
 import type { PlanType, SupportTier } from '@/types'
 import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE, SUPPORT_TIERS } from '@/types'
 
@@ -12,7 +13,19 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   businessId: string
   businessName: string
   sub: { status: string; expiresAt: string | null; amount: number; adminNote: string } | null
-  listingSub: { status: string; expiresAt: string | null; amount: number; payerPhone: string; plan: string; proAssistance: boolean } | null
+  listingSub: {
+    status: string
+    expiresAt: string | null
+    amount: number
+    payerPhone: string
+    plan: string
+    proAssistance: boolean
+    trialEligible: boolean
+    trialActivatedAt: string | null
+    trialExpiresAt: string | null
+    trialReminderSent7d: boolean
+    trialReminderSent3d: boolean
+  } | null
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -31,12 +44,22 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   const listingPending = listingStatus === 'pending'
   const listingExpired = listingStatus === 'expired'
 
-  // Due date + remaining days
+  // Trial status
+  const trialActivatedAt = listingSub?.trialActivatedAt ? new Date(listingSub.trialActivatedAt) : null
+  const trialExpiresAt = listingSub?.trialExpiresAt ? new Date(listingSub.trialExpiresAt) : null
   const now = new Date()
+  const daysUntilTrialExpiry = trialExpiresAt ? Math.ceil((trialExpiresAt.getTime() - now.getTime()) / 86400000) : null
+  const trialActive = trialExpiresAt && trialExpiresAt > now
+
+  // Due date + remaining days for paid subscription
   const expiresAt = listingSub?.expiresAt ? new Date(listingSub.expiresAt) : null
   const daysRemaining = expiresAt ? Math.ceil((expiresAt.getTime() - now.getTime()) / 86400000) : null
   const isUrgent = daysRemaining !== null && daysRemaining <= 7 && daysRemaining > 0
   const isWarning = daysRemaining !== null && daysRemaining <= 14 && daysRemaining > 7
+
+  // Trial reminder status
+  const trial7dReminded = listingSub?.trialReminderSent7d
+  const trial3dReminded = listingSub?.trialReminderSent3d
 
   async function handlePlanProceed(payload: { plan: PlanType; hasProAssistance: boolean }) {
     setBusy(true)
@@ -87,6 +110,29 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
       setError('Simulation failed. Please try again.')
     } finally {
       setSimulating(null)
+    }
+  }
+
+  async function handleActivateTrial() {
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await fetch('/api/portal/billing/activate-trial', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Could not activate trial')
+        return
+      }
+      setNotice(data.message || 'Trial activated successfully!')
+      router.refresh()
+    } catch {
+      setError('Failed to activate trial. Please try again.')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -178,7 +224,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
             <div className="flex items-center justify-between">
               <div>
                 <p className={`text-xs font-semibold ${isUrgent ? 'text-red-700' : isWarning ? 'text-amber-700' : 'text-whatsapp-700'}`}>
-                  Due: {expiresAt.toLocaleDateString('en-ZW', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  Due: {formatHarareDate(expiresAt)}
                 </p>
                 {listingSub.proAssistance && (
                   <p className="text-[10px] text-text-secondary mt-0.5">Includes pro WhatsApp catalog setup</p>
@@ -233,6 +279,55 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
               </button>
             </div>
           )}
+
+          {trialActive && (
+            <div className="mt-4 rounded-xl bg-green-50 border border-green-200 p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-green-800 mb-1">
+                    🆓 90-Day Free Trial
+                  </p>
+                  <p className="text-xs text-green-700">
+                    Your listing is fully active during the trial period.
+                    {daysUntilTrialExpiry !== null && (
+                      <span className="block mt-1">
+                        Expires in <strong>{daysUntilTrialExpiry} days</strong> (approx. {formatHarareDate(trialExpiresAt!)}).
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-green-600 mt-2">
+                    When the trial ends, you'll receive reminders to renew. Continue at $2/month or choose a longer plan.
+                  </p>
+                </div>
+                <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 0 1-18 0 9 9 0 0 1 18 0z" />
+                </svg>
+              </div>
+              {daysUntilTrialExpiry !== null && daysUntilTrialExpiry <= 30 && (
+                <div className="mt-3 h-1.5 bg-green-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 transition-all"
+                    style={{ width: `${Math.max(5, ((daysUntilTrialExpiry || 0) / 90) * 100)}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {listingSub?.trialEligible && !trialActive && (
+            <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 p-4">
+              <p className="text-xs text-blue-700 mb-2">
+                🎉 You're eligible for a 90-day free trial! Your listing will be fully active for 90 days with no payment required.
+              </p>
+              <button
+                onClick={handleActivateTrial}
+                disabled={busy}
+                className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition-all disabled:opacity-60"
+              >
+                {busy ? 'Activating...' : 'Activate Free Trial'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -258,7 +353,7 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
             <div className="bg-surface rounded-xl px-3 py-2.5 border border-gray-200/80">
               <p className="text-text-secondary font-medium">Expires</p>
               <p className="text-base font-extrabold text-text-primary mt-0.5">
-                {sub.expiresAt ? new Date(sub.expiresAt).toLocaleDateString() : '—'}
+                {sub.expiresAt ? formatHarareDate(sub.expiresAt) : '—'}
               </p>
             </div>
             {sub.adminNote && (

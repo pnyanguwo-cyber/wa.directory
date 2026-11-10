@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface BannerRow {
   id: string
@@ -191,7 +192,7 @@ export default function AdminBanners() {
                 <p className="text-sm font-medium text-text-primary">{b.text}</p>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {b.link ? `${b.link_label || 'Learn more'} → ${b.link} · ` : ''}
-                  {new Date(b.created_at).toLocaleString()}
+                  {formatHarareDateTime(b.created_at)}
                 </p>
               </div>
               <div className="flex items-center gap-2 shrink-0">

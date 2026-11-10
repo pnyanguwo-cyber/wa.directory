@@ -203,7 +203,11 @@ export async function analyseListingImage(input: AnalyseListingInput): Promise<A
     { inline_data: { mime_type: prepared.mimeType, data: prepared.base64 } },
   ]
 
-  const raw = await callGeminiJson(parts, { schema: RESPONSE_SCHEMA, temperature: 0.05, maxOutputTokens: 900 })
+  const raw = await callGeminiJson(
+    parts,
+    { schema: RESPONSE_SCHEMA, temperature: 0.05, maxOutputTokens: 900 },
+    { feature: 'listing_draft', channel: 'web' }
+  )
   if (!raw) return { ok: false, reason: 'model_failed' }
 
   const obj = asRecord(raw)
@@ -325,7 +329,8 @@ Confidence is 0-1. Answer with JSON only.`
       { text: prompt },
       { inline_data: { mime_type: prepared.mimeType, data: prepared.base64 } },
     ],
-    { schema: SEARCH_SCHEMA, temperature: 0.05, maxOutputTokens: 300 }
+    { schema: SEARCH_SCHEMA, temperature: 0.05, maxOutputTokens: 300 },
+    { feature: 'vision_analysis', channel: 'web' }
   )
   if (!raw) return null
 

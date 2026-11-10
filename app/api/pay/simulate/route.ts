@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { activateListingSubscription } from '@/lib/listing-activation'
 import { activateBidAsNumberOne, markBidPaid, notifyAdminTakeover } from '@/lib/bid-activation'
@@ -130,6 +131,11 @@ async function simulateListing(
     request,
   })
 
+  // Revalidate portal and pay pages
+  revalidatePath('/portal')
+  revalidatePath('/portal/billing')
+  revalidatePath('/pay')
+
   return NextResponse.json({ success: true, activated: true })
 }
 
@@ -236,6 +242,11 @@ async function simulateBid(supabase: Supabase, body: Record<string, unknown>, re
     })
   }
 
+  // Revalidate portal and ranking pages
+  revalidatePath('/portal')
+  revalidatePath('/portal/ranking')
+  revalidatePath('/portal/billing')
+
   return NextResponse.json({ success: true, activated: result.activated !== false })
 }
 
@@ -306,6 +317,13 @@ async function simulatePremium(supabase: Supabase, body: Record<string, unknown>
     detail: { via: 'simulated', kind: 'premium' },
     request,
   })
+
+  // Revalidate portal pages so the new premium status is visible immediately
+  revalidatePath('/portal')
+  revalidatePath('/portal/billing')
+  revalidatePath('/portal/conversations')
+  revalidatePath('/portal/analytics')
+  revalidatePath('/portal/improve')
 
   return NextResponse.json({ success: true, activated: true })
 }

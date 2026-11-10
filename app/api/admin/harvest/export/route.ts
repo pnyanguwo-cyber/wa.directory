@@ -1,6 +1,7 @@
 import { adminGuard } from '@/lib/admin-auth'
 import { listTrainingExamples, trainingExamplesToCsv } from '@/lib/harvest'
 import { NextResponse } from 'next/server'
+import { getHarareDateNow } from '@/lib/date-utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
 
   try {
     const examples = await listTrainingExamples({ status, category })
-    const stamp = new Date().toISOString().slice(0, 10)
+    const stamp = getHarareDateNow().replace(/\s+/g, '-')
 
     if (format === 'json') {
       return new NextResponse(JSON.stringify({ exportedAt: new Date().toISOString(), status, category, examples }, null, 2), {

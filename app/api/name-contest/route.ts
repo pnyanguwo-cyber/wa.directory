@@ -4,6 +4,8 @@ import { normalizeUsername } from '@/lib/username'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()

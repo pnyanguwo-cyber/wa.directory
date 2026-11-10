@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 
+export const dynamic = 'force-dynamic'
+
 const NOMINATIM_SEARCH = 'https://nominatim.openstreetmap.org/search'
 const NOMINATIM_REVERSE = 'https://nominatim.openstreetmap.org/reverse'
 

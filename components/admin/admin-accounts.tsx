@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { formatHarareDate } from '@/lib/date-utils'
 
 interface Account {
   id: string
@@ -109,7 +110,7 @@ export default function AdminAccounts() {
       buckets.set(assigned!, (buckets.get(assigned!) || 0) + 1)
     }
     return [...buckets.entries()].map(([week, count]) => ({
-      week: new Date(week + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      week: formatHarareDate(week + 'T00:00:00', { month: 'short', day: 'numeric' }),
       signups: count,
     }))
   }, [rows])
@@ -326,7 +327,7 @@ export default function AdminAccounts() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-text-primary truncate">{a.business?.name || 'Unknown business'}</p>
                 <p className="text-[11px] text-text-secondary">
-                  {a.business?.phone || 'no phone'} · created {new Date(a.created_at).toLocaleDateString()}
+                  {a.business?.phone || 'no phone'} · created {formatHarareDate(a.created_at)}
                 </p>
               </div>
               <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${a.disabled ? 'bg-red-50 text-red-700 border-red-200' : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'}`}>

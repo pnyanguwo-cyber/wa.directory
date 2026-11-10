@@ -225,7 +225,11 @@ export async function analyseBusinessMaterial(
   // The prompt is the only part: every image failed to decode.
   if (parts.length < 2) return { ok: false, reason: 'no_images' }
 
-  const raw = await callGeminiJson(parts, { schema: RESPONSE_SCHEMA, temperature: 0.05, maxOutputTokens: 1200 })
+  const raw = await callGeminiJson(
+    parts,
+    { schema: RESPONSE_SCHEMA, temperature: 0.05, maxOutputTokens: 1200 },
+    { feature: 'registration_draft', channel: 'web' }
+  )
   if (!raw) return { ok: false, reason: 'model_failed' }
 
   const obj = asRecord(raw)

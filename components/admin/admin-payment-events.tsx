@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
+import { formatHarareDateTimeFull, formatHarareRelative } from '@/lib/date-utils'
 
 interface PaymentEvent {
   id: string
@@ -47,14 +48,6 @@ function outcomeBadge(outcome: string) {
     default:
       return 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200'
   }
-}
-
-function timeAgo(iso: string) {
-  const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000))
-  if (s < 60) return `${s}s ago`
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
-  return new Date(iso).toLocaleDateString()
 }
 
 export default function AdminPaymentEvents() {
@@ -149,13 +142,13 @@ export default function AdminPaymentEvents() {
                   {typeof e.detail?.amount === 'number' && (
                     <span className="text-xs font-semibold text-whatsapp-700">${Number(e.detail.amount).toFixed(2)}</span>
                   )}
-                  <span className="ml-auto text-[10px] text-text-secondary shrink-0">{timeAgo(e.created_at)}</span>
+                  <span className="ml-auto text-[10px] text-text-secondary shrink-0">{formatHarareRelative(e.created_at)}</span>
                 </button>
 
                 {expanded === e.id && (
                   <div className="mt-3 space-y-2 border-t border-gray-200/70 pt-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                      <p><span className="font-semibold text-text-secondary">When:</span> <span className="text-text-primary">{new Date(e.created_at).toLocaleString()}</span></p>
+                      <p><span className="font-semibold text-text-secondary">When:</span> <span className="text-text-primary">{formatHarareDateTimeFull(e.created_at)}</span></p>
                       <p className="truncate"><span className="font-semibold text-text-secondary">IP hash:</span> <span className="text-text-primary font-mono">{e.ip_hash || '—'}</span></p>
                       <p className="truncate sm:col-span-2"><span className="font-semibold text-text-secondary">User agent:</span> <span className="text-text-primary">{e.user_agent || '—'}</span></p>
                       {e.bid_id && <p className="truncate"><span className="font-semibold text-text-secondary">Bid:</span> <span className="text-text-primary font-mono">{e.bid_id}</span></p>}

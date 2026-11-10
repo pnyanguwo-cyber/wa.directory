@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
-import { getActingPortalBusiness, isPaidSubscriber } from '@/lib/portal'
+import { getActingPortalBusiness } from '@/lib/portal'
+import { isPremiumActive } from '@/lib/premium-entitlement'
 import { getBusinessAnalytics } from '@/lib/analytics'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const session = await getActingPortalBusiness(url.searchParams.get('branch'))
+  const branchId = url.searchParams.get('branch')
+  const session = await getActingPortalBusiness(branchId)
   if (!session) return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
-  if (!(await isPaidSubscriber(session.business.id))) {
+  if (!(await isPremiumActive(branchId))) {
     return NextResponse.json({ error: 'Analytics require an active subscription' }, { status: 403 })
   }
 

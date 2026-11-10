@@ -4,6 +4,38 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
 
+// Harare timezone for client-side date initialization
+const HARARE_TZ = 'Africa/Harare'
+
+function getHarareDateNow(): string {
+  const now = new Date()
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: HARARE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
+function getHarareDatePlusDays(days: number): string {
+  const now = new Date()
+  const harareDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: HARARE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+  const [year, month, day] = harareDate.split('-').map(Number)
+  const targetDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0))
+  targetDate.setUTCDate(targetDate.getUTCDate() + days)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: HARARE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(targetDate)
+}
+
 interface BizRef {
   id: string
   name: string
@@ -60,11 +92,8 @@ export default function AdminRankings() {
   const [overrideFee, setOverrideFee] = useState('')
   const [overrideDays, setOverrideDays] = useState('30')
   const [overrideMode, setOverrideMode] = useState<'days' | 'dates'>('days')
-  const [overrideStart, setOverrideStart] = useState(() => new Date().toISOString().slice(0, 10))
-  const [overrideEnd, setOverrideEnd] = useState(() => {
-    const d = new Date(Date.now() + 29 * 24 * 60 * 60 * 1000)
-    return d.toISOString().slice(0, 10)
-  })
+  const [overrideStart, setOverrideStart] = useState(() => getHarareDateNow())
+  const [overrideEnd, setOverrideEnd] = useState(() => getHarareDatePlusDays(29))
   const [payingBid, setPayingBid] = useState<Bid | null>(null)
   const [payFee, setPayFee] = useState('')
   const [resetting, setResetting] = useState<{ category: string; city: string; holderBusinessId?: string; holderName?: string; holderFee?: number } | null>(null)
@@ -129,10 +158,10 @@ export default function AdminRankings() {
             <form onSubmit={e => { e.preventDefault(); act('override', {
               business_id: overrideBiz, category: overrideCategory, city: overrideCity,
               position: overridePosition, monthly_fee: Number(overrideFee || 0),
-              period_start: overrideMode === 'dates' ? overrideStart : new Date().toISOString().slice(0, 10),
+              period_start: overrideMode === 'dates' ? overrideStart : getHarareDateNow(),
               period_end: overrideMode === 'dates'
                 ? overrideEnd
-                : new Date(Date.now() + (Math.max(1, Number(overrideDays) || 30) - 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+                : getHarareDatePlusDays(Math.max(1, Number(overrideDays) || 30) - 1),
             }) }} className="space-y-3.5">
               <div>
                 <label className="text-xs font-medium text-text-secondary mb-1 block">Business ID</label>

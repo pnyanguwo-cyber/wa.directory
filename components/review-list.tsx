@@ -1,5 +1,7 @@
 'use client'
 
+import { formatHarareRelative } from '@/lib/date-utils'
+
 interface Review {
   id: string
   name: string
@@ -25,18 +27,6 @@ function Stars({ rating }: { rating: number }) {
   )
 }
 
-function formatDate(dateStr: string): string {
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`
-  return d.toLocaleDateString('en-ZW', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
 export function ReviewListDisplay({ reviews }: { reviews: Review[] }) {
   if (reviews.length === 0) {
     return (
@@ -56,7 +46,7 @@ export function ReviewListDisplay({ reviews }: { reviews: Review[] }) {
             </div>
             <div>
               <p className="text-sm font-medium text-text-primary">{review.name || 'Anonymous'}</p>
-              <p className="text-xs text-text-secondary">{formatDate(review.created_at)}</p>
+              <p className="text-xs text-text-secondary">{formatHarareRelative(review.created_at)}</p>
             </div>
             <div className="ml-auto">
               <Stars rating={review.rating} />

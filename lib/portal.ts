@@ -88,10 +88,15 @@ export async function getListingSubscription(businessId: string): Promise<{
   payerPhone: string
   plan: string
   proAssistance: boolean
+  trialEligible: boolean
+  trialActivatedAt: string | null
+  trialExpiresAt: string | null
+  trialReminderSent7d: boolean
+  trialReminderSent3d: boolean
 } | null> {
   const { data } = await getSupabase()
     .from('listing_subscriptions')
-    .select('status, expires_at, amount, payer_phone, plan, pro_assistance')
+    .select('status, expires_at, amount, payer_phone, plan, pro_assistance, trial_eligible, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -104,6 +109,11 @@ export async function getListingSubscription(businessId: string): Promise<{
     payerPhone: data.payer_phone,
     plan: data.plan || '1m',
     proAssistance: data.pro_assistance || false,
+    trialEligible: data.trial_eligible || false,
+    trialActivatedAt: data.trial_activated_at,
+    trialExpiresAt: data.trial_expires_at,
+    trialReminderSent7d: data.trial_reminder_sent_7d || false,
+    trialReminderSent3d: data.trial_reminder_sent_3d || false,
   }
 }
 

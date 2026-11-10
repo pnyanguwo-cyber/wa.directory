@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch } from './shared'
+import { formatHarareDate } from '@/lib/date-utils'
 
 interface AddressRequest {
   id: string
@@ -110,7 +111,7 @@ export default function AdminAddressRequests() {
                     <span className="text-xs text-text-secondary">Business: {r.business_name}</span>
                   )}
                   <span className="text-xs text-text-secondary">
-                    {new Date(r.created_at).toLocaleDateString('en-ZW', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    {formatHarareDate(r.created_at)}
                   </span>
                   <span
                     className={`text-xs font-semibold px-2 py-0.5 rounded-full ${

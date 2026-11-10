@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { adminFetch, AdminSectionHeader } from './shared'
+import { formatHarareDateTime } from '@/lib/date-utils'
 
 interface RequestRow {
   id: string
@@ -169,7 +170,7 @@ export default function AdminRequests() {
                 </div>
                 <p className="text-xs text-text-secondary mt-1">
                   From <span className="font-medium text-text-primary">{r.businesses?.name || 'Unknown business'}</span>
-                  {' · '}{new Date(r.created_at).toLocaleString()}
+                  {' · '}{formatHarareDateTime(r.created_at)}
                 </p>
               </div>
               {r.status === 'pending' && (
