@@ -164,11 +164,11 @@ Contact support if you need assistance.`
       }
     }
 
-    return {
+    return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
       messagesSent,
-    }
+    })
   } catch (err) {
     console.error('[cron] Error:', err)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
