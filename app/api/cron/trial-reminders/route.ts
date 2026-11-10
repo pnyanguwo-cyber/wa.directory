@@ -16,6 +16,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
+import { PLAN_CONFIG, formatUsd } from '@/types'
+import { setConversationState } from '@/lib/bot-state'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,10 +37,11 @@ export async function POST(request: Request) {
     const supabase = getSupabase()
     const now = new Date()
 
-    // 1. 7-day expiry reminders
-    const sevenDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000)
-    const threeDaysAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000)
-    const today = new Date(now.toISOString().slice(0, 10))
+    // Rolling windows, not "now minus N days": the old query looked for
+    // trials that expired BEFORE today and after today at the same time, so it
+    // could never match anything.
+    const in7Days = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const in3Days = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
 
     // Find trials expiring in 7 days (not yet reminded)
     const { data: sevenDayTrials, error: err7 } = await supabase
@@ -48,11 +51,11 @@ export async function POST(request: Request) {
         trial_expires_at,
         trial_reminder_sent_7d
       `)
-      .eq('trial_eligible', false)
+      .eq('is_trial', true)
       .eq('status', 'active')
       .not('trial_expires_at', 'is', null)
-      .lt('trial_expires_at', sevenDaysAgo.toISOString())
-      .gt('trial_expires_at', today.toISOString())
+      .lte('trial_expires_at', in7Days.toISOString())
+      .gt('trial_expires_at', in3Days.toISOString())
       .eq('trial_reminder_sent_7d', false)
 
     if (err7) console.error('[cron] Error fetching 7-day trials:', err7)
@@ -65,11 +68,11 @@ export async function POST(request: Request) {
         trial_expires_at,
         trial_reminder_sent_3d
       `)
-      .eq('trial_eligible', false)
+      .eq('is_trial', true)
       .eq('status', 'active')
       .not('trial_expires_at', 'is', null)
-      .lt('trial_expires_at', threeDaysAgo.toISOString())
-      .gt('trial_expires_at', today.toISOString())
+      .lte('trial_expires_at', in3Days.toISOString())
+      .gt('trial_expires_at', now.toISOString())
       .eq('trial_reminder_sent_3d', false)
 
     if (err3) console.error('[cron] Error fetching 3-day trials:', err3)
@@ -82,11 +85,10 @@ export async function POST(request: Request) {
         trial_expires_at,
         trial_reminder_sent_3d
       `)
-      .eq('trial_eligible', false)
+      .eq('is_trial', true)
       .eq('status', 'active')
       .not('trial_expires_at', 'is', null)
-      .lt('trial_expires_at', today.toISOString())
-      .eq('trial_reminder_sent_3d', true) // Only send renewal offer once
+      .lte('trial_expires_at', now.toISOString())
 
     if (errExpired) console.error('[cron] Error fetching expired trials:', errExpired)
 
@@ -107,7 +109,7 @@ export async function POST(request: Request) {
 Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
 
 To continue your listing:
-• Reply *paid* for subscription options
+• Reply *renew* for subscription options
 • Or visit ${SITE_URL}/pay?business_id=${business.business_id}
 
 Your listing will become inactive after the trial ends.`
@@ -116,6 +118,7 @@ Your listing will become inactive after the trial ends.`
           .from('listing_subscriptions')
           .update({ trial_reminder_sent_7d: true })
           .eq('business_id', trial.business_id)
+          .eq('is_trial', true)
         messagesSent.sevenDay++
       }
     }
@@ -131,15 +134,22 @@ Your listing will become inactive after the trial ends.`
 Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
 
 ⚡ Time to act now!
-• Reply *paid* for subscription options
+• Reply *renew* for subscription options
 • Or visit ${SITE_URL}/pay?business_id=${business.business_id}
 
 Your listing will become inactive after the trial ends.`
         )
         await supabase
           .from('listing_subscriptions')
-          .update({ trial_reminder_sent_3d: true })
+          .update({ trial_reminder_sent_3d: true, trial_status: 'expiring' })
           .eq('business_id', trial.business_id)
+          .eq('is_trial', true)
+        await setConversationState(business.phone, 'TRIAL_EXPIRING', {
+          businessId: trial.business_id,
+          businessName: business.name,
+          businessSlug: business.username || null,
+          trialExpiresAt: trial.trial_expires_at,
+        })
         messagesSent.threeDay++
       }
     }
@@ -156,10 +166,25 @@ Your 90-day free trial ended on ${trial.trial_expires_at?.slice(0, 10)}.
 
 To reactivate your listing:
 • Visit ${SITE_URL}/pay?business_id=${business.business_id}
-• Choose your subscription plan ($2/month, $10/6mo, $20/year)
+• Choose your subscription plan (${formatUsd(PLAN_CONFIG['1m'].price)}/month, ${formatUsd(PLAN_CONFIG['6m'].price)}/6mo, ${formatUsd(PLAN_CONFIG['12m'].price)}/year)
 
 Contact support if you need assistance.`
         )
+        await supabase
+          .from('listing_subscriptions')
+          .update({ status: 'expired', trial_status: 'expired' })
+          .eq('business_id', trial.business_id)
+          .eq('is_trial', true)
+        await supabase
+          .from('businesses')
+          .update({ payment_status: 'expired' })
+          .eq('id', trial.business_id)
+        await setConversationState(business.phone, 'TRIAL_EXPIRED', {
+          businessId: trial.business_id,
+          businessName: business.name,
+          businessSlug: business.username || null,
+          trialExpiresAt: trial.trial_expires_at,
+        })
         messagesSent.expired++
       }
     }
@@ -181,7 +206,7 @@ Contact support if you need assistance.`
 async function getBusinessById(supabase: ReturnType<typeof getSupabase>, businessId: string) {
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, business_id, phone, name')
+    .select('id, business_id, phone, name, username')
     .eq('id', businessId)
     .single()
 

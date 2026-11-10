@@ -5,18 +5,15 @@
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server'
+import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG, formatUsd, TRIAL_PLAN_LABEL, type PlanType } from '@/types'
 
 /**
- * Subscription plan configuration (pricing for listing activation).
- * Used by multiple modules: onboarding, payment help, activation messages.
+ * Re-export the single authoritative plan table from types/index.ts.
+ * Do not declare prices here — bot, portal, admin and Paynow must all read
+ * the same object, otherwise a user can see one amount and be charged another.
  */
-export const PLAN_CONFIG = {
-  '1m': { price: 2.0, days: 30, label: '1 Month — $2.00' },
-  '6m': { price: 10.0, days: 180, label: '6 Months — $10.00 (save $2)' },
-  '12m': { price: 20.0, days: 360, label: '12 Months — $20.00 (save $4)' },
-} as const
-
-export type PlanType = keyof typeof PLAN_CONFIG
+export { PLAN_CONFIG, PERSONAL_PLAN_CONFIG, formatUsd, TRIAL_PLAN_LABEL }
+export type { PlanType }
 
 export type ConversationState =
   | 'LISTING_SUBMITTED'
@@ -50,6 +47,9 @@ export interface ConversationContext {
   listingId?: string
   subscriptionId?: string
   selectedPackage?: '1m' | '6m' | '12m'
+  /** Plan chosen at the start of registration: free trial or paid. */
+  approvedPlan?: 'trial' | PlanType
+  trialRequested?: boolean
   ecocashNumber?: string
   paynowReference?: string
   paynowPollUrl?: string

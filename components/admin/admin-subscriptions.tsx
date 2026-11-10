@@ -34,6 +34,9 @@ interface ListingSubscription {
   paynow_paid_at: string | null
   auto_confirmed_at: string | null
   trial_eligible: boolean
+  trial_status: string | null
+  is_trial: boolean
+  trial_requested_at: string | null
   trial_activated_at: string | null
   trial_expires_at: string | null
   trial_reminder_sent_7d: boolean
@@ -314,6 +317,14 @@ export default function AdminSubscriptions() {
                         {planLabel} · Requested {new Date(s.created_at).toLocaleDateString()} · ${Number(s.amount || 0).toFixed(2)}
                         {s.pro_assistance && <> · +Pro</>}
                       </p>
+                      {(s.is_trial || s.trial_status) && (
+                        <p className="text-[11px] text-text-secondary mt-0.5">
+                          🆓 Trial: <span className="font-semibold capitalize">{s.trial_status || (s.trial_activated_at ? 'active' : 'none')}</span>
+                          {s.trial_requested_at && <> · Requested {new Date(s.trial_requested_at).toLocaleDateString()}</>}
+                          {s.trial_activated_at && <> · Start {new Date(s.trial_activated_at).toLocaleDateString()}</>}
+                          {s.trial_expires_at && <> · Expiry {new Date(s.trial_expires_at).toLocaleDateString()}</>}
+                        </p>
+                      )}
                     </div>
 
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${statusStyle[s.status] || statusStyle.cancelled}`}>

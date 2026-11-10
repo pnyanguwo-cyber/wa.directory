@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
-import { PERSONAL_PLAN_CONFIG } from '@/types'
+import { PERSONAL_PLAN_CONFIG, PLAN_CONFIG, formatUsd } from '@/types'
 import type { PlanType } from '@/types'
+import { setConversationState } from '@/lib/bot-state'
 
 function authorized(request: Request): boolean {
   if (request.headers.get('x-vercel-cron') === '1') return true
@@ -203,6 +204,7 @@ async function notifyExpiringListings(supabase: ReturnType<typeof getSupabase>) 
     .from('listing_subscriptions')
     .select('id, business_id, expires_at, renewal_notified_at, plan, amount, payer_phone')
     .eq('status', 'active')
+    .eq('is_trial', false)
     .lte('expires_at', threeDaysFromNow)
     .or(`renewal_notified_at.is.null,renewal_notified_at.lt.${twoDaysAgo}`)
     .limit(50)
@@ -232,7 +234,7 @@ async function notifyExpiringListings(supabase: ReturnType<typeof getSupabase>) 
             '',
             `${biz.name} (@${biz.username || 'N/A'}) expires in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}.`,
             '',
-            `Pay USD 1 to renew. Anyone can pay for you:`,
+            `Pay USD ${formatUsd(PLAN_CONFIG['1m'].price)} to renew. Anyone can pay for you:`,
             `${SITE_URL}/pay`,
             '',
             `Or renew from your portal:`,
@@ -254,6 +256,7 @@ async function notifyExpiringListings(supabase: ReturnType<typeof getSupabase>) 
     .from('listing_subscriptions')
     .select('id, business_id, expires_at, renewal_notified_at, plan, amount, payer_phone')
     .eq('status', 'active')
+    .eq('is_trial', false)
     .lte('expires_at', oneDayFromNow)
     .not('renewal_notified_at', 'is', null)
     .lte('renewal_notified_at', twoDaysAgo)
@@ -282,7 +285,7 @@ async function notifyExpiringListings(supabase: ReturnType<typeof getSupabase>) 
             '',
             `${biz.name} (@${biz.username || 'N/A'}) will be hidden from search results.`,
             '',
-            `Pay USD 1 now to stay live:`,
+            `Pay USD ${formatUsd(PLAN_CONFIG['1m'].price)} now to stay live:`,
             `${SITE_URL}/pay`,
           ].join('\n')
         ).catch(() => {})
@@ -308,6 +311,7 @@ async function warnExpiredListings(supabase: ReturnType<typeof getSupabase>) {
     .from('listing_subscriptions')
     .select('id, business_id, expires_at, plan, amount, payer_phone')
     .eq('status', 'active')
+    .eq('is_trial', false)
     .lte('expires_at', oneDayAgo)
     .gte('expires_at', sevenDaysAgo)
     .limit(50)
@@ -340,7 +344,7 @@ async function warnExpiredListings(supabase: ReturnType<typeof getSupabase>) {
           `${biz.name} (@${biz.username || 'N/A'}) expired ${daysExpired} day${daysExpired !== 1 ? 's' : ''} ago.`,
           `It will be hidden in ${daysUntilHidden} day${daysUntilHidden !== 1 ? 's' : ''}.`,
           '',
-          `Pay USD 1 to restore visibility:`,
+          `Pay USD ${formatUsd(PLAN_CONFIG['1m'].price)} to restore visibility:`,
           `${SITE_URL}/pay`,
         ].join('\n')
       ).catch(() => {})
@@ -359,6 +363,7 @@ async function hideExpiredListings(supabase: ReturnType<typeof getSupabase>) {
     .from('listing_subscriptions')
     .select('id, business_id, plan, amount, payer_phone')
     .eq('status', 'active')
+    .eq('is_trial', false)
     .lte('expires_at', sevenDaysAgo)
     .limit(100)
 
@@ -419,15 +424,16 @@ async function hideExpiredListings(supabase: ReturnType<typeof getSupabase>) {
 async function notifyExpiringTrialSubs(supabase: ReturnType<typeof getSupabase>) {
   const now = new Date()
   const sevenDaysFromNow = new Date(now.getTime() + 7 * 86400000).toISOString()
+  const in3Days = new Date(now.getTime() + 3 * 86400000).toISOString()
   const tomorrow = new Date(now.getTime() + 1 * 86400000).toISOString()
 
   const { data: expiringTrials } = await supabase
     .from('listing_subscriptions')
     .select('business_id, trial_expires_at, trial_reminder_sent_7d')
-    .eq('trial_eligible', false)
+    .eq('is_trial', true)
     .eq('status', 'active')
     .not('trial_expires_at', 'is', null)
-    .gte('trial_expires_at', now.toISOString())
+    .gt('trial_expires_at', in3Days)
     .lte('trial_expires_at', sevenDaysFromNow)
     .eq('trial_reminder_sent_7d', false)
     .limit(100)
@@ -454,7 +460,7 @@ Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
 
 To continue your listing:
 • Visit ${SITE_URL}/pay?business_id=${biz.business_id}
-• Or reply *paid* to see subscription options
+• Or reply *renew* to see subscription options
 
 Your listing will become inactive after the trial ends.`
     ).catch(() => {})
@@ -481,7 +487,7 @@ async function notifyExpiringTrialSubs3Day(supabase: ReturnType<typeof getSupaba
   const { data: expiringTrials } = await supabase
     .from('listing_subscriptions')
     .select('business_id, trial_expires_at, trial_reminder_sent_3d')
-    .eq('trial_eligible', false)
+    .eq('is_trial', true)
     .eq('status', 'active')
     .not('trial_expires_at', 'is', null)
     .gte('trial_expires_at', now.toISOString())
@@ -510,7 +516,7 @@ async function notifyExpiringTrialSubs3Day(supabase: ReturnType<typeof getSupaba
 Your 90-day free trial expires on ${trial.trial_expires_at?.slice(0, 10)}.
 
 Time to choose:
-• Reply *paid* for subscription options
+• Reply *renew* for subscription options
 • Or visit ${SITE_URL}/pay?business_id=${biz.business_id}
 
 Your listing will become inactive after the trial ends.`
@@ -518,8 +524,14 @@ Your listing will become inactive after the trial ends.`
 
     await supabase
       .from('listing_subscriptions')
-      .update({ trial_reminder_sent_3d: true })
+      .update({ trial_reminder_sent_3d: true, trial_status: 'expiring' })
       .eq('business_id', trial.business_id)
+      .eq('is_trial', true)
+    await setConversationState(biz.phone, 'TRIAL_EXPIRING', {
+      businessId: trial.business_id,
+      businessName: biz.name,
+      trialExpiresAt: trial.trial_expires_at,
+    })
 
     notified++
   }
@@ -536,7 +548,7 @@ async function processExpiredTrialSubs(supabase: ReturnType<typeof getSupabase>)
   const { data: expiredTrials } = await supabase
     .from('listing_subscriptions')
     .select('business_id, trial_expires_at, trial_reminder_sent_3d')
-    .eq('trial_eligible', false)
+    .eq('is_trial', true)
     .eq('status', 'active')
     .lt('trial_expires_at', now.toISOString())
     .limit(100)
@@ -545,11 +557,13 @@ async function processExpiredTrialSubs(supabase: ReturnType<typeof getSupabase>)
 
   const ids = [...new Set(expiredTrials.map(s => s.business_id))]
 
-  // Expire the subscriptions
+  // Expire the subscriptions. Trial history (trial_activated_at) is preserved
+  // so the same business can never claim a second free trial.
   await supabase
     .from('listing_subscriptions')
-    .update({ status: 'expired' })
+    .update({ status: 'expired', trial_status: 'expired', is_trial: true })
     .in('business_id', ids)
+    .eq('is_trial', true)
 
   // Hide the businesses
   await supabase
@@ -578,14 +592,19 @@ Your listing is no longer visible in the directory.
 
 To go live again:
 • Visit ${SITE_URL}/pay?business_id=${biz.business_id}
-• Or reply *paid* to choose a plan
+• Or reply *renew* to choose a plan
 
-$2/month — 1 Month
-$10 — 6 Months (most popular, save $2)
-$20 — 12 Months (save $4)
+${formatUsd(PLAN_CONFIG['1m'].price)}/month — 1 Month
+${formatUsd(PLAN_CONFIG['6m'].price)} — 6 Months (most popular, save ${formatUsd(PLAN_CONFIG['1m'].price * 6 - PLAN_CONFIG['6m'].price)})
+${formatUsd(PLAN_CONFIG['12m'].price)} — 12 Months (save ${formatUsd(PLAN_CONFIG['1m'].price * 12 - PLAN_CONFIG['12m'].price)})
 
 Contact support if you need help.`
     ).catch(() => {})
+    await setConversationState(biz.phone, 'TRIAL_EXPIRED', {
+      businessId: trial.business_id,
+      businessName: biz.name,
+      trialExpiresAt: trial.trial_expires_at,
+    })
 
     processed++
   }

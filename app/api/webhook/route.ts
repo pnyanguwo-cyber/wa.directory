@@ -15,8 +15,12 @@ import {
 import {
   startRegistrationFlow,
   handleRegistrationMessage,
-  handleRegistrationImage
+  handleRegistrationImage,
+  chooseRegistrationPlan,
 } from '@/lib/bot-registration'
+import { startTrialForBusiness, isTrialEligible } from '@/lib/trial-helpers'
+import { PLAN_CONFIG, formatUsd, TRIAL_PLAN_LABEL, type PlanType } from '@/types'
+import { logOnboarding, maskPhone } from '@/lib/onboarding-log'
 import { formatHarareDate, getHarareStartOfDay } from '@/lib/date-utils'
 import {
   getConversationState,
@@ -141,13 +145,23 @@ async function handleMessages(value: any) {
     const media = await inboundMediaLog(phone, msg, text)
     if (media) {
       const stateData = await getConversationState(phone)
-      if (stateData?.state === 'REGISTRATION_AWAITING_IMAGE' && msg.type === 'image') {
+      // Only an explicit registration state may treat an image as business
+      // material. Images sent during a search/bid never enter registration.
+      const registrationImageState =
+        stateData?.state === 'REGISTRATION_AWAITING_IMAGE' ||
+        stateData?.state === 'REGISTRATION_FLOW_ACTIVE'
+      if (registrationImageState && msg.type === 'image') {
         const url = await fetchMediaUrl(msg.image.id)
         if (url) {
           const res = await fetch(url)
           const bytes = new Uint8Array(await res.arrayBuffer())
           await handleRegistrationImage(phone, bytes, text)
         }
+      } else if (msg.type === 'image') {
+        logOnboarding('image_ignored_non_registration', {
+          phone: maskPhone(phone),
+          state: stateData?.state || 'none',
+        })
       }
       continue
     }
@@ -212,11 +226,16 @@ async function handleMessages(value: any) {
         continue
       }
       if (state.startsWith('REGISTRATION_')) {
-        // REGISTRATION_FLOW_ACTIVE is handled by the Flow endpoint
-        // Only handle chat-based registration states
-        if (state !== 'REGISTRATION_FLOW_ACTIVE') {
-          await handleRegistrationMessage(phone, text, context)
-        }
+        // REGISTRATION_FLOW_ACTIVE is normally advanced by the Flow endpoint,
+        // but if the Flow was not published/launched or the user replies in
+        // chat, handleRegistrationMessage falls back to the image-first path
+        // instead of leaving them stuck or jumping to question 1.
+        logOnboarding('registration_state_message', {
+          phone: maskPhone(phone),
+          state,
+          step: context.step || null,
+        })
+        await handleRegistrationMessage(phone, text, context)
         continue
       }
       if (state === 'ACTIVE') {
@@ -296,17 +315,47 @@ async function handleInteractiveReply(phone: string, replyId: string, replyTitle
     return
   }
 
+  // Registration plan choice / upload / skip / proceed / edit buttons.
+  // These IDs are the only way the image-first step and manual fallback are
+  // invoked; before this they fell through to "unknown interactive reply".
+  if (lower.startsWith('reg_')) {
+    const stateData = await getConversationState(phone)
+    logOnboarding('registration_button', {
+      phone: maskPhone(phone),
+      button: lower,
+      state: stateData?.state || 'none',
+    })
+
+    if (lower === 'reg_plan_trial' || lower === 'reg_plan_paid') {
+      await chooseRegistrationPlan(phone, lower)
+      return
+    }
+
+    if (!stateData || !stateData.state.startsWith('REGISTRATION_')) {
+      // Stale button from an expired session: restart at the plan choice
+      // instead of silently dropping the reply.
+      await startRegistrationFlow(phone, { force: true })
+      return
+    }
+
+    await handleRegistrationMessage(phone, lower, stateData.context)
+    return
+  }
+
   // Trial or package selection for payment flow
   if (lower.startsWith('trial_') || lower.startsWith('pkg_')) {
     const stateData = await getConversationState(phone)
     if (stateData?.state === 'APPROVED_TRIAL_SELECTION') {
-      if (lower === 'trial_free') {
+      if (lower === 'trial_free' || lower === 'trial_start') {
         await handleTrialSelection(phone, stateData.context)
       } else {
         // Convert pkg_1m -> 1m, etc.
         const planKey = lower.replace('pkg_', '')
         await handlePackageSelection(phone, planKey, stateData.context)
       }
+    } else if (stateData?.state === 'APPROVED_AWAITING_PACKAGE') {
+      const planKey = lower.replace('pkg_', '')
+      await handlePackageSelection(phone, planKey, stateData.context)
     }
     return
   }
@@ -414,13 +463,8 @@ async function handleRankingCommand(phone: string) {
  * Terminal states: REJECTED, CANCELLED, PAYMENT_FAILED, EXPIRED
  */
 
-const PLAN_CONFIG = {
-  '1m': { price: 2.0, days: 30, label: '1 Month — $2.00' },
-  '6m': { price: 10.0, days: 180, label: '6 Months — $10.00 (save $2)' },
-  '12m': { price: 20.0, days: 360, label: '12 Months — $20.00 (save $4)' },
-} as const
-
-type PlanType = keyof typeof PLAN_CONFIG
+// Prices come from types/index.ts (the single authoritative PLAN_CONFIG).
+// Never declare a second price table here.
 
 async function handlePackageSelection(phone: string, text: string, context: any) {
   const lower = text.toLowerCase().trim()
@@ -434,6 +478,11 @@ async function handlePackageSelection(phone: string, text: string, context: any)
 
   if (selectedPlan) {
     const plan = PLAN_CONFIG[selectedPlan]
+    logOnboarding('payment_plan_selected', {
+      phone: maskPhone(phone),
+      plan: selectedPlan,
+      amount: plan.price,
+    })
 
     // Store selected package and prompt for EcoCash number
     await updateConversationContext(phone, { selectedPackage: selectedPlan })
@@ -441,7 +490,7 @@ async function handlePackageSelection(phone: string, text: string, context: any)
 
     await sendWhatsAppMessage(
       phone,
-      `✅ *Package Selected: ${plan.label}*\n\n` +
+      `✅ *Package Selected: ${plan.label} — USD ${formatUsd(plan.price)}*\n\n` +
       `Now please provide your *EcoCash number* (must be an Econet number starting with 077, 078, or 073) to proceed with payment.\n\n` +
       `Example: 0771234567`
     )
@@ -455,9 +504,13 @@ async function handlePackageSelection(phone: string, text: string, context: any)
 async function sendPackageSelectionList(phone: string, context: any) {
   const businessName = context.businessName || 'your business'
 
+  // Needed so the pkg_* button reply is accepted during renewal as well as
+  // the first approval.
+  await setConversationState(phone, 'APPROVED_AWAITING_PACKAGE', context)
+
   const rows = Object.entries(PLAN_CONFIG).map(([key, plan]) => ({
     id: `pkg_${key}`,
-    title: plan.label,
+    title: `${plan.label} — ${formatUsd(plan.price)}`,
     description: `${plan.days} days of verified listing`,
   }))
 
@@ -471,14 +524,10 @@ async function sendPackageSelectionList(phone: string, context: any) {
 
 /**
  * Handle trial selection from APPROVED_TRIAL_SELECTION state.
- * If trial is accepted, activate the 90-day free trial.
+ * Activation is delegated to the single trial helper, which enforces
+ * "approved + published first" and "one trial per business".
  */
 async function handleTrialSelection(phone: string, context: any) {
-  const { getSupabaseAdmin } = await import('@/lib/supabase-server')
-  const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
-  const { setConversationState } = await import('@/lib/bot-state')
-
-  const supabase = getSupabaseAdmin()
   const businessId = context.businessId
 
   if (!businessId) {
@@ -486,62 +535,40 @@ async function handleTrialSelection(phone: string, context: any) {
     return
   }
 
-  const now = new Date()
-  const trialExpiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+  // Publication is the admin's approval (verified=true). We deliberately do
+  // not set it here: the trial must start at publication, not at selection.
+  const result = await startTrialForBusiness(String(businessId))
 
-  // Update subscription with trial details
-  const { error: subError } = await supabase
-    .from('listing_subscriptions')
-    .update({
-      status: 'active',
-      amount: 0,
-      plan: '1m',
-      trial_eligible: false,
-      trial_activated_at: now.toISOString(),
-      trial_expires_at: trialExpiresAt.toISOString(),
+  if (!result.ok || !result.trialExpiresAt) {
+    logOnboarding('trial_activation_blocked', {
+      phone: maskPhone(phone),
+      businessId,
+      error: result.error,
     })
-    .eq('business_id', businessId)
-    .eq('trial_eligible', true)
-
-  if (subError) {
-    console.error('[webhook] Trial activation error:', subError)
-    await sendWhatsAppMessage(phone, '❌ Failed to activate trial. Please try again.')
+    await sendWhatsAppMessage(
+      phone,
+      `❌ ${result.error || 'Could not activate the trial.'}\n\n` +
+        `You can still activate with a paid plan by typing *payment*.`
+    )
     return
   }
 
-  // Update business status
-  await supabase
-    .from('businesses')
-    .update({
-      payment_status: 'active',
-      verified: true,
-      listing_activated_at: now.toISOString(),
-    })
-    .eq('id', businessId)
-
-  // Set conversation state
   await setConversationState(phone, 'TRIAL_ACTIVE', {
     ...context,
-    trialActivatedAt: now.toISOString(),
-    trialExpiresAt: trialExpiresAt.toISOString(),
+    trialActivatedAt: new Date().toISOString(),
+    trialExpiresAt: result.trialExpiresAt,
     subscriptionType: 'trial',
   })
 
-  // Send confirmation
   await sendWhatsAppMessage(
     phone,
-    `🎉 *90-Day FREE Trial Activated!*
-
-Your business *${context.businessName}* is now live on WA Directory!
-
-⏰ Trial period: ${now.toISOString().slice(0, 10)} to ${trialExpiresAt.toISOString().slice(0, 10)}
-
-No payment required. At the end of 90 days, you'll receive a reminder to renew.
-
-• Profile: ${SITE_URL}/business/${context.businessSlug || context.businessName}
-• QR codes available when you log in
-
-Reply *help* anytime.`
+    `🎉 *${TRIAL_PLAN_LABEL} activated!*\n\n` +
+      `Your business *${context.businessName}* is now live on WA Directory!\n\n` +
+      `📅 Trial period: ${new Date().toISOString().slice(0, 10)} to ${result.trialExpiresAt.slice(0, 10)}\n\n` +
+      `No payment is required and you will not be charged automatically. ` +
+      `We will remind you 7 days and 3 days before it ends.\n\n` +
+      `• Profile: ${SITE_URL}/business/${context.businessSlug || context.businessName}\n\n` +
+      `Reply *help* anytime.`
   )
 }
 
@@ -551,30 +578,29 @@ Reply *help* anytime.`
 async function handleTrialSelectionState(phone: string, text: string, context: any) {
   const lower = text.toLowerCase().trim()
 
-  // "cancel" or "payment" or "paid" means they want to skip trial and pay
-  if (lower === 'cancel' || lower === 'payment' || lower === 'paid') {
-    await sendWhatsAppMessage(
-      phone,
-      `📦 *Choose Your Plan*\n\nSelect a subscription plan to activate your listing:\n\n` +
-      `1m — 1 Month — $2.00\n` +
-      `6m — 6 Months — $10.00 (save $2)\n` +
-      `12m — 12 Months — $20.00 (save $4)\n\n` +
-      `Reply with 1, 6, 12 or the full code (1m, 6m, 12m).`
-    )
+  if (lower === 'trial' || lower === 'free' || lower === 'accept' || lower === 'yes') {
+    await handleTrialSelection(phone, context)
     return
   }
 
-  // Treat any number as package selection
-  if (/^[1-6]$/.test(lower)) {
-    const planMap: Record<string, string> = {
-      '1': '1m',
-      'one': '1m',
-      '6': '6m',
-      'six': '6m',
-      '12': '12m',
-      'twelve': '12m',
-    }
-    const planKey = planMap[lower] || lower
+  if (lower === 'cancel' || lower === 'payment' || lower === 'paid') {
+    await sendPackageSelectionList(phone, context)
+    return
+  }
+
+  const planMap: Record<string, PlanType> = {
+    '1': '1m',
+    '1m': '1m',
+    'one': '1m',
+    '6': '6m',
+    '6m': '6m',
+    'six': '6m',
+    '12': '12m',
+    '12m': '12m',
+    'twelve': '12m',
+  }
+  const planKey = planMap[lower]
+  if (planKey) {
     await handlePackageSelection(phone, planKey, context)
     return
   }
@@ -582,11 +608,10 @@ async function handleTrialSelectionState(phone: string, text: string, context: a
   await sendWhatsAppMessage(
     phone,
     `Reply with:\n` +
-    `• *trial* — Start your 90-day free trial\n` +
-    `• *1* or *1m* — Pay $2 for 1 month\n` +
-    `• *6* or *6m* — Pay $10 for 6 months\n` +
-    `• *12* or *12m* — Pay $20 for 12 months\n` +
-    `• *cancel* — Start over`
+      `• *trial* — Start your ${TRIAL_PLAN_LABEL} (no payment)\n` +
+      `• *1* or *1m* — Pay ${formatUsd(PLAN_CONFIG['1m'].price)} for 1 month\n` +
+      `• *6* or *6m* — Pay ${formatUsd(PLAN_CONFIG['6m'].price)} for 6 months\n` +
+      `• *12* or *12m* — Pay ${formatUsd(PLAN_CONFIG['12m'].price)} for 12 months`
   )
 }
 
@@ -598,6 +623,11 @@ async function handleTrialActiveState(phone: string, text: string, context: any)
 
   if (lower === 'help' || lower === 'menu') {
     await sendTrialHelpMessage(phone, context)
+    return
+  }
+
+  if (lower === 'renew' || lower === 'pay' || lower === 'upgrade') {
+    await sendPackageSelectionList(phone, context)
     return
   }
 
@@ -619,6 +649,12 @@ async function handleTrialActiveState(phone: string, text: string, context: any)
  * Handle messages during trial expiry (within 3 days).
  */
 async function handleTrialExpiringState(phone: string, text: string, context: any) {
+  const lower = text.toLowerCase().trim()
+  if (lower === 'renew' || lower === 'pay' || lower === 'upgrade' || lower === 'paid') {
+    await sendPackageSelectionList(phone, context)
+    return
+  }
+
   await sendWhatsAppMessage(
     phone,
     `⏳ *Trial Expiring Soon*\n\n` +
@@ -631,6 +667,12 @@ async function handleTrialExpiringState(phone: string, text: string, context: an
  * Handle messages after trial has expired.
  */
 async function handleTrialExpiredState(phone: string, text: string, context: any) {
+  const lower = text.toLowerCase().trim()
+  if (lower === 'renew' || lower === 'pay' || lower === 'upgrade' || lower === 'paid') {
+    await sendPackageSelectionList(phone, context)
+    return
+  }
+
   await sendWhatsAppMessage(
     phone,
     `⏰ *Trial Expired*\n\n` +
@@ -758,7 +800,38 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
     }
     subscriptionId = sub.id
     await updateConversationContext(phone, { subscriptionId })
+  } else {
+    // Reuse the pending row but correct it to the paid plan. Without this, a
+    // row created with the $0 trial request could be paid for and still store
+    // USD $0, so the receipt and the record would disagree.
+    const { error: updateError } = await supabase
+      .from('listing_subscriptions')
+      .update({
+        plan: selectedPlan,
+        amount: plan.price,
+        status: 'pending',
+        payment_method: 'ecocash',
+        is_trial: false,
+        trial_eligible: false,
+        trial_status: 'converted',
+      })
+      .eq('id', subscriptionId)
+
+    if (updateError) {
+      console.error('[webhook] Failed to update subscription:', updateError)
+      await sendWhatsAppMessage(phone, '❌ Failed to prepare the payment record. Please try again.')
+      return
+    }
   }
+
+  // The displayed amount, the Paynow request and the stored subscription row
+  // all use this same plan.price value.
+  logOnboarding('payment_amount_calculated', {
+    phone: maskPhone(phone),
+    plan: selectedPlan,
+    amount: plan.price,
+    subscriptionId,
+  })
 
   // Initiate EcoCash payment
   const paynowRef = `LISTING-${subscriptionId}`
@@ -875,7 +948,7 @@ export async function notifyAdminApproval(
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id, name, phone, category, city')
+    .select('id, name, phone, slug, username, category, city')
     .eq('id', businessId)
     .single()
 
@@ -883,44 +956,87 @@ export async function notifyAdminApproval(
 
   const phone = business.phone
 
-  // Update business status to approved
+  // Approval publishes the listing. Payment/trial activation comes next.
   await supabase
     .from('businesses')
     .update({ verified: true, payment_status: 'pending', admin_note: adminNote })
     .eq('id', businessId)
 
-  // Check trial eligibility and set trial_eligible flag on subscription record
-  const { data: trialCheck } = await supabase
-    .from('businesses')
-    .select('id, category, payment_status')
-    .eq('id', businessId)
-    .single()
+  logOnboarding('admin_approved_listing', {
+    phone: maskPhone(phone),
+    businessId,
+  })
 
-  const { data: specialCats } = await supabase
-    .from('categories')
-    .select('name')
-    .eq('special', true)
-    .in('name', trialCheck?.category || [])
-
-  const isEligibleForTrial = (offerTrial || !specialCats || specialCats.length === 0) &&
-    !(trialCheck?.payment_status === 'active')
-
-  // Create subscription record with trial eligibility
-  const { data: subRecord } = await supabase
+  // Reuse the subscription row already created at submission/request time.
+  // Never insert a second row for the same onboarding.
+  const { data: existingRows } = await supabase
     .from('listing_subscriptions')
-    .insert({
-      business_id: businessId,
-      status: isEligibleForTrial ? 'pending' : 'pending',
-      amount: isEligibleForTrial ? 0 : 2,
-      trial_eligible: isEligibleForTrial,
+    .select('id, trial_status, trial_requested_at, trial_activated_at')
+    .eq('business_id', businessId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  const existingSub = existingRows?.[0]
+
+  // A trial chosen during registration is now fulfilled: approval is the
+  // publication event, so the 90 days start here, not at submission.
+  if (existingSub?.trial_status === 'requested' && !existingSub.trial_activated_at) {
+    const activated = await startTrialForBusiness(String(businessId), { adminOverride: true })
+    if (activated.ok && activated.trialExpiresAt) {
+      await setConversationState(phone, 'TRIAL_ACTIVE', {
+        businessId: business.id,
+        businessName: business.name,
+        businessSlug: business.slug || business.username || '',
+        category: business.category?.[0],
+        city: business.city,
+        trialActivatedAt: new Date().toISOString(),
+        trialExpiresAt: activated.trialExpiresAt,
+        subscriptionType: 'trial',
+      })
+      await sendWhatsAppMessage(
+        phone,
+        `🎉 *Your listing is approved and live!*\n\n` +
+          `*${business.name}* is now published on WA Directory.\n\n` +
+          `🆓 *${TRIAL_PLAN_LABEL} started on approval.*\n` +
+          `📅 ${new Date().toISOString().slice(0, 10)} → ${activated.trialExpiresAt.slice(0, 10)} (90 days)\n\n` +
+          `No payment is required and you will not be charged automatically. ` +
+          `We will remind you 7 days and 3 days before it ends.\n\n` +
+          `Profile: ${SITE_URL}/business/${business.slug || business.username || ''}`
+      )
+      return true
+    }
+
+    logOnboarding('trial_activation_failed_on_approval', {
+      phone: maskPhone(phone),
+      businessId,
+      error: activated.error,
     })
-    .select('id')
-    .single()
+  }
+
+  const trialCheck = await isTrialEligible(String(businessId))
+  const isEligibleForTrial = offerTrial || trialCheck.eligible
+
+  const subValues = isEligibleForTrial
+    ? { status: 'pending', amount: 0, plan: '1m', trial_eligible: true, trial_status: 'none', is_trial: false }
+    : { status: 'pending', amount: PLAN_CONFIG['1m'].price, plan: '1m', trial_eligible: false, trial_status: 'none', is_trial: false }
+
+  const { data: subRecord } = existingSub
+    ? await supabase
+        .from('listing_subscriptions')
+        .update(subValues)
+        .eq('id', existingSub.id)
+        .select('id')
+        .single()
+    : await supabase
+        .from('listing_subscriptions')
+        .insert({ business_id: businessId, ...subValues })
+        .select('id')
+        .single()
 
   // Set conversation state - include trial_offered flag
   await setConversationState(phone, 'APPROVED_TRIAL_SELECTION', {
     businessId: business.id,
     businessName: business.name,
+    businessSlug: business.slug || business.username || '',
     category: business.category?.[0],
     city: business.city,
     trialOffered: isEligibleForTrial,
@@ -948,35 +1064,27 @@ async function sendTrialOrPackageSelection(
   phone: string,
   context: { businessName: string; trialOffered: boolean }
 ) {
-  const { sendInteractiveList, sendWhatsAppMessage } = await import('@/lib/whatsapp')
-  const { setConversationState } = await import('@/lib/bot-state')
-  const supabase = getSupabase()
+  const { sendInteractiveList } = await import('@/lib/whatsapp')
 
   const businessName = context.businessName
+  const monthly = PLAN_CONFIG['1m'].price
 
   if (context.trialOffered) {
-    // Show trial option
+    // Prices are generated from the one PLAN_CONFIG table.
     const rows = [
       {
         id: 'trial_free',
-        title: '90-Day Free Trial',
-        description: 'Go live for 90 days free — no payment required',
+        title: TRIAL_PLAN_LABEL,
+        description: '90 days free — starts on approval, no auto-charge',
       },
-      {
-        id: 'pkg_1m',
-        title: '1 Month — $2.00',
-        description: 'Quick activation, best for testing',
-      },
-      {
-        id: 'pkg_6m',
-        title: '6 Months — $10.00',
-        description: 'Save $2 with the most popular plan',
-      },
-      {
-        id: 'pkg_12m',
-        title: '12 Months — $20.00',
-        description: 'Save $4, annual commitment',
-      },
+      ...Object.entries(PLAN_CONFIG).map(([key, plan]) => ({
+        id: `pkg_${key}`,
+        title: `${plan.label} — ${formatUsd(plan.price)}`,
+        description:
+          key === '1m'
+            ? `USD ${formatUsd(plan.price)}/month, cancel anytime`
+            : `Save ${formatUsd(monthly * plan.months - plan.price)} with this plan`,
+      })),
     ]
 
     await sendInteractiveList(
@@ -1000,72 +1108,43 @@ export async function notifyTrialActivation(
 ): Promise<boolean> {
   const { getSupabaseAdmin } = await import('@/lib/supabase-server')
   const { sendWhatsAppMessage } = await import('@/lib/whatsapp')
-  const { setConversationState, clearConversationState } = await import('@/lib/bot-state')
+  const { setConversationState } = await import('@/lib/bot-state')
+
+  const result = await startTrialForBusiness(businessId, { adminOverride: true })
+  if (!result.ok || !result.business || !result.trialExpiresAt) {
+    logOnboarding('trial_activation_failed', { businessId, error: result.error })
+    return false
+  }
+
+  const business = result.business
+  const phone = business.phone
+  if (!phone) return false
 
   const supabase = getSupabaseAdmin()
-
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('id, name, phone, slug, username, edit_token, category')
-    .eq('id', businessId)
-    .single()
-
-  if (!business?.phone) return false
-
-  const phone = business.phone
-  const now = new Date()
-  const trialExpiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
-
-  // Update subscription with trial details
-  await supabase
-    .from('listing_subscriptions')
-    .upsert({
-      business_id: businessId,
-      status: 'active',
-      amount: 0,
-      plan: '1m', // Trial uses 1m plan key
-      trial_eligible: false,
-      trial_activated_at: now.toISOString(),
-      trial_expires_at: trialExpiresAt.toISOString(),
-    })
-
-  // Update business status
   await supabase
     .from('businesses')
-    .update({
-      payment_status: 'active',
-      verified: true,
-      listing_activated_at: now.toISOString(),
-      admin_note: adminNote || '90-day free trial activated',
-    })
+    .update({ admin_note: adminNote || '90-day free trial activated' })
     .eq('id', businessId)
 
-  // Set conversation state with trial info
   await setConversationState(phone, 'TRIAL_ACTIVE', {
-    businessId: business.id,
+    businessId,
     businessName: business.name,
-    category: business.category?.[0],
-    trialActivatedAt: now.toISOString(),
-    trialExpiresAt: trialExpiresAt.toISOString(),
+    category: undefined,
+    trialActivatedAt: new Date().toISOString(),
+    trialExpiresAt: result.trialExpiresAt,
     subscriptionType: 'trial',
   })
 
-  // Send confirmation message
   await sendWhatsAppMessage(
     phone,
-    `🎉 *90-Day FREE Trial Activated!*
-
-Your business *${business.name}* is now live on WA Directory!
-
-⏰ Trial period: ${now.toISOString().slice(0, 10)} to ${trialExpiresAt.toISOString().slice(0, 10)}
-
-No payment required. At the end of 90 days, you'll receive a reminder to renew.
-
-*Your links:*
-• Profile: ${SITE_URL}/business/${business.slug || business.username}
-• QR codes: ${SITE_URL}/my-qr/${business.slug || business.username}
-
-Reply *help* anytime.`
+    `🎉 *${TRIAL_PLAN_LABEL} activated!*\n\n` +
+      `Your business *${business.name}* is now live on WA Directory!\n\n` +
+      `📅 Trial period: ${new Date().toISOString().slice(0, 10)} to ${result.trialExpiresAt.slice(0, 10)}\n\n` +
+      `No payment required. At the end of 90 days, you'll receive a reminder to renew.\n\n` +
+      `*Your links:*\n` +
+      `• Profile: ${SITE_URL}/business/${business.slug || business.username}\n` +
+      `• QR codes: ${SITE_URL}/my-qr/${business.slug || business.username}\n\n` +
+      `Reply *help* anytime.`
   )
 
   return true

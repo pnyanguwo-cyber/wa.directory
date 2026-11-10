@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { activateListingSubscription } from '@/lib/listing-activation'
+import { startTrialForBusiness } from '@/lib/trial-helpers'
 import { adminGuard } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { fetchBusinessesByIds } from '@/lib/business-select'
@@ -38,7 +39,7 @@ export async function GET() {
   // trial_reminder_sent_7d, trial_reminder_sent_3d
   const { data: listingSubs } = await supabase
     .from('listing_subscriptions')
-    .select('id, business_id, status, amount, payer_phone, started_at, expires_at, renewal_notified_at, created_at, plan, pro_assistance, paynow_reference, paynow_paid_at, auto_confirmed_at, trial_eligible, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
+    .select('id, business_id, status, amount, payer_phone, started_at, expires_at, renewal_notified_at, created_at, plan, pro_assistance, paynow_reference, paynow_paid_at, auto_confirmed_at, trial_eligible, trial_status, is_trial, trial_requested_at, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
     .order('created_at', { ascending: false })
     .limit(300)
 
@@ -259,65 +260,15 @@ export async function POST(request: Request) {
       const { business_id } = body
       if (!business_id) return NextResponse.json({ error: 'business_id is required' }, { status: 400 })
 
+      // Same eligibility, publication and 90-day rules as every other channel.
+      const result = await startTrialForBusiness(business_id, { adminOverride: true })
+      if (!result.ok || !result.trialExpiresAt || !result.business) {
+        return NextResponse.json({ error: result.error || 'Could not activate trial' }, { status: 400 })
+      }
+
+      const business = result.business
       const now = new Date()
-      const trialExpiresAt = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
 
-      // Check if already has active subscription
-      const { data: existingSub } = await supabase
-        .from('listing_subscriptions')
-        .select('id, status')
-        .eq('business_id', business_id)
-        .eq('status', 'active')
-        .maybeSingle()
-
-      if (existingSub) {
-        return NextResponse.json({ error: 'Business already has active subscription' }, { status: 400 })
-      }
-
-      // Get business details
-      const { data: business } = await supabase
-        .from('businesses')
-        .select('id, name, phone, category, slug')
-        .eq('id', business_id)
-        .single()
-
-      if (!business) {
-        return NextResponse.json({ error: 'Business not found' }, { status: 404 })
-      }
-
-      // Check for special categories
-      const { data: specialCats } = await supabase
-        .from('categories')
-        .select('name')
-        .eq('special', true)
-        .in('name', business.category || [])
-
-      if (specialCats && specialCats.length > 0) {
-        return NextResponse.json({ error: 'Cannot activate trial for special categories' }, { status: 400 })
-      }
-
-      // Create or update subscription with trial
-      const { error: subError } = await supabase
-        .from('listing_subscriptions')
-        .upsert({
-          business_id: business_id,
-          status: 'active',
-          amount: 0,
-          plan: '1m',
-          trial_eligible: false,
-          trial_activated_at: now.toISOString(),
-          trial_expires_at: trialExpiresAt.toISOString(),
-        })
-
-      if (subError) return NextResponse.json({ error: subError.message }, { status: 500 })
-
-      // Update business status
-      await supabase
-        .from('businesses')
-        .update({ payment_status: 'active', verified: true, listing_activated_at: now.toISOString() })
-        .eq('id', business_id)
-
-      // Send confirmation to business
       if (business.phone) {
         await sendWhatsAppMessage(
           business.phone,
@@ -326,7 +277,7 @@ export async function POST(request: Request) {
             '',
             `Your business *${business.name}* is now live on WA Directory!`,
             '',
-            `⏰ Trial period: ${now.toISOString().slice(0, 10)} to ${trialExpiresAt.toISOString().slice(0, 10)}`,
+            `⏰ Trial period: ${now.toISOString().slice(0, 10)} to ${result.trialExpiresAt.slice(0, 10)}`,
             '',
             'No payment required. At the end of 90 days, you\'ll receive a reminder to renew.',
             '',
@@ -339,7 +290,7 @@ export async function POST(request: Request) {
 
       revalidatePath('/portal')
       revalidatePath('/portal/billing')
-      return NextResponse.json({ success: true, expires_at: trialExpiresAt.toISOString() })
+      return NextResponse.json({ success: true, expires_at: result.trialExpiresAt })
     }
 
     // === IT CONCIERGE SUPPORT SUBSCRIPTION ACTIONS ===

@@ -107,6 +107,7 @@ export async function getConfirmedPayments(opts: {
     .from('listing_subscriptions')
     .select('id, business_id, amount, status, started_at, expires_at, plan, pro_assistance, paynow_reference, paynow_paid_at, auto_confirmed_at, created_at')
     .in('status', ['active', 'approved']) // Only confirmed
+    .eq('is_trial', false) // Trials are free and must never appear as paid revenue
     .gte('created_at', from)
     .lte('created_at', to)
 

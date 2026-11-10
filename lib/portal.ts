@@ -89,6 +89,9 @@ export async function getListingSubscription(businessId: string): Promise<{
   plan: string
   proAssistance: boolean
   trialEligible: boolean
+  trialStatus: string
+  isTrial: boolean
+  trialRequestedAt: string | null
   trialActivatedAt: string | null
   trialExpiresAt: string | null
   trialReminderSent7d: boolean
@@ -96,7 +99,7 @@ export async function getListingSubscription(businessId: string): Promise<{
 } | null> {
   const { data } = await getSupabase()
     .from('listing_subscriptions')
-    .select('status, expires_at, amount, payer_phone, plan, pro_assistance, trial_eligible, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
+    .select('status, expires_at, amount, payer_phone, plan, pro_assistance, trial_eligible, trial_status, is_trial, trial_requested_at, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
     .eq('business_id', businessId)
     .order('created_at', { ascending: false })
     .limit(1)
@@ -110,6 +113,9 @@ export async function getListingSubscription(businessId: string): Promise<{
     plan: data.plan || '1m',
     proAssistance: data.pro_assistance || false,
     trialEligible: data.trial_eligible || false,
+    trialStatus: data.trial_status || (data.trial_activated_at ? 'active' : 'none'),
+    isTrial: data.is_trial || false,
+    trialRequestedAt: data.trial_requested_at,
     trialActivatedAt: data.trial_activated_at,
     trialExpiresAt: data.trial_expires_at,
     trialReminderSent7d: data.trial_reminder_sent_7d || false,

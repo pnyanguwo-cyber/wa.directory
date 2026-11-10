@@ -12,6 +12,7 @@ import { getBotSetting } from '@/lib/bot-settings'
 import { renderChannelPitch } from '@/lib/bot-templates'
 import { portalAccessLines } from '@/lib/portal-invite'
 import { clearConversationState } from '@/lib/bot-state'
+import { PLAN_CONFIG, formatUsd, type PlanType } from '@/types'
 
 export async function activateListingSubscription(
   supabase: NonNullable<ReturnType<typeof import('@/lib/supabase-server').getSupabase>>,
@@ -50,6 +51,12 @@ export async function activateListingSubscription(
       started_at: (existingActive?.expires_at ? undefined : now.toISOString()) as string | undefined,
       expires_at: expiresAt.toISOString(),
       auto_confirmed_at: opts.autoConfirmed ? now.toISOString() : null,
+      // A paid payment always produces a paid subscription. If this row was a
+      // trial, its trial history stays on the row but it is no longer a trial
+      // and must never be counted as $0 revenue.
+      is_trial: false,
+      trial_eligible: false,
+      trial_status: 'converted',
     })
     .eq('id', subscriptionId)
 
@@ -92,13 +99,9 @@ export async function activateListingSubscription(
         })),
       ]
 
-      // Determine plan details for the message
-      const planLabels: Record<string, string> = {
-        '1m': '1 Month ($2.00)',
-        '6m': '6 Months ($10.00)',
-        '12m': '12 Months ($20.00)',
-      }
-      const planLabel = planLabels[sub.plan] || sub.plan
+      // Determine plan details for the message from the one pricing table.
+      const config = sub.plan && PLAN_CONFIG[sub.plan as PlanType] ? PLAN_CONFIG[sub.plan as PlanType] : null
+      const planLabel = config ? `${config.label} (${formatUsd(config.price)})` : sub.plan
 
       // Main confirmation message (clean, focused on review/publishing)
       await sendWhatsAppMessage(

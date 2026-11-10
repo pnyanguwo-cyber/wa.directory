@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { getSupabase } from '@/lib/supabase-server'
 import EditBusinessForm from '@/components/edit-business-form'
 import { getApprovedCategories, getApprovedAreas } from '@/lib/approved-data'
+import { PLAN_CONFIG, formatUsd } from '@/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,7 +60,7 @@ export default async function EditPage({
               <p className="text-sm font-bold text-amber-800">Payment pending</p>
             </div>
             <p className="text-xs text-amber-800">
-              Your listing needs USD 1 to go live. Anyone can pay at <Link href="/pay" className="font-semibold underline">/pay</Link> using your Business ID: <span className="font-mono font-bold">{business.business_id}</span>
+              Your listing needs USD {formatUsd(PLAN_CONFIG['1m'].price)} to go live. Anyone can pay at <Link href="/pay" className="font-semibold underline">/pay</Link> using your Business ID: <span className="font-mono font-bold">{business.business_id}</span>
             </p>
           </div>
         )}
@@ -72,7 +73,7 @@ export default async function EditPage({
               <p className="text-sm font-bold text-red-800">Listing hidden</p>
             </div>
             <p className="text-xs text-red-800">
-              Your subscription expired. Your listing is not visible to customers. Pay USD 1 to restore it at <Link href="/pay" className="font-semibold underline">/pay</Link> using Business ID: <span className="font-mono font-bold">{business.business_id}</span>
+              Your subscription expired. Your listing is not visible to customers. Pay USD {formatUsd(PLAN_CONFIG['1m'].price)} to restore it at <Link href="/pay" className="font-semibold underline">/pay</Link> using Business ID: <span className="font-mono font-bold">{business.business_id}</span>
             </p>
           </div>
         )}

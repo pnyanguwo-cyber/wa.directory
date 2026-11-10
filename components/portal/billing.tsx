@@ -7,7 +7,7 @@ import PaymentPlanModal from '@/components/payment-plan-modal'
 import { paymentSimulationEnabled } from '@/lib/pay-simulation'
 import { formatHarareDate } from '@/lib/date-utils'
 import type { PlanType, SupportTier } from '@/types'
-import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE, SUPPORT_TIERS } from '@/types'
+import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE, SUPPORT_TIERS, formatUsd, TRIAL_PLAN_LABEL } from '@/types'
 
 export default function PortalBilling({ businessId, businessName, sub, listingSub }: {
   businessId: string
@@ -21,6 +21,9 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
     plan: string
     proAssistance: boolean
     trialEligible: boolean
+    trialStatus: string
+    isTrial: boolean
+    trialRequestedAt: string | null
     trialActivatedAt: string | null
     trialExpiresAt: string | null
     trialReminderSent7d: boolean
@@ -50,6 +53,8 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
   const now = new Date()
   const daysUntilTrialExpiry = trialExpiresAt ? Math.ceil((trialExpiresAt.getTime() - now.getTime()) / 86400000) : null
   const trialActive = trialExpiresAt && trialExpiresAt > now
+  const trialRequested = listingSub?.trialStatus === 'requested'
+  const trialStatus = listingSub?.trialStatus || (trialActive ? 'active' : 'none')
 
   // Due date + remaining days for paid subscription
   const expiresAt = listingSub?.expiresAt ? new Date(listingSub.expiresAt) : null
@@ -289,14 +294,15 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
                   </p>
                   <p className="text-xs text-green-700">
                     Your listing is fully active during the trial period.
-                    {daysUntilTrialExpiry !== null && (
+                    {trialActivatedAt && (
                       <span className="block mt-1">
-                        Expires in <strong>{daysUntilTrialExpiry} days</strong> (approx. {formatHarareDate(trialExpiresAt!)}).
+                        Started <strong>{formatHarareDate(trialActivatedAt)}</strong>
+                        {trialExpiresAt && <> · Expires in <strong>{daysUntilTrialExpiry} days</strong> ({formatHarareDate(trialExpiresAt)})</>}
                       </span>
                     )}
                   </p>
                   <p className="text-[11px] text-green-600 mt-2">
-                    When the trial ends, you'll receive reminders to renew. Continue at $2/month or choose a longer plan.
+                    When the trial ends, you'll receive reminders to renew. Continue at {formatUsd(PLAN_CONFIG['1m'].price)}/month or choose a longer plan. No automatic charge.
                   </p>
                 </div>
                 <svg className="w-5 h-5 text-green-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -314,10 +320,21 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
             </div>
           )}
 
-          {listingSub?.trialEligible && !trialActive && (
+          {trialRequested && !trialActive && (
+            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 p-4">
+              <p className="text-xs font-semibold text-amber-800">
+                🆓 {TRIAL_PLAN_LABEL} requested
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Your 90 days have <strong>not</strong> started yet. The trial starts automatically when an administrator approves and publishes your listing.
+              </p>
+            </div>
+          )}
+
+          {listingSub?.trialEligible && !trialActive && !trialRequested && (
             <div className="mt-4 rounded-xl bg-blue-50 border border-blue-200 p-4">
               <p className="text-xs text-blue-700 mb-2">
-                🎉 You're eligible for a 90-day free trial! Your listing will be fully active for 90 days with no payment required.
+                🎉 You're eligible for a 90-day free trial! Your listing will be fully active for 90 days with no payment required. The trial starts when your listing is approved.
               </p>
               <button
                 onClick={handleActivateTrial}
@@ -326,6 +343,14 @@ export default function PortalBilling({ businessId, businessName, sub, listingSu
               >
                 {busy ? 'Activating...' : 'Activate Free Trial'}
               </button>
+            </div>
+          )}
+
+          {trialStatus === 'expired' && (
+            <div className="mt-4 rounded-xl bg-red-50 border border-red-200 p-4">
+              <p className="text-xs text-red-700">
+                This business's free trial has ended. Choose a paid plan to make the listing visible again — your data has been kept.
+              </p>
             </div>
           )}
         </div>

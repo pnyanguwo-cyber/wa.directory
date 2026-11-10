@@ -13,7 +13,7 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendInteractiveList, sendInteractiveButtons } from '@/lib/whatsapp'
 import { getBotSetting } from '@/lib/bot-settings'
-import { PLAN_CONFIG } from '@/lib/bot-state'
+import { PLAN_CONFIG, formatUsd, TRIAL_PLAN_LABEL } from '@/lib/bot-state'
 
 export interface HelpCategory {
   key: string
@@ -177,9 +177,10 @@ What do you need help with?
 export async function handleViewPackagesHelp(phone: string) {
   const supportFooter = await getSupportFooter()
 
-  const packagesList = Object.entries(PLAN_CONFIG)
-    .map(([key, plan]) => `- ${plan.label}`)
-    .join('\n')
+  const packagesList = [
+    `- ${TRIAL_PLAN_LABEL} — FREE (starts after admin approval, one per business)`,
+    ...Object.entries(PLAN_CONFIG).map(([, plan]) => `- ${plan.label} — USD ${formatUsd(plan.price)}`),
+  ].join('\n')
 
   await sendWhatsAppMessage(
     phone,
@@ -284,9 +285,7 @@ To renew:
 3. Or reply with your request
 
 Packages available:
-- 1 Month — USD $2
-- 6 Months — USD $10
-- 12 Months — USD $20
+${Object.entries(PLAN_CONFIG).map(([, plan]) => `- ${plan.label} — USD ${formatUsd(plan.price)}`).join('\n')}
 
 [Back to payments]${supportFooter}`
   )
