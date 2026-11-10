@@ -36,6 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_conversation_state_expires ON conversation_state(
 -- RLS: Service role only (server-side state management)
 ALTER TABLE conversation_state ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Service role full access" ON conversation_state;
 CREATE POLICY "Service role full access" ON conversation_state
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
