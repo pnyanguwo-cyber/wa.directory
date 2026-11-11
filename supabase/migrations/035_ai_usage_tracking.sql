@@ -258,5 +258,10 @@ AS $$
           AND (p_org_id IS NULL OR org_id = p_org_id)
         GROUP BY channel
       ) t
-    ) AS by_channel;
+    ) AS by_channel
+  FROM ai_usage_log
+  WHERE (p_from IS NULL OR created_at >= p_from)
+    AND (p_to IS NULL OR created_at <= p_to)
+    AND (p_business_id IS NULL OR business_id = p_business_id)
+    AND (p_org_id IS NULL OR org_id = p_org_id);
 $$;

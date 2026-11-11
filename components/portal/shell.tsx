@@ -144,6 +144,11 @@ export default function PortalShell({
     setOpen(false)
   }, [pathname, activeId])
 
+  // A tab is a new screen: start it at the top, not where the last one ended.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname, activeId])
+
   useEffect(() => {
     if (!open) return
     function onKey(event: KeyboardEvent) {

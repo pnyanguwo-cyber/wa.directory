@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 import './globals.css'
 import { SITE_URL } from '@/lib/site-url'
+import ScrollToTop from '@/components/scroll-to-top'
 
 // Self-hosted Inter variable font (weights 100-900, latin subset).
 // No network dependency at build/dev time — Google Fonts being briefly
@@ -54,7 +55,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} min-h-screen font-sans`}>{children}</body>
+      <body className={`${inter.variable} min-h-screen font-sans`}>
+        <ScrollToTop />
+        {children}
+      </body>
     </html>
   )
 }

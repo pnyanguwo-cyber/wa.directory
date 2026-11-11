@@ -212,10 +212,10 @@ export default function AdminAiUsage() {
     return String(tokens)
   }
 
-  const featureEntries = summary ? Object.entries(summary.by_feature) : []
-  const modelEntries = summary ? Object.entries(summary.by_model) : []
-  const channelEntries = summary ? Object.entries(summary.by_channel) : []
-  const dayEntries = summary ? Object.entries(summary.by_day).sort(([a], [b]) => a.localeCompare(b)) : []
+  const featureEntries = summary ? Object.entries(summary.by_feature || {}) : []
+  const modelEntries = summary ? Object.entries(summary.by_model || {}) : []
+  const channelEntries = summary ? Object.entries(summary.by_channel || {}) : []
+  const dayEntries = summary ? Object.entries(summary.by_day || {}).sort(([a], [b]) => a.localeCompare(b)) : []
 
   return (
     <div className="space-y-6">

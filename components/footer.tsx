@@ -12,7 +12,7 @@ export default function Footer() {
   return (
     <footer className="mt-12 border-t border-gray-200/80 bg-surface/70 backdrop-blur-md">
       <div className="max-w-6xl mx-auto px-4 py-8 sm:py-12">
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 text-left">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-6 sm:gap-8 text-left">
           {/* Brand Col */}
           <div className="col-span-2 space-y-3">
             <div className="flex items-center gap-2.5">
@@ -43,33 +43,8 @@ export default function Footer() {
             </h3>
             <ul className="space-y-2 text-xs sm:text-sm text-text-secondary">
               <li>
-                <Link href="/" className="hover:text-whatsapp-600 transition-colors">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link href="/search" className="hover:text-whatsapp-600 transition-colors">
-                  Search All Listings
-                </Link>
-              </li>
-              <li>
                 <Link href="/yellow-pages" className="text-amber-700 hover:underline font-semibold">
                   ★ Yellow Pages: Emergency &amp; Government
-                </Link>
-              </li>
-              <li>
-                <Link href="/search?q=Solar" className="hover:text-whatsapp-600 transition-colors">
-                  Solar & Power Installers
-                </Link>
-              </li>
-              <li>
-                <Link href="/search?q=Plumber" className="hover:text-whatsapp-600 transition-colors">
-                  Plumbers & Boreholes
-                </Link>
-              </li>
-              <li>
-                <Link href="/search?q=Automotive" className="hover:text-whatsapp-600 transition-colors">
-                  Auto Mechanics & Spares
                 </Link>
               </li>
             </ul>
@@ -110,25 +85,17 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* How It Works & Support */}
+          {/* Contact */}
           <div>
             <h3 className="font-bold mb-3 text-sm text-text-primary tracking-tight">
-              How It Works
+              Contact
             </h3>
-            <ol className="space-y-2 text-xs sm:text-sm text-text-secondary">
-              <li className="flex items-start gap-2">
-                <span className="bg-whatsapp-600 text-white w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5" aria-hidden="true">1</span>
-                <span>Search by service, shop, or location</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-whatsapp-600 text-white w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5" aria-hidden="true">2</span>
-                <span>Chat instantly on WhatsApp</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="bg-whatsapp-600 text-white w-4 h-4 rounded-full text-[10px] flex items-center justify-center font-bold shrink-0 mt-0.5" aria-hidden="true">3</span>
-                <span>Verify ratings & buy with confidence</span>
-              </li>
-            </ol>
+            <a
+              href="mailto:wadirectory@proton.me"
+              className="text-xs sm:text-sm text-text-secondary hover:text-whatsapp-600 transition-colors break-all"
+            >
+              wadirectory@proton.me
+            </a>
           </div>
         </div>
 
