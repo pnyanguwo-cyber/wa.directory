@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
-import { isAdmin } from '@/lib/admin-auth'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { adminGuard } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
+import { approveFeatureRequest, type FeatureRequestRow } from '@/lib/feature-request-actions'
 
 export async function GET() {
   const denied = adminGuard()
@@ -94,42 +94,7 @@ export async function POST(request: Request) {
     }
 
     // Approve
-    if (req.type === 'category') {
-      await supabase
-        .from('categories')
-        .upsert({ name: finalName, active: true }, { onConflict: 'name' })
-    } else if (req.type === 'area') {
-      await supabase
-        .from('areas')
-        .upsert({ city: req.city, name: finalName, active: true }, { onConflict: 'city,name' })
-    } else if (req.type === 'city') {
-      await supabase
-        .from('cities')
-        .upsert({ name: finalName, active: true }, { onConflict: 'name' })
-    }
-
-    // Replace the old name with the corrected name in the business's array
-    const { data: biz } = await supabase
-      .from('businesses')
-      .select('category, areas, city')
-      .eq('id', req.business_id)
-      .single()
-
-    if (biz) {
-      if (req.type === 'city') {
-        await supabase.from('businesses').update({ city: finalName }).eq('id', req.business_id)
-      } else {
-        const arrCol = req.type === 'category' ? 'category' : 'areas'
-        const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
-        const next = arr.map((n: string) => (n === req.name ? finalName : n))
-        await supabase.from('businesses').update({ [arrCol]: next }).eq('id', req.business_id)
-      }
-    }
-
-    await supabase
-      .from('feature_requests')
-      .update({ status: 'approved', corrected_name: finalName === req.name ? '' : finalName })
-      .eq('id', id)
+    await approveFeatureRequest(supabase, req as FeatureRequestRow, corrected_name)
 
     return NextResponse.json({ success: true })
   } catch {

@@ -34,7 +34,9 @@ interface Bid {
   created_at: string
 }
 
-const MIN_GAP = 0.1
+// Outbid increment over the current #1 fee ($0.50). For remote listings the
+// server resolves the nationwide tier or the 2× takeover price instead.
+const MIN_GAP = 0.5
 
 export default function PortalRanking({
   businessId,
@@ -463,7 +465,7 @@ export default function PortalRanking({
               autoFocus
             />
             <p className="text-[11px] text-text-secondary mt-1.5">
-              Must exceed the #1 fee by at least ${MIN_GAP.toFixed(2)} (10 cents). Bids equal to or below the current #1 are not allowed.
+              Must exceed the #1 fee by at least ${MIN_GAP.toFixed(2)} (50 cents). Bids equal to or below the current #1 are not allowed.
             </p>
           </div>
           <button type="submit" className="btn-primary w-full py-3 text-sm font-semibold">

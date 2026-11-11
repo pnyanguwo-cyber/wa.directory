@@ -1661,7 +1661,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
                 inputRef={areaInputRef}
                 placeholder="Select areas"
-                label="Areas you cover"
+                label="Areas you cover (service area)"
                 hint={
                   areas.length === 0
                     ? undefined
@@ -1670,6 +1670,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                       : 'First area (orange) is your primary location. Add more if you cover them.'
                 }
               />
+              <p className="text-xs text-whatsapp-600 mt-1">Where you deliver or serve — this can be different from your physical address below.</p>
               </div>
             ) : (
               <div />
@@ -1688,7 +1689,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 onEnterNext={() => (isValidStep2 ? setStep(3) : undefined)}
                 placeholder="All of Zimbabwe (default)"
                 label="Locations you serve (remote)"
-                hint="Optional: pick the cities/areas you serve. Leave empty to cover all of Zimbabwe."
+                hint="Optional: pick the cities/areas you SERVE — this can differ from a physical address. Leave empty to cover all of Zimbabwe."
               />
               <p className="text-xs text-whatsapp-600 mt-1">You serve customers remotely. Pick the locations you cover.</p>
             </div>
@@ -1704,7 +1705,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
           )}
           <div>
             <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
-              Street Address <span className="text-text-secondary font-normal">(optional)</span>
+              Physical Address — where you are located <span className="text-text-secondary font-normal">(optional)</span>
             </label>
             <div className="flex gap-2">
               <input
@@ -1737,7 +1738,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                 <span className="hidden sm:inline">{geoLoading ? 'Locating...' : 'Current'}</span>
               </button>
             </div>
-            <p className="text-xs text-whatsapp-600 mt-1">Adding your address lets customers get directions on Google Maps</p>
+              <p className="text-xs text-whatsapp-600 mt-1">Physical Address — where you are located. Adding it lets customers get directions on Google Maps</p>
             {addressStatus === 'checking' && (
               <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
                 <span className="w-3.5 h-3.5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />

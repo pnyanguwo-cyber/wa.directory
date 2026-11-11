@@ -6,9 +6,10 @@ import { logPaymentEvent } from '@/lib/payment-events'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import { fetchBusinessesByIds } from '@/lib/business-select'
+import { resolveBidScope, MIN_BID_GAP, NATIONWIDE_TOWN_FEE } from '@/lib/bot-bidding'
 
-// Minimum gap over the current #1 fee (10 cents).
-const MIN_BID_GAP = 0.1
+// Fair-bidding rules (constants + resolveBidScope) live in lib/bot-bidding.ts:
+// locals $0.50 base/outbid gap; nationwide tier $0.50 × open towns; takeover 2×.
 
 // The #1 auction is live: a paid bid takes over the spot immediately, so all
 // bids are grouped under the current month's period.
@@ -125,6 +126,11 @@ export async function GET(request: Request) {
 
   const holder = (spotsRes.data || [])[0] || null
 
+  // minBid follows the fair-bidding rules; remote scopes resolve to the
+  // nationwide tier or the 2× takeover price (falls back to the local rule).
+  const scopeInfo = await resolveBidScope(supabase, category, city, scope.isRemote).catch(() => null)
+  const minBid = scopeInfo?.ok ? scopeInfo.min : holder ? Number(holder.monthly_fee || 0) + MIN_BID_GAP : MIN_BID_GAP
+
   return NextResponse.json({
     category,
     city,
@@ -150,7 +156,9 @@ export async function GET(request: Request) {
       two: null,
       three: null,
     },
-    minBid: holder ? Number(holder.monthly_fee || 0) + MIN_BID_GAP : MIN_BID_GAP,
+    // minBid follows the fair-bidding rules; remote scopes resolve to the
+    // nationwide tier or the 2× takeover price.
+    minBid,
     paymentsConfigured: paynowConfigured(),
   })
 }
@@ -207,63 +215,54 @@ export async function POST(request: Request) {
 
   const period = currentPeriodStart()
 
-  // The pending-bid reuse check and the current #1 holder lookup are
-  // independent — fetch together. (The fallback holder lookup below stays
-  // sequential because it depends on the result.)
-  const [{ data: existing }, { data: holderSpot }] = await Promise.all([
-    supabase
-      .from('bids')
-      .select('id, amount')
-      .eq('business_id', businessId)
-      .eq('category', category)
-      .eq('city', city || '')
-      .eq('period', period)
-      .eq('status', 'pending')
-      .maybeSingle(),
-    supabase
-      .from('rank_spots')
-      .select('monthly_fee, business_id')
-      .eq('category', category)
-      .eq('city', city || '')
-      .eq('position', 1)
-      .eq('status', 'active')
-      .gte('period_end', period)
-      .order('period_start', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-  ])
+  // Pending-bid reuse. The current #1 lookup is handled inside
+  // resolveBidScope below, which also enforces the takeover rules.
+  const { data: existing } = await supabase
+    .from('bids')
+    .select('id, amount')
+    .eq('business_id', businessId)
+    .eq('category', category)
+    .eq('city', city || '')
+    .eq('period', period)
+    .eq('status', 'pending')
+    .maybeSingle()
 
-  const { data: fallbackSpot } = holderSpot
-    ? { data: null }
-    : await supabase
-        .from('rank_spots')
-        .select('monthly_fee, business_id')
-        .eq('category', category)
-        .eq('city', city || '')
-        .eq('position', 1)
-        .eq('status', 'active')
-        .order('period_start', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+  // Fair-bidding rules — same source of truth as the WhatsApp flow:
+  // - Locals: open spot min $0.50; outbid min = current fee + $0.50.
+  // - Nationwide tier (is_remote, no city): $0.50 × towns with no local #1.
+  // - Takeover (is_remote, city): only where a LOCAL holds #1, at 2× their fee.
+  const resolved = await resolveBidScope(supabase, category, city || '', scope.isRemote)
+  if (!resolved.ok) {
+    await logPaymentEvent({
+      eventType: 'bid_rejected',
+      outcome: 'rejected',
+      businessId,
+      detail: { reason: 'scope_blocked', note: resolved.reason, category, city: city || '' },
+      request,
+    })
+    return NextResponse.json({ error: resolved.reason }, { status: 400 })
+  }
 
-  const currentFee = Number((holderSpot || fallbackSpot)?.monthly_fee ?? 0)
-
-  // Auction rule: outbid the current #1 by at least 10 cents — never bid
-  // equal to or below the holder. An open spot starts at 10 cents.
-  const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
+  const currentFee = resolved.currentFee
+  const minBid = resolved.min
   if (fee < minBid) {
     await logPaymentEvent({
       eventType: 'bid_rejected',
       outcome: 'rejected',
       businessId,
-      detail: { reason: 'below_min_bid', amount: fee, currentFee, minBid, category, city: city || '' },
+      detail: { reason: 'below_min_bid', amount: fee, currentFee, minBid, mode: resolved.mode, category, city: city || '' },
       request,
     })
     return NextResponse.json(
       {
-        error: currentFee > 0
-          ? `Your bid must beat the current #1 ($${currentFee.toFixed(2)}) by at least $${MIN_BID_GAP.toFixed(2)}. Minimum bid: $${minBid.toFixed(2)}.`
-          : `Minimum bid for the open #1 spot is $${MIN_BID_GAP.toFixed(2)}.`,
+        error:
+          resolved.mode === 'takeover'
+            ? `Takeover costs 2× the local\u2019s fee ($${currentFee.toFixed(2)}) — minimum bid: $${minBid.toFixed(2)}.`
+            : resolved.mode === 'nationwide'
+              ? `The nationwide slot costs $${NATIONWIDE_TOWN_FEE.toFixed(2)} per open town — minimum bid: $${minBid.toFixed(2)} (${resolved.towns} open towns).`
+              : currentFee > 0
+                ? `Your bid must beat the current #1 ($${currentFee.toFixed(2)}) by at least $${MIN_BID_GAP.toFixed(2)}. Minimum bid: $${minBid.toFixed(2)}.`
+                : `Minimum bid for the open #1 spot is $${minBid.toFixed(2)}.`,
       },
       { status: 400 }
     )
@@ -364,7 +363,13 @@ export async function POST(request: Request) {
         `Location: ${city || 'Nationwide'}`,
         'Bidding for: #1 (live auction)',
         `Bid: $${fee.toFixed(2)}`,
-        currentFee > 0 ? `Outbids current #1 ($${currentFee.toFixed(2)})` : 'Spot was open',
+        resolved.mode === 'takeover'
+          ? `Takeover (2× local fee $${currentFee.toFixed(2)})`
+          : resolved.mode === 'nationwide'
+            ? `Nationwide slot ($${NATIONWIDE_TOWN_FEE.toFixed(2)} × ${resolved.towns} open towns)`
+            : currentFee > 0
+              ? `Outbids current #1 ($${currentFee.toFixed(2)})`
+              : 'Spot was open',
         `Payer EcoCash: +${payerClean}`,
         '',
         `Review: ${SITE_URL}/admin`,

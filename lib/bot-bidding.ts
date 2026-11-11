@@ -6,9 +6,131 @@ import { digitsOnly } from '@/lib/phone'
 import { logBotMessage } from '@/lib/bot-log'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { formatHarareDateTime } from '@/lib/date-utils'
+import { zimbabweCities } from '@/data/zimbabwe-locations'
 
-// Minimum gap over the current #1 fee (10 cents).
-const MIN_BID_GAP = 0.1
+// Fair-bidding rules (shared with the portal ranking API):
+// - Locals bid their own town only. Open spot min $0.50; outbid min = current fee + $0.50.
+// - Nationwide tier (is_remote, city='') any time: $0.50 × towns with no active local #1.
+// - Takeover of a town's #1 (is_remote, city set): only where a LOCAL currently
+//   holds it, at a 2× premium of the local's fee. Locals can always reclaim.
+export const MIN_BID_GAP = 0.5
+export const LOCAL_BID_BASE = 0.5
+export const NATIONWIDE_TOWN_FEE = 0.5
+export const TAKEOVER_PREMIUM = 2
+
+type SupabaseClient = ReturnType<typeof getSupabase>
+
+/** Towns (static dataset) where this category has NO active #1 spot. */
+export async function unoccupiedTownCount(supabase: SupabaseClient, category: string): Promise<number> {
+  const { data: spots } = await supabase
+    .from('rank_spots')
+    .select('city')
+    .eq('category', category)
+    .eq('position', 1)
+    .eq('status', 'active')
+  const held = new Set((spots || []).map((s: { city: string | null }) => s.city).filter(Boolean) as string[])
+  return zimbabweCities.filter((c) => !held.has(c.name)).length
+}
+
+/** Active #1 spots in real towns whose holder is a LOCAL (non-remote) business. */
+export async function localHeldSpots(supabase: SupabaseClient, category: string) {
+  const { data: spots } = await supabase
+    .from('rank_spots')
+    .select('city, monthly_fee, business_id')
+    .eq('category', category)
+    .eq('position', 1)
+    .eq('status', 'active')
+    .neq('city', '')
+  const rows = (spots || []).filter((s: { city: string | null }) => s.city)
+  if (!rows.length) return []
+  const { data: holders } = await supabase
+    .from('businesses')
+    .select('id, name, is_remote')
+    .in('id', rows.map((r: { business_id: string }) => r.business_id))
+  const localIds = new Set((holders || []).filter((h: { is_remote: boolean | null }) => h.is_remote !== true).map((h: { id: string }) => h.id))
+  return rows.filter((r: { business_id: string }) => localIds.has(r.business_id))
+}
+
+/**
+ * Resolve the minimum bid and mode for a (category, city, isRemote) scope.
+ * Single source of truth for pricing, used by the WhatsApp flow and the portal API.
+ */
+export async function resolveBidScope(
+  supabase: SupabaseClient,
+  category: string,
+  city: string,
+  isRemote: boolean
+): Promise<
+  | { ok: true; mode: 'open' | 'outbid' | 'nationwide' | 'takeover'; min: number; currentFee: number; holderId?: string; towns?: number }
+  | { ok: false; reason: string }
+> {
+  const scopeCity = city || ''
+  const { data: spot } = await supabase
+    .from('rank_spots')
+    .select('monthly_fee, business_id')
+    .eq('category', category)
+    .eq('city', scopeCity)
+    .eq('position', 1)
+    .eq('status', 'active')
+    .order('period_start', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const currentFee = spot ? Number(spot.monthly_fee || 0) : 0
+
+  // Local businesses: own town only, standard auction rules.
+  if (!isRemote) {
+    return {
+      ok: true,
+      mode: currentFee > 0 ? 'outbid' : 'open',
+      min: currentFee > 0 ? currentFee + MIN_BID_GAP : LOCAL_BID_BASE,
+      currentFee,
+      holderId: spot?.business_id,
+    }
+  }
+
+  // Remote (nationwide) business targeting a specific town = takeover.
+  if (scopeCity) {
+    if (!spot) {
+      return {
+        ok: false,
+        reason:
+          'That town has no local #1 to take over — towns without a #1 are covered by the *Nationwide* slot. Type `bid` and pick *Nationwide*.',
+      }
+    }
+    const { data: holder } = await supabase
+      .from('businesses')
+      .select('is_remote, name')
+      .eq('id', spot.business_id)
+      .maybeSingle()
+    if (holder?.is_remote === true) {
+      return { ok: false, reason: 'Only towns where a *local* business holds #1 can be taken over, at 2× their fee.' }
+    }
+    return {
+      ok: true,
+      mode: 'takeover',
+      min: Math.round(currentFee * TAKEOVER_PREMIUM * 100) / 100,
+      currentFee,
+    }
+  }
+
+  // Remote business, no town = the nationwide tier.
+  const towns = await unoccupiedTownCount(supabase, category)
+  if (towns <= 0) {
+    return {
+      ok: false,
+      reason:
+        'Locals hold #1 in every town for this category right now, so the nationwide slot is closed. You can take over a specific town at 2× the local fee — type `bid` to see the list.',
+    }
+  }
+  return {
+    ok: true,
+    mode: 'nationwide',
+    min: Math.round(towns * NATIONWIDE_TOWN_FEE * 100) / 100,
+    currentFee: 0,
+    towns,
+  }
+}
 
 /**
  * Handle the main `bid` command.
@@ -38,10 +160,11 @@ export async function handleBidCommand(phone: string, text: string) {
   // Parse arguments: bid <category> <city> <amount>
   const parts = text.trim().split(/\s+/)
   if (parts.length >= 4) {
-    // Quick bid: bid plumber harare 1.50
+    // Quick bid: bid plumber harare 1.50 (or "nationwide" for the nationwide slot)
     const category = parts[1]
-    const city = parts[2]
+    let city = parts[2]
     const amount = parseFloat(parts[3])
+    if (city.toLowerCase() === 'nationwide') city = ''
 
     if (!categories.includes(category)) {
       await sendWhatsAppMessage(phone, `Category "${category}" not found on your listing. Your categories: ${categories.join(', ')}`)
@@ -98,32 +221,43 @@ export async function handleBidCategorySelection(phone: string, selectionId: str
     return
   }
 
-  // If nationwide, ask for city
+  // If nationwide, show the nationwide slot + towns held by locals (takeover)
   if (business.is_remote) {
-    // Get cities where this category has spots or bids
-    const { data: spots } = await supabase
-      .from('rank_spots')
-      .select('city')
-      .eq('category', category)
-      .eq('position', 1)
-      .eq('status', 'active')
+    const unoccupied = await unoccupiedTownCount(supabase, category)
+    const nationwideFee = Math.round(unoccupied * NATIONWIDE_TOWN_FEE * 100) / 100
+    const held = await localHeldSpots(supabase, category)
 
-    const cities = [...new Set((spots || []).map(s => s.city).filter(Boolean))]
-    if (cities.length === 0) {
-      cities.push('Harare', 'Bulawayo', 'Mutare', 'Gweru', 'Chinhoyi')
+    const rows: { id: string; title: string; description: string }[] = []
+    if (unoccupied > 0) {
+      rows.push({
+        id: `bid_nationwide_${category}`,
+        title: '🌍 Nationwide',
+        description: `$${nationwideFee.toFixed(2)} = $0.50 × ${unoccupied} open towns`,
+      })
+    }
+    for (const s of held.slice(0, 8)) {
+      rows.push({
+        id: `bid_city_${category}_${s.city}`,
+        title: s.city,
+        description: `Take over — 2× their $${Number(s.monthly_fee || 0).toFixed(2)}`,
+      })
     }
 
-    const rows = cities.map(c => ({
-      id: `bid_city_${category}_${c}`,
-      title: c,
-      description: 'Select city to bid in'
-    }))
+    if (rows.length === 0) {
+      await sendWhatsAppMessage(
+        phone,
+        `Locals hold #1 in every town for *${category}*, so there is nothing to bid on right now. Check back later.`
+      )
+      return
+    }
 
     await sendInteractiveList(
       phone,
-      `*Bid for #1 in ${category}* 📍\nPick a city:`,
+      `*Bid for #1 in ${category}* 📍\n\n` +
+        `• *Nationwide*: $0.50 per town with no local #1 (${unoccupied} open). You show first wherever no local has bid — locals always rank above you in their own towns.\n` +
+        `• *Take over a town*: only where a local holds #1, at 2× their fee. Locals can always reclaim at their fee + $0.50.`,
       rows,
-      'Choose city'
+      'Choose scope'
     )
     return
   }
@@ -133,7 +267,7 @@ export async function handleBidCategorySelection(phone: string, selectionId: str
 }
 
 /**
- * Handle city selection for nationwide businesses.
+ * Handle town selection for nationwide businesses (takeover of a local-held #1).
  * Callback ID format: bid_city_<category>_<city>
  */
 export async function handleBidCitySelection(phone: string, selectionId: string) {
@@ -145,7 +279,7 @@ export async function handleBidCitySelection(phone: string, selectionId: string)
 
   const { data: business } = await supabase
     .from('businesses')
-    .select('id')
+    .select('id, is_remote')
     .eq('phone', phone)
     .maybeSingle()
 
@@ -154,29 +288,64 @@ export async function handleBidCitySelection(phone: string, selectionId: string)
     return
   }
 
-  await showBidAmountOptions(phone, business.id, category, city)
+  // Takeover rules: the town's #1 must be held by a LOCAL, priced at 2× their fee.
+  const scope = await resolveBidScope(supabase, category, city, business.is_remote === true)
+  if (!scope.ok) {
+    await sendWhatsAppMessage(phone, scope.reason)
+    return
+  }
+
+  await showBidAmountOptions(phone, business.id, category, city, scope)
+}
+
+/**
+ * Handle the nationwide-slot selection for nationwide businesses.
+ * Callback ID format: bid_nationwide_<category>
+ */
+export async function handleBidNationwideSelection(phone: string, selectionId: string) {
+  const supabase = getSupabase()
+
+  const category = selectionId.replace('bid_nationwide_', '')
+
+  const { data: business } = await supabase
+    .from('businesses')
+    .select('id, is_remote')
+    .eq('phone', phone)
+    .maybeSingle()
+
+  if (!business) {
+    await sendWhatsAppMessage(phone, 'Business not found.')
+    return
+  }
+
+  const scope = await resolveBidScope(supabase, category, '', business.is_remote === true)
+  if (!scope.ok) {
+    await sendWhatsAppMessage(phone, scope.reason)
+    return
+  }
+
+  await showBidAmountOptions(phone, business.id, category, '', scope)
 }
 
 /**
  * Show current #1 fee and bid amount options.
+ * `scope` (from resolveBidScope) carries the pricing mode; locals resolve it here.
  */
-async function showBidAmountOptions(phone: string, businessId: string, category: string, city: string) {
+async function showBidAmountOptions(
+  phone: string,
+  businessId: string,
+  category: string,
+  city: string,
+  scope?: Awaited<ReturnType<typeof resolveBidScope>>
+) {
   const supabase = getSupabase()
 
-  // Get current #1 holder (no period filter - bids are indefinite until outbid)
-  const { data: spot } = await supabase
-    .from('rank_spots')
-    .select('monthly_fee, business_id')
-    .eq('category', category)
-    .eq('city', city)
-    .eq('position', 1)
-    .eq('status', 'active')
-    .order('period_start', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const currentFee = spot ? Number(spot.monthly_fee || 0) : 0
-  const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
+  const resolved = scope || (await resolveBidScope(supabase, category, city, false))
+  if (!resolved.ok) {
+    await sendWhatsAppMessage(phone, resolved.reason)
+    return
+  }
+  const minBid = resolved.min
 
   // Get business name for display
   const { data: business } = await supabase
@@ -188,15 +357,22 @@ async function showBidAmountOptions(phone: string, businessId: string, category:
   let message = `*Bid for #1: ${category}* ${city ? `in ${city}` : '(nationwide)'}\n`
   message += `Business: *${business?.name || 'Your business'}* (${business?.business_id})\n\n`
 
-  if (spot) {
-    const isMine = spot.business_id === businessId
-    message += `Current #1: ${isMine ? 'YOU 👑' : 'Another business'}\n`
-    message += `Current fee paid: $${currentFee.toFixed(2)} (one-time)\n\n`
+  if (resolved.mode === 'nationwide') {
+    message += `Nationwide slot: you show *first* in every town with no local #1 (${resolved.towns} open towns), and below locals where they hold #1.\n`
+    message += `Price: *$${minBid.toFixed(2)}* = $${NATIONWIDE_TOWN_FEE.toFixed(2)} × ${resolved.towns} open towns (one-time)\n\n`
+  } else if (resolved.mode === 'takeover') {
+    message += `Takeover: the current #1 is a local business. Takeover price = 2× their fee.\n`
+    message += `Current fee paid: $${resolved.currentFee.toFixed(2)} → your price: *$${minBid.toFixed(2)}* (one-time)\n`
+    message += `Locals can always reclaim at their fee + $${MIN_BID_GAP.toFixed(2)}.\n\n`
+  } else if (resolved.mode === 'outbid') {
+    message += `Current #1: ${resolved.holderId === businessId ? 'YOU 👑' : 'Another business'}\n`
+    message += `Current fee paid: $${resolved.currentFee.toFixed(2)} (one-time)\n`
+    message += `Minimum bid: *$${minBid.toFixed(2)}* (current fee + $${MIN_BID_GAP.toFixed(2)})\n`
   } else {
-    message += `Current #1: *OPEN* 🟢\n\n`
+    message += `Current #1: *OPEN* 🟢\n`
+    message += `Minimum bid: *$${minBid.toFixed(2)}* (one-time)\n`
   }
 
-  message += `Minimum bid: *$${minBid.toFixed(2)}* (must beat current #1 by at least $${MIN_BID_GAP.toFixed(2)})\n`
   message += `Select an amount or type a custom amount:`
 
   // Quick amount buttons (minBid, minBid+0.50, minBid+1.00, minBid+2.00)
@@ -224,23 +400,28 @@ async function showBidAmountOptions(phone: string, businessId: string, category:
 export async function handleBidAmount(phone: string, businessId: string, category: string, city: string, amount: number) {
   const supabase = getSupabase()
 
-  // Get current #1 holder
-  const { data: spot } = await supabase
-    .from('rank_spots')
-    .select('monthly_fee, business_id')
-    .eq('category', category)
-    .eq('city', city)
-    .eq('position', 1)
-    .eq('status', 'active')
-    .order('period_start', { ascending: false })
-    .limit(1)
+  // Server-side pricing guard (single source of truth with the portal API)
+  const { data: bidder } = await supabase
+    .from('businesses')
+    .select('is_remote')
+    .eq('id', businessId)
     .maybeSingle()
+  const scope = await resolveBidScope(supabase, category, city || '', bidder?.is_remote === true)
+  if (!scope.ok) {
+    await sendWhatsAppMessage(phone, scope.reason)
+    return
+  }
+  const currentFee = scope.currentFee
 
-  const currentFee = spot ? Number(spot.monthly_fee || 0) : 0
-  const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
-
-  if (amount < minBid) {
-    await sendWhatsAppMessage(phone, `Your bid of $${amount.toFixed(2)} is below the minimum of $${minBid.toFixed(2)}. You must beat the current #1 by at least $${MIN_BID_GAP.toFixed(2)}.`)
+  if (amount < scope.min) {
+    await sendWhatsAppMessage(
+      phone,
+      scope.mode === 'takeover'
+        ? `Takeover of *${category}* in ${city} costs 2× the local's fee ($${currentFee.toFixed(2)}) = *$${scope.min.toFixed(2)}* minimum.`
+        : scope.mode === 'nationwide'
+          ? `The nationwide slot costs $${NATIONWIDE_TOWN_FEE.toFixed(2)} per open town — right now that is *$${scope.min.toFixed(2)}* minimum (${scope.towns} open towns).`
+          : `Your bid of $${amount.toFixed(2)} is below the minimum of $${scope.min.toFixed(2)}. You must beat the current #1 by at least $${MIN_BID_GAP.toFixed(2)}.`
+    )
     return
   }
 
@@ -264,15 +445,27 @@ export async function handleBidAmount(phone: string, businessId: string, categor
     return
   }
 
-  // Ask for EcoCash phone number
+  // Ask for EcoCash phone number. Include the scope tokens so the confirm
+  // step can price the exact (category, city) the user picked.
+  const scopeToken = city ? `${category} in ${city}` : `${category} nationwide`
+  const beatsLine =
+    scope.mode === 'takeover'
+      ? `Takeover price = 2× the local's $${currentFee.toFixed(2)} fee`
+      : scope.mode === 'nationwide'
+        ? `Covers ${scope.towns} open towns at $${NATIONWIDE_TOWN_FEE.toFixed(2)} each`
+        : currentFee > 0
+          ? `Beats current #1 ($${currentFee.toFixed(2)}) by $${(amount - currentFee).toFixed(2)}`
+          : 'Spot is open!'
   await sendWhatsAppMessage(
     phone,
     `*Confirm Bid* ✅\n\n` +
     `Category: *${category}*\n` +
     `Location: ${city || 'Nationwide'}\n` +
     `Bid amount: *$${amount.toFixed(2)}* (one-time payment)\n` +
-    `${currentFee > 0 ? `Beats current #1 ($${currentFee.toFixed(2)}) by $${(amount - currentFee).toFixed(2)}` : 'Spot is open!'}\n\n` +
-    `Reply with your EcoCash phone number (e.g. 0771234567) to proceed with payment.\n` +
+    `${beatsLine}\n\n` +
+    `To pay, reply with your EcoCash number in this format:\n` +
+    `\`confirm ${amount.toFixed(2)} <ecocash-number> ${scopeToken}\`\n` +
+    `Example: \`confirm ${amount.toFixed(2)} 0771234567 ${scopeToken}\`\n` +
     `You'll receive a PIN prompt on that number — approve it to confirm your bid.`
   )
 
@@ -283,15 +476,15 @@ export async function handleBidAmount(phone: string, businessId: string, categor
 
 /**
  * Handle bid confirmation with phone number.
- * Expected format: "confirm <amount> <phone>"
+ * Expected format: "confirm <amount> <phone> [<category> [in <city> | nationwide]]"
  */
 export async function handleBidConfirm(phone: string, text: string) {
   const supabase = getSupabase()
 
-  // Parse: confirm 1.50 0771234567
+  // Parse: confirm 1.50 0771234567 plumber in harare
   const parts = text.trim().split(/\s+/)
   if (parts.length < 3) {
-    await sendWhatsAppMessage(phone, 'Usage: `confirm <amount> <phone>` (e.g. `confirm 1.50 0771234567`)')
+    await sendWhatsAppMessage(phone, 'Usage: `confirm <amount> <phone> <category> [in <city> | nationwide]` (e.g. `confirm 1.50 0771234567 plumbing in Harare`)')
     return
   }
 
@@ -321,32 +514,50 @@ export async function handleBidConfirm(phone: string, text: string) {
     return
   }
 
-  // For simplicity, assume first category + city
-  const category = business.category?.[0]
-  const city = business.is_remote ? '' : business.city || ''
+  // Parse the optional scope tokens: "<category> [in <city> | nationwide]".
+  // Falls back to the listing's own scope when omitted.
+  const rest = parts.slice(3).join(' ').trim()
+  let category = business.category?.[0] || ''
+  let city = business.is_remote ? '' : business.city || ''
+
+  if (rest) {
+    if (/\bnationwide\b/i.test(rest)) {
+      const cat = rest.replace(/\bnationwide\b/i, '').trim()
+      if (cat) category = cat
+      city = ''
+    } else {
+      const inMatch = rest.match(/^(.+?)\s+in\s+(.+)$/i)
+      if (inMatch) {
+        category = inMatch[1].trim()
+        city = inMatch[2].trim()
+      } else {
+        category = rest
+        if (!business.is_remote) city = business.city || ''
+      }
+    }
+  }
 
   if (!category) {
     await sendWhatsAppMessage(phone, 'No categories on your listing.')
     return
   }
+  if (!business.category?.includes(category)) {
+    await sendWhatsAppMessage(phone, `Category "${category}" not found on your listing. Your categories: ${(business.category || []).join(', ')}`)
+    return
+  }
+  if (!business.is_remote && city && city !== business.city) {
+    await sendWhatsAppMessage(phone, `You can only bid in your listing's city (${business.city}).`)
+    return
+  }
 
-  // Get current #1 fee for validation
-  const { data: spot } = await supabase
-    .from('rank_spots')
-    .select('monthly_fee')
-    .eq('category', category)
-    .eq('city', city)
-    .eq('position', 1)
-    .eq('status', 'active')
-    .order('period_start', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const currentFee = spot ? Number(spot.monthly_fee || 0) : 0
-  const minBid = currentFee > 0 ? currentFee + MIN_BID_GAP : MIN_BID_GAP
-
-  if (amount < minBid) {
-    await sendWhatsAppMessage(phone, `Bid must be at least $${minBid.toFixed(2)}.`)
+  // Server-side pricing guard (same rules as the portal API)
+  const scope = await resolveBidScope(supabase, category, city || '', business.is_remote === true)
+  if (!scope.ok) {
+    await sendWhatsAppMessage(phone, scope.reason)
+    return
+  }
+  if (amount < scope.min) {
+    await sendWhatsAppMessage(phone, `Bid must be at least $${scope.min.toFixed(2)} for *${category}* ${city ? `in ${city}` : '(nationwide)'}.`)
     return
   }
 
@@ -503,32 +714,42 @@ export async function handleOutbidCommand(phone: string) {
 
   let message = `*Outbid Requirements* 🎯\nBusiness: *${business.name}*\n\n`
 
+  if (business.is_remote) {
+    for (const cat of categories) {
+      const scope = await resolveBidScope(supabase, cat, '', true)
+      if (scope.ok) {
+        message += `*${cat}* (nationwide)\n`
+        message += `Nationwide slot: *$${scope.min.toFixed(2)}* = $${NATIONWIDE_TOWN_FEE.toFixed(2)} × ${scope.towns} open towns\n`
+        const held = await localHeldSpots(supabase, cat)
+        if (held.length > 0) {
+          message += `Takeovers available: ${held.slice(0, 4).map((s: { city: string; monthly_fee: number }) => `${s.city} (2× $${Number(s.monthly_fee).toFixed(2)})`).join(', ')}${held.length > 4 ? '…' : ''}\n`
+        }
+        message += '\n'
+      } else {
+        message += `*${cat}* (nationwide)\nNationwide slot closed — locals hold every town. Type \`bid\` to see takeover prices.\n\n`
+      }
+    }
+    message += 'Type `bid` for the interactive flow.'
+    await sendWhatsAppMessage(phone, message)
+    return
+  }
+
   for (const cat of categories) {
-    const city = business.is_remote ? '(nationwide - pick city)' : business.city || 'N/A'
+    const city = business.city || 'N/A'
 
-    const { data: spot } = await supabase
-      .from('rank_spots')
-      .select('monthly_fee, business_id')
-      .eq('category', cat)
-      .eq('city', business.city || '')
-      .eq('position', 1)
-      .eq('status', 'active')
-      .order('period_start', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const scope = await resolveBidScope(supabase, cat, business.city || '', false)
 
-    if (spot) {
-      const currentFee = Number(spot.monthly_fee || 0)
-      const minBid = currentFee + MIN_BID_GAP
-      const isMine = spot.business_id === business.id
-
-      message += `*${cat}* ${city}\n`
-      message += `Current #1: ${isMine ? 'YOU 👑' : 'Another business'}\n`
-      message += `Current fee paid: $${currentFee.toFixed(2)} (one-time)\n`
-      message += `To take/keep #1: bid at least *$${minBid.toFixed(2)}*\n\n`
+    if (scope.ok) {
+      message += `*${cat}* in ${city}\n`
+      message += `Current #1: ${scope.mode === 'outbid' ? (scope.holderId === business.id ? 'YOU 👑' : 'Another business') : '*OPEN* 🟢'}\n`
+      if (scope.mode === 'outbid') {
+        message += `Current fee paid: $${scope.currentFee.toFixed(2)} (one-time)\n`
+        message += `To take/keep #1: bid at least *$${scope.min.toFixed(2)}* (fee + $${MIN_BID_GAP.toFixed(2)})\n\n`
+      } else {
+        message += `Min bid: *$${scope.min.toFixed(2)}* (one-time)\n\n`
+      }
     } else {
-      message += `*${cat}* ${city}\n`
-      message += `#1 spot: OPEN — min bid $${MIN_BID_GAP.toFixed(2)}\n\n`
+      message += `*${cat}* in ${city}\n${scope.reason}\n\n`
     }
   }
 

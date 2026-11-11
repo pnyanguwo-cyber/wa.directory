@@ -410,7 +410,7 @@ export default function EditBusinessForm({
                 pending={pendingAreaNames}
                 onRequestName={handleRequestArea}
                 placeholder="Select areas"
-                label="Areas you cover"
+                label="Areas you cover (service area)"
                 hint={
                   areas.length === 0
                     ? undefined
@@ -419,6 +419,7 @@ export default function EditBusinessForm({
                       : 'First area (orange) is your primary location. Add more if you cover them.'
                 }
               />
+              <p className="text-xs text-whatsapp-600 mt-1">Where you deliver or serve — this can be different from your physical address below.</p>
             </div>
           ) : (
             <div />
@@ -433,7 +434,7 @@ export default function EditBusinessForm({
 
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">
-            Street Address <span className="text-text-secondary font-normal">(optional)</span>
+            Physical Address — where you are located <span className="text-text-secondary font-normal">(optional)</span>
           </label>
           <input
             type="text"
@@ -443,7 +444,7 @@ export default function EditBusinessForm({
             placeholder="e.g. 123 Samora Machel Ave, Harare"
             className="input-field"
           />
-          <p className="text-xs text-whatsapp-600 mt-1">Your address will generate a Google Maps link for directions</p>
+          <p className="text-xs text-whatsapp-600 mt-1">Physical Address — where you are located. This generates a Google Maps link for directions</p>
           {addressStatus === 'checking' && (
             <p className="text-xs text-text-secondary mt-1 flex items-center gap-1.5">
               <span className="w-3.5 h-3.5 border-2 border-whatsapp-500 border-t-transparent rounded-full animate-spin" />

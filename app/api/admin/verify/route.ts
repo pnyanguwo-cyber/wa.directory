@@ -5,6 +5,7 @@ import { isAdmin } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
 import { activateListingForDays, notifyBusinessLive } from '@/lib/admin-verify'
+import { autoApproveBusinessLocations } from '@/lib/feature-request-actions'
 import { notifyAdminApproval, notifyTrialActivation, notifyRejection } from '@/app/api/webhook/route'
 import { isTrialEligible } from '@/lib/trial-helpers'
 
@@ -29,6 +30,12 @@ export async function POST(request: Request) {
     }
 
     if (verified) {
+      // Verifying a business verifies its location too: pending city/area
+      // requests land in the approved lists for future users. Non-blocking.
+      try {
+        await autoApproveBusinessLocations(String(id))
+      } catch {}
+
       // NEW FLOW: Offer trial option instead of requiring immediate payment
       // Only auto-grant if payment_status is already 'active' (already paid)
       const alreadyPaid = business.payment_status === 'active'

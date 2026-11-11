@@ -263,7 +263,8 @@ async function handleMessages(value: any) {
       }
       // Help-related interactive selections from buttons/lists
       else if (lowerText.startsWith('help_') || lowerText.startsWith('bid_cat_') ||
-               lowerText.startsWith('bid_city_') || lowerText.startsWith('bid_amt_')) {
+               lowerText.startsWith('bid_city_') || lowerText.startsWith('bid_amt_') ||
+               lowerText.startsWith('bid_nationwide_')) {
         // Route help selections to the help router
         if (lowerText.startsWith('help_')) {
           await routeHelpSelection(phone, text)
@@ -285,14 +286,17 @@ async function handleMessages(value: any) {
         await handleBidCategorySelection(phone, text)
       } else if (lowerText.startsWith('bid_city_')) {
         await handleBidCitySelection(phone, text)
+      } else if (lowerText.startsWith('bid_nationwide_')) {
+        const { handleBidNationwideSelection } = await import('@/lib/bot-bidding')
+        await handleBidNationwideSelection(phone, text)
       } else if (lowerText.startsWith('bid_amt_')) {
         // Format: bid_amt_1.50
         const amountStr = text.replace('bid_amt_', '')
         const amount = parseFloat(amountStr)
         if (!isNaN(amount)) {
-          // We need to get the business to find their pending bid context
-          // For now, ask for confirmation with phone number
-          await sendWhatsAppMessage(phone, `To confirm your bid of $${amount.toFixed(2)}/month, reply with:\n\`confirm ${amount.toFixed(2)} <your-ecocash-phone>\`\n\nExample: \`confirm 1.50 0771234567\``)
+          // Confirm step re-validates pricing; include the scope tokens so the
+          // exact (category, city) is honored.
+          await sendWhatsAppMessage(phone, `To confirm your bid of $${amount.toFixed(2)} (one-time), reply with:\n\`confirm ${amount.toFixed(2)} <your-ecocash-phone> <category> [in <city> | nationwide]\`\n\nExample: \`confirm ${amount.toFixed(2)} 0771234567 plumbing in Harare\``)
         }
       } else if (lowerText.startsWith('confirm ')) {
         await handleBidConfirm(phone, text)
@@ -361,15 +365,17 @@ async function handleInteractiveReply(phone: string, replyId: string, replyTitle
   }
 
   // Bid-related interactive selections
-  if (lower.startsWith('bid_cat_') || lower.startsWith('bid_city_') || lower.startsWith('bid_amt_')) {
+  if (lower.startsWith('bid_cat_') || lower.startsWith('bid_city_') || lower.startsWith('bid_amt_') || lower.startsWith('bid_nationwide_')) {
     const stateData = await getConversationState(phone)
     if (stateData) {
       // Route to bid handlers - these will need to handle both text and interactive
-      const { handleBidCategorySelection, handleBidCitySelection, handleBidAmount } = await import('@/lib/bot-bidding')
+      const { handleBidCategorySelection, handleBidCitySelection, handleBidAmount, handleBidNationwideSelection } = await import('@/lib/bot-bidding')
       if (lower.startsWith('bid_cat_')) {
         await handleBidCategorySelection(phone, replyId)
       } else if (lower.startsWith('bid_city_')) {
         await handleBidCitySelection(phone, replyId)
+      } else if (lower.startsWith('bid_nationwide_')) {
+        await handleBidNationwideSelection(phone, replyId)
       } else if (lower.startsWith('bid_amt_')) {
         // bid_amt_<amount> - need businessId, category, city from state
         const context = stateData.context || {}
@@ -377,7 +383,7 @@ async function handleInteractiveReply(phone: string, replyId: string, replyTitle
         const category = context.bidCategory
         const city = context.bidCity
         const amount = parseFloat(replyId.replace('bid_amt_', ''))
-        if (businessId && category && city && !isNaN(amount)) {
+        if (businessId && category && typeof city === 'string' && !isNaN(amount)) {
           await handleBidAmount(phone, businessId, category, city, amount)
         }
       }
