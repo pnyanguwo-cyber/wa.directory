@@ -28,8 +28,14 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
   },
   icons: {
-    icon: [{ url: '/icon-192.png', sizes: '192x192', type: 'image/png' }, { url: '/icon-512.png', sizes: '512x512', type: 'image/png' }],
-    apple: [{ url: '/icon-192.png', sizes: '180x180', type: 'image/png' }],
+    // The public/favicon.png badge is the single source of truth for the tab,
+    // bookmarks and search results. app/favicon.ico, app/icon.png and
+    // app/apple-icon.png are generated from it so every crawler sees the same art.
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   openGraph: {
     type: 'website',
