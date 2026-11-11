@@ -34,6 +34,10 @@ export async function generateMetadata({ searchParams }: { searchParams: { q?: s
   return {
     title: q ? `Search: ${q} in Zimbabwe | WA Directory` : 'Browse Businesses | WA Directory',
     description: q ? `Find ${q} services on WhatsApp in Zimbabwe.` : 'Browse all businesses listed on WA Directory.',
+    // Search result pages are generated per query: endless near-duplicates that
+    // waste crawl budget. They stay followable but out of the index.
+    alternates: { canonical: '/search' },
+    robots: { index: false, follow: true },
   }
 }
 

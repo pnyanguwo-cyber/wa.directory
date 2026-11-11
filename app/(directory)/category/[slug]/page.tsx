@@ -66,9 +66,23 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   const approved = await getApprovedCategories()
   const matched = matchCategoryAgainst(parsed.category, approved)
 
+  const title = `Best ${matched} in ${parsed.location} | WA Directory`
+  const description = `Find the best ${matched} businesses in ${parsed.location}, Zimbabwe. Browse verified services with real prices and start a WhatsApp conversation instantly.`
+
   return {
-    title: `Best ${matched} in ${parsed.location} | WA Directory`,
-    description: `Find the best ${matched} businesses in ${parsed.location}, Zimbabwe. Browse verified services and start a WhatsApp conversation instantly.`,
+    title,
+    description,
+    alternates: { canonical: `/category/${encodeURIComponent(params.slug)}` },
+    openGraph: {
+      title,
+      description,
+      url: `${SITE_URL}/category/${encodeURIComponent(params.slug)}`,
+      siteName: 'WA Directory',
+      locale: 'en_ZW',
+      type: 'website',
+      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: `${matched} in ${parsed.location}` }],
+    },
+    twitter: { card: 'summary_large_image', images: ['/og-image.png'] },
   }
 }
 
@@ -113,6 +127,7 @@ async function CategoryResults({ category, location }: { category: string; locat
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
     name: `Best ${matchedCategory} in ${location}`,
+    url: `${SITE_URL}/category/${encodeURIComponent(`${matchedCategory.toLowerCase().replace(/\s+/g, '-')}-${location.toLowerCase().replace(/\s+/g, '-')}`)}`,
     description: `Find the best ${matchedCategory} services in ${location}, Zimbabwe.`,
     about: {
       '@type': 'Thing',

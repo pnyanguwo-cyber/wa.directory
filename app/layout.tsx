@@ -41,9 +41,16 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'WA Directory',
     locale: 'en_ZW',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'WA Directory: find any local business on WhatsApp' }],
   },
   twitter: {
     card: 'summary_large_image',
+    images: ['/og-image.png'],
+  },
+  // Machine-readable hint that Zimbabwe is the area served, used by both
+  // Google and AI assistants when deciding which answers to surface us in.
+  other: {
+    'geo.region': 'ZW',
   },
 }
 

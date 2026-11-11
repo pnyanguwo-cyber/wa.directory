@@ -47,16 +47,22 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 
   if (!data) return {}
 
+  const description = data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp in ${data.city || 'Zimbabwe'}.`
+
   return {
-    title: `${data.name} | WA Directory`,
-    description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp in ${data.city || 'Zimbabwe'}.`,
+    title: `${data.name}${data.city ? ` in ${data.city}` : ''} | WA Directory`,
+    description,
+    alternates: { canonical: `/business/${params.slug}` },
     openGraph: {
-      title: `${data.name} | WA Directory`,
-      description: data.bio?.slice(0, 160) || `Contact ${data.name} on WhatsApp.`,
+      title: `${data.name}${data.city ? ` in ${data.city}` : ''} | WA Directory`,
+      description,
+      url: `${SITE_URL}/business/${params.slug}`,
       siteName: 'WA Directory',
       locale: 'en_ZW',
       type: 'profile',
+      images: [{ url: '/og-image.png', width: 1200, height: 630, alt: data.name }],
     },
+    twitter: { card: 'summary_large_image', images: ['/og-image.png'] },
   }
 }
 
@@ -213,24 +219,57 @@ async function BusinessContent({ slug }: { slug: string }) {
       ? [business.area]
       : []
 
+  const businessUrl = `${SITE_URL}/business/${business.slug || business.id}`
+  const socials = Object.values(((business as { socials?: Record<string, string> | null }).socials) || {}).filter(
+    (value): value is string => typeof value === 'string' && value.length > 0
+  )
+  const sameAs = [business.website, ...socials].filter((value): value is string => !!value)
+
+  // @graph keeps the business and its breadcrumb in one block, which is what
+  // Google merges into a single rich result.
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'LocalBusiness',
-    name: business.name,
-    telephone: business.phone ? `+${business.phone.replace(/[^0-9]/g, '')}` : undefined,
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: business.city || 'Zimbabwe',
-    },
-    description: business.bio,
-    ...(business.rating > 0 ? {
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: business.rating,
-        reviewCount: business.review_count,
+    '@graph': [
+      {
+        '@type': 'LocalBusiness',
+        '@id': `${businessUrl}#business`,
+        name: business.name,
+        url: businessUrl,
+        image: [business.logo_url || `${SITE_URL}/og-image.png`],
+        telephone: business.phone ? `+${business.phone.replace(/[^0-9]/g, '')}` : undefined,
+        priceRange: business.price_range || undefined,
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: business.address || undefined,
+          addressLocality: business.city || 'Zimbabwe',
+          addressCountry: 'ZW',
+        },
+        ...(business.lat != null && business.lng != null
+          ? { geo: { '@type': 'GeoCoordinates', latitude: business.lat, longitude: business.lng } }
+          : {}),
+        areaServed: [business.city, ...businessAreas]
+          .filter((value): value is string => !!value)
+          .map(name => ({ '@type': 'Place', name })),
+        description: business.bio,
+        ...(sameAs.length ? { sameAs } : {}),
+        ...(business.rating > 0 && business.review_count > 0 ? {
+          aggregateRating: {
+            '@type': 'AggregateRating',
+            ratingValue: business.rating,
+            reviewCount: business.review_count,
+          },
+        } : {}),
+        ...(org ? { parentOrganization: { '@type': 'Organization', name: org.name } } : {}),
       },
-    } : {}),
-    ...(org ? { parentOrganization: { '@type': 'Organization', name: org.name } } : {}),
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'WA Directory', item: SITE_URL },
+          { '@type': 'ListItem', position: 2, name: 'Categories', item: `${SITE_URL}/categories` },
+          { '@type': 'ListItem', position: 3, name: business.name, item: businessUrl },
+        ],
+      },
+    ],
   }
 
   const shareSlug = business.slug || business.id

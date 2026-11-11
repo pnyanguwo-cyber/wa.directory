@@ -4,14 +4,51 @@ import Image from 'next/image'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/footer'
 import BannerStrip from '@/components/banner-strip'
+import { SITE_URL } from '@/lib/site-url'
 
 const SiteSplash = dynamic(() => import('@/components/site-splash'), { ssr: false })
 const PWARegistration = dynamic(() => import('@/components/pwa-registration'), { ssr: false })
 const InstallPWA = dynamic(() => import('@/components/install-pwa'), { ssr: false })
 
+// One Organization + WebSite graph for every page in the directory: it names the
+// site, tells search engines where the search box lives, and gives AI assistants
+// a canonical entity to cite.
+const siteJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE_URL}/#organization`,
+      name: 'WA Directory',
+      url: SITE_URL,
+      logo: `${SITE_URL}/favicon.png`,
+      email: 'wadirectory@proton.me',
+      areaServed: { '@type': 'Country', name: 'Zimbabwe' },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: 'WA Directory',
+      description: 'Find any business in Zimbabwe on WhatsApp.',
+      inLanguage: 'en',
+      publisher: { '@id': `${SITE_URL}/#organization` },
+      potentialAction: {
+        '@type': 'SearchAction',
+        target: { '@type': 'EntryPoint', urlTemplate: `${SITE_URL}/search?q={search_term_string}` },
+        'query-input': 'required name=search_term_string',
+      },
+    },
+  ],
+}
+
 export default function DirectoryLayout({ children }: { children: ReactNode }) {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(siteJsonLd) }}
+      />
       <SiteSplash />
       <Navbar />
         <BannerStrip />

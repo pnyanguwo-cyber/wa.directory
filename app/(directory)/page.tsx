@@ -13,8 +13,45 @@ import FaqSection from '@/components/faq-section'
 import EmergencyStrip from '@/components/emergency-strip'
 import Link from 'next/link'
 import Image from 'next/image'
+import type { Metadata } from 'next'
+import { SITE_URL } from '@/lib/site-url'
+import { FAQ_ITEMS } from '@/data/faq'
 
 export const revalidate = 300
+
+export const metadata: Metadata = {
+  title: 'WA Directory | Find Any Business in Zimbabwe on WhatsApp',
+  description:
+    'Find verified plumbers, electricians, solar installers, salons, hardware shops and more across Zimbabwe. Compare prices and chat with the business on WhatsApp in one tap.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'WA Directory | Find Any Business in Zimbabwe on WhatsApp',
+    description:
+      'Verified local businesses across Zimbabwe, searchable in plain language and one tap from a WhatsApp chat.',
+    url: SITE_URL,
+    siteName: 'WA Directory',
+    locale: 'en_ZW',
+    type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'WA Directory: find any local business on WhatsApp' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'WA Directory | Find Any Business in Zimbabwe on WhatsApp',
+    images: ['/og-image.png'],
+  },
+}
+
+// FAQPage markup makes these answers quotable by Google, Bing and AI answer
+// engines instead of only living inside an accordion.
+const faqJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ_ITEMS.map((item) => ({
+    '@type': 'Question',
+    name: item.q,
+    acceptedAnswer: { '@type': 'Answer', text: item.a },
+  })),
+}
 
 const QUICK_CATEGORIES = [
   { name: 'Plumbing', icon: 'wrench', query: 'Plumber' },
@@ -80,6 +117,10 @@ export default async function HomePage() {
 
   return (
     <main className="min-h-[calc(100vh-3.5rem)]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
       {/* High-Converting Glass Mesh Hero */}
       <section className="relative overflow-hidden bg-gradient-to-b from-whatsapp-500/10 via-surface/40 to-transparent pt-8 pb-12 sm:pt-14 sm:pb-16 border-b border-gray-200/50">
         {/* Left Flank Image: wad1 fading seamlessly into white/background towards the middle */}
