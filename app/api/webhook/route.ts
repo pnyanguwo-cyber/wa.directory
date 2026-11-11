@@ -377,14 +377,40 @@ async function handleInteractiveReply(phone: string, replyId: string, replyTitle
       } else if (lower.startsWith('bid_nationwide_')) {
         await handleBidNationwideSelection(phone, replyId)
       } else if (lower.startsWith('bid_amt_')) {
-        // bid_amt_<amount> - need businessId, category, city from state
-        const context = stateData.context || {}
-        const businessId = context.businessId
-        const category = context.bidCategory
-        const city = context.bidCity
-        const amount = parseFloat(replyId.replace('bid_amt_', ''))
-        if (businessId && category && typeof city === 'string' && !isNaN(amount)) {
-          await handleBidAmount(phone, businessId, category, city, amount)
+        // New ids carry the full scope: bid_amt_<amount>__<category>__<city>
+        // (empty city = nationwide); custom prompts the confirm format.
+        if (lower.startsWith('bid_amt_custom')) {
+          const parts = lower.slice('bid_amt_custom'.length).split('__')
+          const category = (parts[1] || '').trim()
+          const city = (parts[2] || '').replace(/_/g, ' ').trim()
+          await sendWhatsAppMessage(
+            phone,
+            category
+              ? `Type the amount, then confirm in this format:\n\`confirm <amount> <ecocash-number> ${category}${city ? ` in ${city}` : ' nationwide'}\``
+              : 'Reply with: `confirm <amount> <phone> <category> [in <city> | nationwide]`'
+          )
+        } else {
+          const m = lower.match(/^bid_amt_([\d.]+)__([\s\S]+?)__([\s\S]*)$/)
+          if (m) {
+            const { data: biz } = await getSupabase().from('businesses').select('id').eq('phone', phone).maybeSingle()
+            if (biz) {
+              const { handleBidAmount } = await import('@/lib/bot-bidding')
+              await handleBidAmount(phone, biz.id, m[2].trim(), m[3].replace(/_/g, ' ').trim(), parseFloat(m[1]))
+            } else {
+              await sendWhatsAppMessage(phone, 'No business found for this WhatsApp number. Register first with *register*.')
+            }
+            return
+          }
+          // Legacy id: bid_amt_<amount> — scope came from conversation state.
+          const context = stateData.context || {}
+          const businessId = context.businessId
+          const category = context.bidCategory
+          const city = context.bidCity
+          const amount = parseFloat(replyId.replace('bid_amt_', ''))
+          if (businessId && category && typeof city === 'string' && !isNaN(amount)) {
+            const { handleBidAmount } = await import('@/lib/bot-bidding')
+            await handleBidAmount(phone, businessId, category, city, amount)
+          }
         }
       }
     }

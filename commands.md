@@ -1,6 +1,6 @@
 # WA Directory — WhatsApp bot command reference
 
-Last updated: 2026-10-27 · Bot number +263716150206 · Web app wadirectory.co.zw
+Last updated: 2026-11-11 · Bot number +263716150206 · Web app wadirectory.co.zw
 Everything below works in plain WhatsApp text. Bold = a literal word.
 
 ## Customer commands (anyone)
@@ -20,7 +20,7 @@ Everything below works in plain WhatsApp text. Bold = a literal word.
 | `/go/o/<token>` | One-tap checkout link per shop inside an order receipt (carries the order text into the supplier's WhatsApp) |
 | `register` | Start business registration (guided, ends at payment) |
 | `pay` | Pay/activate a listing |
-| `menu` | Interactive menu (post a need, register, pay, help) |
+| `menu` | Interactive menu (post a need, order, register, pay, bid for #1, help) |
 | `cancel` | Leave whatever flow you are in |
 | `help` | The help card, plus the live WhatsApp channel link |
 | `stop` | Opt out completely — `help` brings you back |
@@ -32,6 +32,20 @@ Everything below works in plain WhatsApp text. Bold = a literal word.
 | menu → Post a need | Guided need flow; you get an RQ id like RQ-7181 |
 | supplier replies `RQ-7181 USD 45 delivered` | Quotes against the RQ id — appears to the buyer as cards |
 | buyer taps ✅ accept | Winner gets the contact card, need closes, late quotes stop relaying |
+
+## Business owners — bidding for the #1 spot
+
+| Command | What it does |
+|---|---|
+| `bid` | Bid menu for your registered business: pick a category, then a town |
+| menu → 🏆 Bid for #1 | Same flow from the main menu |
+| `bid plumbing harare 2` | Place a $2/day bid for the top spot in that category + town |
+| `bid plumbing nationwide 1` | Place a $1/day nationwide bid — billed per open town daily (each town at least 50 cents), so coverage follows where listings exist |
+| `my bids` | Your live bids: current rank, rate and status per scope |
+| `outbid` | Bids you have been outbid on, with the minimum to reclaim #1 |
+| `confirm 3 0771122334 plumbing in harare` | Pay a bid with EcoCash — same format the flow shows you |
+
+Fair-bidding rules: bids move in 50-cent steps; taking over someone's #1 costs double their rate (min $1); your own held towns don't count against your nationwide price.
 
 ## Owner / admin commands
 
