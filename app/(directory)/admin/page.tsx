@@ -27,7 +27,7 @@ import AdminAiUsage from '@/components/admin/admin-ai-usage'
 import AdminAiControls from '@/components/admin/admin-ai-controls'
 import AnalyticsPanel from '@/components/portal/analytics-view'
 import Splash from '@/components/splash'
-import { isChatMuted, playChatChime } from '@/lib/chat-notify'
+import { isChatMuted, playChatChime, unlockChatAudio } from '@/lib/chat-notify'
 
 type Tab =
   | 'stats'
@@ -117,6 +117,17 @@ export default function AdminPage() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [unreadChats, setUnreadChats] = useState(0)
   const unreadRef = useRef(0)
+
+  // The chime needs one user gesture before the browser will let audio play.
+  useEffect(() => {
+    const unlock = () => unlockChatAudio()
+    window.addEventListener('pointerdown', unlock, { once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+  }, [])
 
   // A new customer message can land while the admin is on Listings or Stats,
   // so the badge and the chime live here, outside the Chats screen.
