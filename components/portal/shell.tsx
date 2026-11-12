@@ -192,14 +192,15 @@ export default function PortalShell({
                 <span className="truncate">{item.label}</span>
                 {typeof item.badge === 'number' && item.badge > 0 && (
                   <span
-                    className={`ml-auto rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                      item.badgeTone === 'amber'
-                        ? 'bg-amber-100 text-amber-800'
-                        : item.badgeTone === 'red'
-                          ? 'bg-red-100 text-red-700'
+                    aria-label={`${item.badge} new`}
+                    className={`ml-auto flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none tabular-nums text-white shadow-sm ${
+                      item.badgeTone === 'red'
+                        ? 'bg-red-600'
+                        : item.badgeTone === 'amber'
+                          ? 'bg-amber-500'
                           : item.badgeTone === 'neutral'
-                            ? 'bg-surface text-text-secondary'
-                            : 'bg-whatsapp-100 text-whatsapp-800'
+                            ? 'bg-gray-500'
+                            : 'bg-whatsapp-600'
                     }`}
                   >
                     {item.badge > 99 ? '99+' : item.badge}

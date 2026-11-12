@@ -46,6 +46,8 @@ export interface ChatThread {
   status: 'active' | 'resolved' | 'archived'
   blocked: boolean
   unread: boolean
+  /** Inbound messages that arrived after the admin last read this chat. */
+  unreadCount?: number
   messageCount: number
   foundVia?: string
   businessName?: string

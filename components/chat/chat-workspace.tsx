@@ -5,6 +5,8 @@ import {
   Archive,
   ArrowLeft,
   Ban,
+  Bell,
+  BellOff,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -34,6 +36,7 @@ import {
   type ChatMessage,
   type ChatThread,
 } from '@/lib/chat'
+import { isChatMuted, playChatChime, setChatMuted, unlockChatAudio } from '@/lib/chat-notify'
 import WhatsAppText from './whatsapp-text'
 
 function chatMessageKey(message: ChatMessage): string {
@@ -96,9 +99,12 @@ export default function ChatWorkspace({
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [confirm, setConfirm] = useState<ConfirmState | null>(null)
   const [toast, setToast] = useState('')
+  const [muted, setMuted] = useState(false)
   const latestMessageAt = detail?.messages[detail.messages.length - 1]?.at || null
   const messageEndRef = useRef<HTMLDivElement | null>(null)
   const messagesRef = useRef<HTMLDivElement | null>(null)
+  const seenRef = useRef<Map<string, string>>(new Map())
+  const primedRef = useRef(false)
 
   const withBranch = useCallback(
     (url: string) => {
@@ -108,6 +114,35 @@ export default function ChatWorkspace({
     [branchId]
   )
 
+  // Chime + toast when an inbound message lands. Runs off the polled inbox, so
+  // it fires for other conversations too, not just the one on screen.
+  function announceNewChats(next: ChatThread[]) {
+    if (!primedRef.current) {
+      next.forEach(thread => seenRef.current.set(thread.phone, thread.lastAt || ''))
+      primedRef.current = true
+      return
+    }
+    const fresh: ChatThread[] = []
+    for (const thread of next) {
+      const previous = seenRef.current.get(thread.phone)
+      const at = thread.lastAt || ''
+      const isNew =
+        previous === undefined
+          ? thread.unread
+          : thread.unread && !!at && previous !== at && Date.parse(at) > Date.parse(previous)
+      if (isNew) fresh.push(thread)
+      seenRef.current.set(thread.phone, at)
+    }
+    if (!fresh.length || isChatMuted()) return
+    playChatChime()
+    const first = fresh[0]
+    setToast(
+      fresh.length === 1
+        ? `New message from ${first.name || formatPhone(first.phone)}`
+        : `${fresh.length} new chats need a reply`
+    )
+  }
+
   const loadThreads = useCallback(
     async (quiet = false) => {
       if (!quiet) setLoading(true)
@@ -115,7 +150,9 @@ export default function ChatWorkspace({
         const res = await fetch(withBranch(endpoint), { cache: 'no-store' })
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data?.error || 'Could not load conversations')
-        setThreads(Array.isArray(data.threads) ? data.threads : [])
+        const next: ChatThread[] = Array.isArray(data.threads) ? data.threads : []
+        setThreads(next)
+        announceNewChats(next)
         setError('')
       } catch (err) {
         if (!quiet) setError(err instanceof Error ? err.message : 'Could not load conversations')
@@ -185,15 +222,37 @@ export default function ChatWorkspace({
     setVisibleCount(80)
   }, [selectedPhone])
 
+  // Muted preference + a first user gesture to unlock the alert sound.
   useEffect(() => {
-    if (!selectedPhone || !detail) return
-    const timer = setInterval(() => {
+    setMuted(isChatMuted())
+    const unlock = () => unlockChatAudio()
+    window.addEventListener('pointerdown', unlock, { once: true })
+    window.addEventListener('keydown', unlock, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', unlock)
+      window.removeEventListener('keydown', unlock)
+    }
+  }, [])
+
+  // Live inbox: poll even with nothing selected, and refresh the open thread.
+  useEffect(() => {
+    function tick() {
       if (document.visibilityState !== 'visible') return
       loadThreads(true)
-      loadDetail(selectedPhone, true)
-    }, 15_000)
-    return () => clearInterval(timer)
-  }, [selectedPhone, detail, loadThreads, loadDetail])
+      if (selectedPhone) loadDetail(selectedPhone, true)
+    }
+    const timer = setInterval(tick, 5_000)
+    window.addEventListener('focus', tick)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', tick)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [selectedPhone, loadThreads, loadDetail])
 
   useEffect(() => {
     if (!selectedPhone || !detail) return
@@ -548,6 +607,30 @@ export default function ChatWorkspace({
             <span className="h-1.5 w-1.5 animate-pulse-slow rounded-full bg-whatsapp-500" />
             Live
           </span>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !muted
+              setMuted(next)
+              setChatMuted(next)
+              if (!next) {
+                unlockChatAudio()
+                setToast('Sound alerts on')
+              } else {
+                setToast('Sound alerts muted')
+              }
+            }}
+            aria-pressed={muted}
+            title={muted ? 'New chat alerts are muted' : 'Mute new chat alerts'}
+            className={`flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold transition-colors ${
+              muted
+                ? 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100'
+                : 'border-gray-200 bg-white text-text-secondary hover:bg-surface'
+            }`}
+          >
+            {muted ? <BellOff className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{muted ? 'Muted' : 'Alerts'}</span>
+          </button>
           <button onClick={() => loadThreads()} className="btn-secondary h-8 px-3 text-[11px] font-semibold">
             Refresh
           </button>
@@ -659,7 +742,9 @@ export default function ChatWorkspace({
                     >
                       {initials(thread.phone)}
                       {thread.unread && (
-                        <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border-2 border-white bg-whatsapp-500" />
+                        <span className="absolute -right-1.5 -top-1.5 flex h-[16px] min-w-[16px] items-center justify-center rounded-full border-2 border-white bg-red-600 px-0.5 text-[9px] font-bold leading-none text-white tabular-nums">
+                          {Math.min(99, thread.unreadCount || 1)}
+                        </span>
                       )}
                     </div>
                     <div className="min-w-0 flex-1">

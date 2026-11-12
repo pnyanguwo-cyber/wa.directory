@@ -18,6 +18,14 @@ export async function GET(request: Request) {
 
   try {
     const params = new URL(request.url).searchParams
+    // Lightweight poll for the nav badge: numbers only, no transcripts.
+    if (params.get('summary')) {
+      const threads = await listAdminChats()
+      return NextResponse.json({
+        unread: threads.reduce((total, thread) => total + (thread.unreadCount || 0), 0),
+        chats: threads.filter(thread => thread.unread).length,
+      })
+    }
     const phone = params.get('phone') || ''
     const before = params.get('before') || ''
     if (phone) {

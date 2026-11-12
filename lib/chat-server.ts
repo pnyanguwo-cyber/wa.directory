@@ -115,10 +115,20 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const lastAnyByPhone = new Map<string, { at: string; dir: string }>()
   const lastTextByPhone = new Map<string, string>()
   const recentCount = new Map<string, number>()
+  const unreadByPhone = new Map<string, number>()
   for (const row of recent) {
     recentCount.set(row.phone, (recentCount.get(row.phone) || 0) + 1)
     if (!lastAnyByPhone.has(row.phone)) {
       lastAnyByPhone.set(row.phone, { at: row.created_at, dir: row.dir })
+    }
+    if (row.dir === 'in') {
+      // A chat is unread when its newest message is inbound and arrived after
+      // the admin last opened it. Comparing timestamps (not just "never read")
+      // is what keeps the counter alive for the second and third messages.
+      const readAt = flags.get(row.phone)?.last_read_at
+      if (!readAt || Date.parse(row.created_at) > Date.parse(readAt)) {
+        unreadByPhone.set(row.phone, (unreadByPhone.get(row.phone) || 0) + 1)
+      }
     }
     if (!lastTextByPhone.has(row.phone)) {
       const kind = (row.kind || 'text').toLowerCase()
@@ -186,7 +196,8 @@ export async function listAdminChats(): Promise<ChatThread[]> {
       firstAt: contact?.first_seen || session?.updated_at || null,
       status,
       blocked: !!flag?.blocked,
-      unread: !flag?.last_read_at && lastDir === 'in',
+      unread: !!unreadByPhone.get(phone),
+      unreadCount: unreadByPhone.get(phone) || 0,
       messageCount: Number(contact?.message_count || recentCount.get(phone) || 0),
       foundVia: log?.foundVia || '',
       businessName: business ? String(business.name || '') : '',

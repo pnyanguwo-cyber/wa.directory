@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { LogOut } from 'lucide-react'
 import PortalShell, { type ShellNavGroup } from '@/components/portal/shell'
@@ -27,6 +27,7 @@ import AdminAiUsage from '@/components/admin/admin-ai-usage'
 import AdminAiControls from '@/components/admin/admin-ai-controls'
 import AnalyticsPanel from '@/components/portal/analytics-view'
 import Splash from '@/components/splash'
+import { isChatMuted, playChatChime } from '@/lib/chat-notify'
 
 type Tab =
   | 'stats'
@@ -114,6 +115,65 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('stats')
   const [harvestPhone, setHarvestPhone] = useState('')
   const [loggingOut, setLoggingOut] = useState(false)
+  const [unreadChats, setUnreadChats] = useState(0)
+  const unreadRef = useRef(0)
+
+  // A new customer message can land while the admin is on Listings or Stats,
+  // so the badge and the chime live here, outside the Chats screen.
+  useEffect(() => {
+    let stopped = false
+    let baseline = false
+    async function poll() {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const res = await fetch('/api/admin/chats?summary=1', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        const next = Number(data?.unread) || 0
+        if (stopped) return
+        // The first poll only sets the baseline; it must not chirp.
+        if (baseline && next > unreadRef.current && !isChatMuted()) playChatChime()
+        baseline = true
+        unreadRef.current = next
+        setUnreadChats(next)
+      } catch {
+        // Offline or a flaky request: keep the last known count.
+      }
+    }
+    poll()
+    const timer = setInterval(poll, 10_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') poll()
+    }
+    window.addEventListener('focus', poll)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      stopped = true
+      clearInterval(timer)
+      window.removeEventListener('focus', poll)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
+
+  // Tab title carries the count too, so a background tab still tells you.
+  useEffect(() => {
+    if (unreadChats <= 0) return
+    const previous = document.title
+    document.title = `(${unreadChats}) New chat${unreadChats === 1 ? '' : 's'} · ${previous}`
+    return () => {
+      document.title = previous
+    }
+  }, [unreadChats])
+
+  const nav = useMemo<ShellNavGroup[]>(() => {
+    if (!unreadChats) return NAV
+    return NAV.map(group => ({
+      ...group,
+      items: group.items.map(item =>
+        item.id === 'chats' ? { ...item, badge: unreadChats, badgeTone: 'red' as const } : item
+      ),
+    }))
+  }, [unreadChats])
 
   async function logout() {
     if (loggingOut) return
@@ -129,7 +189,7 @@ export default function AdminPage() {
         brand="WA Directory"
         eyebrow="Directory Administration"
         subtitle="Review listings, conversations and training data."
-        nav={NAV}
+        nav={nav}
         activeId={tab}
         onNavigate={id => setTab(id as Tab)}
         fullBleed={FLUSH_TABS.includes(tab)}
