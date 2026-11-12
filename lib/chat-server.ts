@@ -1,9 +1,13 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { fetchBusinessesByIds } from '@/lib/business-select'
+import { logBotMessage } from '@/lib/bot-log'
+import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import {
   mergeMessages,
   normalizeMessage,
   normalizeMessages,
+  phoneDigits,
+  phoneVariants,
   readableValue,
   type ChatDetail,
   type ChatMessage,
@@ -22,8 +26,11 @@ type ChatFlag = {
   last_read_at: string | null
 }
 
-const FLAG_COLUMNS = 'phone, status, blocked, last_read_at'
+const FLAG_COLUMNS = 'phone, status, blocked, last_read_at, updated_at'
 
+// Older rows stored the number with a leading "+" while contacts and sessions
+// use bare digits. Key flags by digits and keep the freshest row so every
+// screen sees the same status for the same person.
 async function loadFlags(key: string): Promise<Map<string, ChatFlag>> {
   try {
     const { data, error } = await getSupabase()
@@ -32,16 +39,22 @@ async function loadFlags(key: string): Promise<Map<string, ChatFlag>> {
       .eq('scope', key)
       .limit(1000)
     if (error) return new Map()
-    return new Map(
-      (data || []).map(row => [
-        row.phone,
-        {
-          status: (row.status || 'active') as ChatFlag['status'],
-          blocked: !!row.blocked,
-          last_read_at: row.last_read_at,
-        },
-      ])
-    )
+    const flags = new Map<string, ChatFlag>()
+    const stamp = new Map<string, number>()
+    for (const row of data || []) {
+      const digits = phoneDigits(row.phone)
+      if (!digits) continue
+      const updated = row.updated_at ? Date.parse(row.updated_at) : 0
+      const current = stamp.get(digits)
+      if (current !== undefined && updated < current) continue
+      flags.set(digits, {
+        status: (row.status || 'active') as ChatFlag['status'],
+        blocked: !!row.blocked,
+        last_read_at: row.last_read_at,
+      })
+      stamp.set(digits, updated)
+    }
+    return flags
   } catch {
     return new Map()
   }
@@ -107,7 +120,16 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const recent = messagesRes.data || []
   const logs = logsRes.data || []
 
-  const sessionByPhone = new Map(sessions.map(row => [row.phone, row]))
+  const contactByPhone = new Map<string, (typeof contacts)[number]>()
+  for (const row of contacts) {
+    const digits = phoneDigits(row.phone)
+    if (digits && !contactByPhone.has(digits)) contactByPhone.set(digits, row)
+  }
+  const sessionByPhone = new Map<string, (typeof sessions)[number]>()
+  for (const row of sessions) {
+    const digits = phoneDigits(row.phone)
+    if (digits && !sessionByPhone.has(digits)) sessionByPhone.set(digits, row)
+  }
   // Rows are newest-first: track the latest activity for sorting/unread, but
   // pick the inbox preview from the latest message that carries real
   // conversation text — tap row ids ("list_publish"), reactions ("wamid…")
@@ -117,30 +139,32 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const recentCount = new Map<string, number>()
   const unreadByPhone = new Map<string, number>()
   for (const row of recent) {
-    recentCount.set(row.phone, (recentCount.get(row.phone) || 0) + 1)
-    if (!lastAnyByPhone.has(row.phone)) {
-      lastAnyByPhone.set(row.phone, { at: row.created_at, dir: row.dir })
+    const digits = phoneDigits(row.phone)
+    if (!digits) continue
+    recentCount.set(digits, (recentCount.get(digits) || 0) + 1)
+    if (!lastAnyByPhone.has(digits)) {
+      lastAnyByPhone.set(digits, { at: row.created_at, dir: row.dir })
     }
     if (row.dir === 'in') {
       // A chat is unread when its newest message is inbound and arrived after
       // the admin last opened it. Comparing timestamps (not just "never read")
       // is what keeps the counter alive for the second and third messages.
-      const readAt = flags.get(row.phone)?.last_read_at
+      const readAt = flags.get(digits)?.last_read_at
       if (!readAt || Date.parse(row.created_at) > Date.parse(readAt)) {
-        unreadByPhone.set(row.phone, (unreadByPhone.get(row.phone) || 0) + 1)
+        unreadByPhone.set(digits, (unreadByPhone.get(digits) || 0) + 1)
       }
     }
-    if (!lastTextByPhone.has(row.phone)) {
+    if (!lastTextByPhone.has(digits)) {
       const kind = (row.kind || 'text').toLowerCase()
       if (kind !== 'tap' && kind !== 'reaction') {
         const message = normalizeMessage(
           { dir: row.dir, kind: row.kind, body: row.body, created_at: row.created_at },
           0,
-          row.phone
+          digits
         )
         const previewText = message.preview?.title && !message.text ? message.preview.title : message.text
         if (previewText && previewText !== 'Unsupported message') {
-          lastTextByPhone.set(row.phone, previewText.slice(0, 220))
+          lastTextByPhone.set(digits, previewText.slice(0, 220))
         }
       }
     }
@@ -148,8 +172,9 @@ export async function listAdminChats(): Promise<ChatThread[]> {
 
   const logByPhone = new Map<string, { foundVia: string; businessId: string | null; at: string }>()
   for (const row of logs) {
-    if (!logByPhone.has(row.customer_phone)) {
-      logByPhone.set(row.customer_phone, {
+    const digits = phoneDigits(row.customer_phone)
+    if (digits && !logByPhone.has(digits)) {
+      logByPhone.set(digits, {
         foundVia: row.found_via || '',
         businessId: row.business_id,
         at: row.updated_at,
@@ -162,8 +187,8 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const businessById = new Map(businesses.map(b => [String(b.id), b]))
 
   const phones = new Set<string>([
-    ...contacts.map(row => row.phone),
-    ...sessions.map(row => row.phone),
+    ...contactByPhone.keys(),
+    ...sessionByPhone.keys(),
     ...lastAnyByPhone.keys(),
     ...logByPhone.keys(),
   ])
@@ -171,7 +196,7 @@ export async function listAdminChats(): Promise<ChatThread[]> {
   const threads: ChatThread[] = []
   for (const phone of phones) {
     if (!phone) continue
-    const contact = contacts.find(row => row.phone === phone)
+    const contact = contactByPhone.get(phone)
     const session = sessionByPhone.get(phone)
     const lastAny = lastAnyByPhone.get(phone)
     const log = logByPhone.get(phone)
@@ -243,13 +268,15 @@ function firstResponseStats(messages: ChatMessage[]): { median: string; p90: str
 const ADMIN_MESSAGE_PAGE = 200
 
 export async function getAdminChat(phone: string, before = ''): Promise<ChatDetail | null> {
-  if (!phone) return null
+  const digits = phoneDigits(phone)
+  if (!digits) return null
+  const variants = phoneVariants(digits)
   const supabase = getSupabase()
 
   let messageQuery = supabase
     .from('bot_messages')
     .select('id, dir, kind, body, created_at')
-    .eq('phone', phone)
+    .in('phone', variants)
     .order('created_at', { ascending: false })
     .limit(ADMIN_MESSAGE_PAGE + 1)
   if (before) messageQuery = messageQuery.lt('created_at', before)
@@ -259,17 +286,19 @@ export async function getAdminChat(phone: string, before = ''): Promise<ChatDeta
     supabase
       .from('bot_contacts')
       .select('phone, name, first_seen, last_seen, message_count, last_step, opted_out')
-      .eq('phone', phone)
+      .in('phone', variants)
+      .limit(1)
       .maybeSingle(),
     supabase
       .from('chat_sessions')
       .select('phone, step, data, updated_at')
-      .eq('phone', phone)
+      .in('phone', variants)
+      .limit(1)
       .maybeSingle(),
     supabase
       .from('chat_logs')
       .select('id, customer_phone, business_id, found_via, messages, created_at, updated_at')
-      .eq('customer_phone', phone)
+      .in('customer_phone', variants)
       .order('updated_at', { ascending: false })
       .limit(20),
     loadFlags('admin'),
@@ -279,17 +308,17 @@ export async function getAdminChat(phone: string, before = ''): Promise<ChatDeta
   const hasMore = fetched.length > ADMIN_MESSAGE_PAGE
   const rows = fetched.slice(0, ADMIN_MESSAGE_PAGE).slice().reverse()
   const nextBefore = hasMore && rows.length ? String(rows[0].created_at || '') || null : null
-  let messages = normalizeMessages(rows, phone)
+  let messages = normalizeMessages(rows, digits)
   const logs = logsRes.data || []
 
   // Older conversations predate bot_messages: fall back to chat_logs copies.
   if (!messages.length && !before && logs.length) {
-    messages = mergeMessages(logs.map(log => normalizeMessages(log.messages, phone)))
+    messages = mergeMessages(logs.map(log => normalizeMessages(log.messages, digits)))
   }
 
   const contact = contactRes.data
   const session = sessionRes.data
-  const flag = flags.get(phone)
+  const flag = flags.get(digits)
   const latestLog = logs[0]
   const businessIds = [...new Set(logs.map(log => log.business_id).filter(Boolean))] as string[]
   const businesses = await fetchBusinessIdsSafe(businessIds)
@@ -302,8 +331,8 @@ export async function getAdminChat(phone: string, before = ''): Promise<ChatDeta
   const location = cityFromSession(session?.data) || (business?.city as string) || ''
 
   const thread: ChatThread = {
-    id: phone,
-    phone,
+    id: digits,
+    phone: digits,
     name: contact?.name || '',
     lastText: last?.text || (session?.step ? `Bot step: ${session.step}` : 'No transcript yet'),
     lastAt: last?.at || contact?.last_seen || session?.updated_at || null,
@@ -331,6 +360,10 @@ export async function getAdminChat(phone: string, before = ''): Promise<ChatDeta
     ? (session.data as Record<string, unknown>).held
     : null
   if (held) insights.push({ label: 'Session hold', value: 'Held by admin' })
+
+  const lastInboundAt = [...messages].reverse().find(message => message.direction === 'in')?.at
+  const replyWindowOpen =
+    !!lastInboundAt && Date.now() - Date.parse(lastInboundAt) < 24 * 3600_000
   if (latestLog?.found_via) insights.push({ label: 'Found via', value: latestLog.found_via })
   if (business) insights.push({ label: 'Business attributed', value: String(business.name || '—') })
 
@@ -341,12 +374,94 @@ export async function getAdminChat(phone: string, before = ''): Promise<ChatDeta
     nextBefore,
     location,
     insights,
-    canReply: false,
-    replyHint:
-      'Replies are sent from the WhatsApp Business app on your phone. This workspace is read-only to keep the bot conversation authoritative.',
+    canReply: replyWindowOpen,
+    replyHint: replyWindowOpen
+      ? 'Replies are sent from the directory WhatsApp number, and the bot pauses for this contact while you talk.'
+      : 'The 24-hour WhatsApp reply window has closed. Ask the customer to send a message, then reply here.',
     canBlock: true,
     canClear: true,
   }
+}
+
+/** Pause the bot for this contact so it cannot answer over an admin reply. */
+async function holdSession(phone: string) {
+  const digits = phoneDigits(phone)
+  if (!digits) return
+  const supabase = getSupabase()
+  const { data: existing } = await supabase
+    .from('chat_sessions')
+    .select('phone, step, data')
+    .in('phone', phoneVariants(digits))
+    .limit(1)
+    .maybeSingle()
+  const current = ((existing?.data || {}) as Record<string, unknown>)
+  if (current.held) return
+  const now = new Date().toISOString()
+  if (!existing) {
+    // Contacts with no live session still need a hold row, otherwise the bot
+    // would build a fresh unlocked session on their next message.
+    await supabase
+      .from('chat_sessions')
+      .upsert(
+        { phone: digits, step: '', data: { held: { at: now, notified: false } }, updated_at: now },
+        { onConflict: 'phone' }
+      )
+    return
+  }
+  await supabase
+    .from('chat_sessions')
+    .update({ step: existing.step, data: { ...current, held: { at: now, notified: false } }, updated_at: now })
+    .eq('phone', existing.phone)
+}
+
+/**
+ * Send a free-form reply to a customer from the admin chat screen.
+ * WhatsApp only delivers these inside the 24-hour customer service window, so
+ * the window is checked first and the failure is explained instead of guessed.
+ */
+export async function sendAdminReply(
+  phone: string,
+  message: string
+): Promise<{ ok: boolean; error?: string }> {
+  const digits = (phone || '').replace(/\D/g, '')
+  const text = (message || '').trim()
+  if (!digits) return { ok: false, error: 'This chat has no phone number to reply to.' }
+  if (!text) return { ok: false, error: 'Type a reply first.' }
+  if (text.length > 4000) return { ok: false, error: 'Keep the reply under 4000 characters.' }
+
+  const supabase = getSupabase()
+  let lastInbound: string | null = null
+  for (const key of [phone, digits]) {
+    const { data } = await supabase
+      .from('bot_messages')
+      .select('created_at')
+      .eq('phone', key)
+      .eq('dir', 'in')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (data?.created_at) {
+      lastInbound = data.created_at
+      break
+    }
+  }
+  if (!lastInbound || Date.now() - Date.parse(lastInbound) > 24 * 3600_000) {
+    return {
+      ok: false,
+      error:
+        'WhatsApp only allows a free reply within 24 hours of the customer\'s last message. Ask them to message first, then reply here.',
+    }
+  }
+
+  const delivered = await sendWhatsAppMessage(digits, text)
+  if (!delivered) {
+    return { ok: false, error: 'WhatsApp did not accept the message. Check the connection and try again.' }
+  }
+
+  await logBotMessage(digits, 'out', 'admin', text)
+  await updateChat('admin', digits, 'read').catch(() => {})
+  await holdSession(digits).catch(() => {})
+  return { ok: true }
 }
 
 async function fetchBusinessIdsSafe(ids: string[]): Promise<Map<string, Record<string, unknown>>> {
@@ -494,7 +609,8 @@ export async function updateChat(
   phone: string,
   action: ChatAction
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!phone) return { ok: false, error: 'Phone is required' }
+  const digits = phoneDigits(phone)
+  if (!digits) return { ok: false, error: 'Phone is required' }
   const now = new Date().toISOString()
   const patch =
     action === 'read' ? { last_read_at: now, updated_at: now } : ACTION_PATCH[action]?.(now)
@@ -503,7 +619,7 @@ export async function updateChat(
   try {
     const { error } = await getSupabase()
       .from('chat_flags')
-      .upsert({ scope: key, phone, ...patch }, { onConflict: 'scope,phone' })
+      .upsert({ scope: key, phone: digits, ...patch }, { onConflict: 'scope,phone' })
     if (error) {
       if (error.code === '42P01' || error.code === 'PGRST205') {
         return { ok: false, error: 'Chat management is not migrated yet. Apply migration 035.' }

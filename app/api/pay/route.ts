@@ -44,7 +44,9 @@ export async function POST(request: Request) {
     const adapters: PaymentAdapters = {
       initiateEcoCashPayment,
       logPaymentEvent: (p) => logPaymentEvent({ ...p, request }),
-      sendWhatsAppMessage: (phone, text) => sendWhatsAppMessage(phone, text).catch(() => {}),
+      sendWhatsAppMessage: async (phone, text) => {
+        await sendWhatsAppMessage(phone, text).catch(() => {})
+      },
     }
     const result = await createListingPayment(
       {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { adminGuard } from '@/lib/admin-auth'
-import { getAdminChat, listAdminChats, updateChat, type ChatAction } from '@/lib/chat-server'
+import { getAdminChat, listAdminChats, sendAdminReply, updateChat, type ChatAction } from '@/lib/chat-server'
 
 const ACTIONS: ChatAction[] = [
   'read',
@@ -40,6 +40,22 @@ export async function GET(request: Request) {
       { error: error instanceof Error ? error.message : 'Could not load conversations' },
       { status: 500 }
     )
+  }
+}
+
+export async function POST(request: Request) {
+  const denied = adminGuard()
+  if (denied) return denied
+
+  try {
+    const body = await request.json()
+    const phone = typeof body.phone === 'string' ? body.phone : ''
+    const message = typeof body.message === 'string' ? body.message : ''
+    const result = await sendAdminReply(phone, message)
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 })
+    return NextResponse.json({ success: true })
+  } catch {
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 }
 

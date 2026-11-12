@@ -476,6 +476,13 @@ export function phoneDigits(raw: string | null | undefined): string {
   return String(raw || '').replace(/[^0-9]/g, '')
 }
 
+/** Both storage shapes the bot has used for the same number ("2637…" and "+2637…"). */
+export function phoneVariants(raw: string | null | undefined): string[] {
+  const digits = phoneDigits(raw)
+  if (!digits) return []
+  return [...new Set([digits, `+${digits}`])]
+}
+
 export function initials(raw: string | null | undefined): string {
   const digits = phoneDigits(raw)
   return digits ? digits.slice(-2) : 'WA'

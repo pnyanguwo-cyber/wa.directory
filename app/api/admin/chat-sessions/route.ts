@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
-import { isAdmin } from '@/lib/admin-auth'
 import { adminGuard } from '@/lib/admin-auth'
+import { phoneDigits, phoneVariants } from '@/lib/chat'
 
 export async function GET(request: Request) {
   const denied = adminGuard()
@@ -40,15 +40,32 @@ export async function PATCH(request: Request) {
       )
     }
 
+    // Sessions and inbox rows have disagreed on the leading "+" before, so
+    // look the contact up in both shapes before creating anything.
+    const digits = phoneDigits(phone)
+    if (!digits) return NextResponse.json({ error: 'phone is required' }, { status: 400 })
     const supabase = getSupabase()
     const { data: existing, error: readErr } = await supabase
       .from('chat_sessions')
       .select('*')
-      .eq('phone', phone)
+      .in('phone', phoneVariants(digits))
+      .limit(1)
       .maybeSingle()
     if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 })
+
+    const now = new Date().toISOString()
+    if (!existing && action === 'release') {
+      // Nothing stored means nothing is held - releasing should not error.
+      return NextResponse.json({ session: null, released: true })
+    }
     if (!existing) {
-      return NextResponse.json({ error: 'Session not found' }, { status: 404 })
+      const { data, error } = await supabase
+        .from('chat_sessions')
+        .insert({ phone: digits, step: '', data: { held: { at: now, notified: false } }, updated_at: now })
+        .select()
+        .single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ session: data, created: true })
     }
 
     // The bot preserves other jsonb fields (paused, etc.) on its own saves,
@@ -56,13 +73,13 @@ export async function PATCH(request: Request) {
     const current = (existing.data || {}) as Record<string, unknown>
     const nextData =
       action === 'hold'
-        ? { ...current, held: { at: new Date().toISOString(), notified: false } }
+        ? { ...current, held: { at: now, notified: false } }
         : { ...current, held: null }
 
     const { data, error } = await supabase
       .from('chat_sessions')
-      .update({ step: existing.step, data: nextData, updated_at: new Date().toISOString() })
-      .eq('phone', phone)
+      .update({ step: existing.step, data: nextData, updated_at: now })
+      .eq('phone', existing.phone)
       .select()
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -81,9 +98,21 @@ export async function DELETE(request: Request) {
     const { phone } = await request.json()
     if (!phone) return NextResponse.json({ error: 'phone is required' }, { status: 400 })
 
+    const digits = phoneDigits(phone)
+    if (!digits) return NextResponse.json({ error: 'phone is required' }, { status: 400 })
     const supabase = getSupabase()
-    const { error } = await supabase.from('chat_sessions').delete().eq('phone', phone)
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .in('phone', phoneVariants(digits))
+      .select('phone')
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data?.length) {
+      return NextResponse.json(
+        { error: 'This chat has no live bot session to clear - its transcript is already kept.' },
+        { status: 404 }
+      )
+    }
 
     return NextResponse.json({ success: true })
   } catch {

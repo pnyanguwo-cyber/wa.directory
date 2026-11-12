@@ -43,7 +43,7 @@ function chatMessageKey(message: ChatMessage): string {
   return `${message.id}|${message.at || ''}|${message.direction}`
 }
 
-type Filter = 'all' | 'active' | 'archived'
+type Filter = 'all' | 'unread' | 'active' | 'archived'
 type Action =
   | 'read'
   | 'resolve'
@@ -95,6 +95,8 @@ export default function ChatWorkspace({
   const [detailError, setDetailError] = useState('')
   const [visibleCount, setVisibleCount] = useState(80)
   const [busy, setBusy] = useState('')
+  const [reply, setReply] = useState('')
+  const [sending, setSending] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [confirm, setConfirm] = useState<ConfirmState | null>(null)
@@ -286,6 +288,7 @@ export default function ChatWorkspace({
 
   async function selectThread(phone: string) {
     setSelectedPhone(phone)
+    setReply('')
     setMoreOpen(false)
     setDetail(null)
     setDetailsOpen(false)
@@ -297,6 +300,30 @@ export default function ChatWorkspace({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ phone, action: 'read', branch_id: branchId }),
     }).catch(() => {})
+  }
+
+  async function sendReply() {
+    if (!selectedPhone || sending) return
+    const message = reply.trim()
+    if (!message) return
+    setSending(true)
+    try {
+      const res = await fetch(withBranch(endpoint), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: selectedPhone, message }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Could not send the reply')
+      setReply('')
+      setToast('Reply sent')
+      await loadDetail(selectedPhone, true)
+      loadThreads(true)
+    } catch (err) {
+      setToast(err instanceof Error ? err.message : 'Could not send the reply')
+    } finally {
+      setSending(false)
+    }
   }
 
   async function act(action: Action, phone = selectedPhone) {
@@ -436,6 +463,9 @@ export default function ChatWorkspace({
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase()
     return threads.filter(thread => {
+      // Archived chats leave the working inbox and live under their own tab.
+      if (filter === 'all' && thread.status === 'archived') return false
+      if (filter === 'unread' && !thread.unread) return false
       if (filter === 'active' && thread.status !== 'active') return false
       if (filter === 'archived' && thread.status !== 'archived') return false
       if (!term) return true
@@ -450,7 +480,7 @@ export default function ChatWorkspace({
 
   const counts = useMemo(
     () => ({
-      all: threads.length,
+      all: threads.filter(thread => thread.status !== 'archived').length,
       active: threads.filter(thread => thread.status === 'active').length,
       archived: threads.filter(thread => thread.status === 'archived').length,
       unread: threads.filter(thread => thread.unread).length,
@@ -670,6 +700,7 @@ export default function ChatWorkspace({
               {(
                 [
                   ['all', 'All Chats', counts.all],
+                  ['unread', 'Unread', counts.unread],
                   ['active', 'Active', counts.active],
                   ['archived', 'Archived', counts.archived],
                 ] as const
@@ -687,7 +718,13 @@ export default function ChatWorkspace({
                   }`}
                 >
                   {label}
-                  <span className="ml-1 text-[9.5px] opacity-70">{count}</span>
+                  {key === 'unread' && count > 0 ? (
+                    <span className="ml-1 inline-flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-none text-white tabular-nums">
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  ) : (
+                    <span className="ml-1 text-[9.5px] opacity-70">{count}</span>
+                  )}
                 </button>
               ))}
               {(query || filter !== 'all') && (
@@ -1014,18 +1051,38 @@ export default function ChatWorkspace({
                   <form
                     onSubmit={event => {
                       event.preventDefault()
-                      setToast('Replies are not connected to the bot from this workspace yet.')
+                      void sendReply()
                     }}
-                    className="flex items-center gap-2"
+                    className="space-y-1"
                   >
-                    <textarea
-                      rows={1}
-                      placeholder="Type a reply…"
-                      className="h-9 flex-1 resize-none rounded-lg border border-gray-200 px-3 py-2 text-[11.5px] outline-none focus:border-whatsapp-400"
-                    />
-                    <button type="submit" className="flex h-9 w-9 items-center justify-center rounded-lg bg-whatsapp-500 text-white">
-                      <Send className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-end gap-2">
+                      <textarea
+                        rows={1}
+                        value={reply}
+                        onChange={event => setReply(event.target.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault()
+                            void sendReply()
+                          }
+                        }}
+                        maxLength={4000}
+                        placeholder={`Reply to ${selectedThread.name || formatPhone(selectedThread.phone)}…`}
+                        aria-label="Reply message"
+                        className="max-h-28 min-h-9 flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-[11.5px] outline-none focus:border-whatsapp-400"
+                      />
+                      <button
+                        type="submit"
+                        disabled={sending || !reply.trim()}
+                        aria-label="Send reply"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-whatsapp-500 text-white transition-colors hover:bg-whatsapp-600 disabled:opacity-40"
+                      >
+                        {sending ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="text-[9.5px] leading-relaxed text-gray-400">
+                      {detail?.replyHint || 'Sent from the directory WhatsApp number. Enter sends, Shift+Enter adds a line.'}
+                    </p>
                   </form>
                 ) : (
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">

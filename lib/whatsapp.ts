@@ -30,16 +30,16 @@ async function postToWhatsApp(phoneNumberId: string, accessToken: string, payloa
   }
 }
 
-export async function sendWhatsAppMessage(to: string, message: string, replyTo?: string) {
+export async function sendWhatsAppMessage(to: string, message: string, replyTo?: string): Promise<boolean> {
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
 
   if (!phoneNumberId || !accessToken) {
     console.warn('[whatsapp] Missing WHATSAPP_PHONE_NUMBER_ID or WHATSAPP_ACCESS_TOKEN')
-    return
+    return false
   }
 
-  await postToWhatsApp(phoneNumberId, accessToken, {
+  return postToWhatsApp(phoneNumberId, accessToken, {
     messaging_product: 'whatsapp',
     to,
     type: 'text',
