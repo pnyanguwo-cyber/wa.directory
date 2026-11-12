@@ -493,7 +493,7 @@ export async function listBusinessChats(
   for (const log of logs || []) {
     const messages = normalizeMessages(log.messages, log.customer_phone)
     const last = messages[messages.length - 1]
-    const flag = flags.get(log.customer_phone)
+    const flag = flags.get(phoneDigits(log.customer_phone))
     const unreadLast = last?.direction === 'in'
     const lastAt = last?.at || log.updated_at
     threads.push({
@@ -542,7 +542,7 @@ export async function getBusinessChat(
   if (!log) return null
 
   const messages = normalizeMessages(log.messages, phone)
-  const flag = flags.get(phone)
+  const flag = flags.get(phoneDigits(phone))
   const last = messages[messages.length - 1]
   const inbound = messages.filter(message => message.direction === 'in').length
   const outbound = messages.filter(message => message.direction === 'out').length
