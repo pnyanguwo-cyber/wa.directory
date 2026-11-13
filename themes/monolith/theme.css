@@ -1,0 +1,931 @@
+/* ==========================================================================
+   Monolith theme — theme.css
+   Scope: everything lives under `.mono-root` (matches data-theme="monolith").
+   Self-contained: no html/body/:root selectors, no external CSS.
+   Colours come from inline custom properties set by theme/index.tsx:
+     --mono-head/--mono-body (fonts), --mono-accent, --mono-soft,
+     --mono-muted, --mono-glow, --mono-cta-ink, --mono-header-bg/-ink,
+     --mono-hero-bg/-ink, --mono-shop-bg/-ink, --mono-contact-bg/-ink/-cta
+   Orientation variants are driven by [data-orient='immersive'|'stacked'].
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Root + static tokens
+   -------------------------------------------------------------------------- */
+.mono-root {
+  --mono-surface: #ffffff;
+  --mono-ink: #111b21;
+  --mono-ink-muted: rgba(17, 27, 33, 0.62);
+  --mono-hairline: rgba(17, 27, 33, 0.1);
+  --mono-radius: 0px;
+
+  position: relative;
+  background: #f7f5f0;
+  color: var(--mono-ink);
+  font-family: var(--mono-body, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Scoped resets — the theme must render standalone (no global reset assumed) */
+.mono-root *,
+.mono-root *::before,
+.mono-root *::after {
+  box-sizing: border-box;
+}
+.mono-root img {
+  max-width: 100%;
+  display: block;
+}
+.mono-root a {
+  color: inherit;
+}
+.mono-root h1,
+.mono-root h2,
+.mono-root h3,
+.mono-root h4 {
+  margin: 0;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+}
+.mono-root p {
+  margin: 0;
+}
+.mono-root ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mono-root blockquote {
+  margin: 0;
+}
+.mono-root figure {
+  margin: 0;
+}
+.mono-root details {
+  margin: 0;
+}
+.mono-root summary {
+  margin: 0;
+  cursor: pointer;
+}
+.mono-root [id] {
+  scroll-margin-top: 76px;
+}
+
+/* --------------------------------------------------------------------------
+   Layout containers
+   -------------------------------------------------------------------------- */
+.mono-container {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2rem);
+}
+
+.mono-section {
+  padding-block: clamp(4rem, 8vw, 6rem);
+}
+.mono-section--gallery {
+  padding-bottom: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Section head
+   -------------------------------------------------------------------------- */
+.mono-section__head {
+  max-width: 680px;
+  margin-bottom: clamp(2rem, 4vw, 2.75rem);
+}
+.mono-eyebrow {
+  margin-bottom: 0.75rem;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--mono-accent);
+}
+.mono-section__title {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+}
+.mono-section__lede {
+  margin-top: 0.75rem;
+  max-width: 56ch;
+  font-size: 1rem;
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Buttons
+   -------------------------------------------------------------------------- */
+.mono-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.25rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: var(--mono-radius);
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+.mono-btn:focus-visible {
+  outline: 2px solid var(--mono-accent);
+  outline-offset: 2px;
+}
+.mono-btn--cta {
+  background: var(--mono-accent);
+  color: var(--mono-cta-ink);
+}
+.mono-btn--cta:hover {
+  background: color-mix(in srgb, var(--mono-accent) 85%, #000000);
+}
+.mono-btn--soft {
+  background: color-mix(in srgb, var(--mono-accent) 10%, transparent);
+  color: var(--mono-accent);
+}
+.mono-btn--soft:hover {
+  background: color-mix(in srgb, var(--mono-accent) 16%, transparent);
+}
+.mono-btn--ghost {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--mono-hero-ink) 35%, transparent);
+  color: var(--mono-hero-ink);
+}
+.mono-btn--ghost:hover {
+  border-color: var(--mono-hero-ink);
+  background: color-mix(in srgb, var(--mono-hero-ink) 10%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Chips (category / status / open-hours)
+   -------------------------------------------------------------------------- */
+.mono-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+  background: rgba(17, 27, 33, 0.06);
+  border-radius: var(--mono-radius);
+}
+.mono-chip--ok {
+  background: color-mix(in srgb, #15803d 12%, transparent);
+  color: #15803d;
+}
+.mono-chip--warn {
+  background: color-mix(in srgb, #b45309 14%, transparent);
+  color: #b45309;
+}
+.mono-chip--off {
+  background: rgba(17, 27, 33, 0.08);
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Verified badge (mirrors atlas conventions, mono naming)
+   -------------------------------------------------------------------------- */
+.mono-verified {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}
+.mono-verified__bg {
+  fill: var(--mono-accent, #0f766e);
+}
+.mono-verified__check {
+  stroke: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Stars (mirrors atlas conventions, mono naming)
+   -------------------------------------------------------------------------- */
+.mono-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.mono-star {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  fill: rgba(17, 27, 33, 0.18);
+}
+.mono-star--fill {
+  fill: var(--mono-accent, #0f766e);
+}
+.mono-hero--dark .mono-star {
+  fill: rgba(255, 255, 255, 0.25);
+}
+.mono-hero--dark .mono-star--fill {
+  fill: var(--mono-accent, #0f766e);
+}
+
+/* --------------------------------------------------------------------------
+   Placeholder (media fallback)
+   -------------------------------------------------------------------------- */
+.mono-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: rgba(17, 27, 33, 0.06);
+  color: var(--mono-ink-muted);
+}
+.mono-placeholder--dark {
+  background: #1a2429;
+  color: rgba(255, 255, 255, 0.65);
+}
+.mono-placeholder__initials {
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.mono-placeholder__category {
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.mono-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  color: var(--mono-header-ink);
+  background: color-mix(in srgb, var(--mono-header-bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid color-mix(in srgb, var(--mono-header-ink) 12%, transparent);
+}
+.mono-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding: 0.9rem clamp(1.25rem, 4vw, 2rem);
+}
+.mono-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: inherit;
+  text-decoration: none;
+}
+.mono-brand__logo {
+  width: 2rem;
+  height: 2rem;
+  object-fit: cover;
+  border-radius: var(--mono-radius);
+}
+.mono-brand__monogram {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--mono-accent);
+  color: var(--mono-cta-ink);
+  border-radius: var(--mono-radius);
+}
+.mono-brand__name {
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.mono-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin-left: auto;
+}
+.mono-nav a {
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: color-mix(in srgb, var(--mono-header-ink) 75%, transparent);
+}
+.mono-nav a:hover {
+  color: var(--mono-header-ink);
+}
+.mono-nav a:focus-visible {
+  outline: 2px solid var(--mono-accent);
+  outline-offset: 2px;
+}
+.mono-header__cta {
+  flex: none;
+}
+
+/* Immersive: header floats over the hero instead of pushing content down */
+[data-orient='immersive'] .mono-header {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-bottom-color: transparent;
+}
+
+/* --------------------------------------------------------------------------
+   Hero
+   Base rules serve `stacked`; `immersive` overrides below via [data-orient].
+   -------------------------------------------------------------------------- */
+.mono-hero {
+  position: relative;
+  overflow: hidden;
+}
+.mono-hero__media {
+  position: relative;
+}
+.mono-hero__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.mono-hero__wash {
+  position: absolute;
+  inset: 0;
+}
+.mono-hero--dark .mono-hero__media::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), transparent 40%, rgba(0, 0, 0, 0.55));
+}
+.mono-hero__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 1120px;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2rem);
+}
+.mono-hero__content {
+  max-width: 720px;
+}
+.mono-hero__title {
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+}
+.mono-hero__title .mono-verified {
+  margin-left: 0.35rem;
+}
+.mono-hero__lede {
+  margin-top: 1rem;
+  font-size: clamp(1.05rem, 2vw, 1.25rem);
+  color: color-mix(in srgb, var(--mono-hero-ink) 75%, transparent);
+}
+.mono-hero__rating {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.25rem;
+  font-size: 0.95rem;
+  color: color-mix(in srgb, var(--mono-hero-ink) 78%, transparent);
+}
+.mono-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+/* Stacked: media is a banner above the text block */
+[data-orient='stacked'] .mono-hero__media {
+  aspect-ratio: 21 / 9;
+}
+[data-orient='stacked'] .mono-hero__inner {
+  padding-block: clamp(3rem, 6vw, 4.5rem);
+}
+
+/* Immersive: media is a full-bleed cover behind the statement */
+[data-orient='immersive'] .mono-hero {
+  display: flex;
+  align-items: center;
+  min-height: clamp(640px, 88vh, 820px);
+}
+[data-orient='immersive'] .mono-hero__media {
+  position: absolute;
+  inset: 0;
+}
+[data-orient='immersive'] .mono-hero__inner {
+  padding-block: 7rem;
+}
+
+/* --------------------------------------------------------------------------
+   Stats strip
+   -------------------------------------------------------------------------- */
+.mono-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 2rem;
+}
+.mono-stat__value {
+  display: block;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: clamp(2rem, 4vw, 3rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--mono-accent);
+}
+.mono-stat__label {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Services — numbered editorial rows
+   -------------------------------------------------------------------------- */
+.mono-services {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--mono-hairline);
+}
+.mono-service {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(1rem, 3vw, 2.5rem);
+  padding-block: 1.4rem;
+  border-bottom: 1px solid var(--mono-hairline);
+}
+.mono-service__num {
+  flex: none;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--mono-accent);
+}
+.mono-service__label {
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: clamp(1.15rem, 2.2vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* --------------------------------------------------------------------------
+   Shop — per-item WhatsApp ordering, no cart
+   -------------------------------------------------------------------------- */
+.mono-section--shop {
+  background: var(--mono-shop-bg);
+  color: var(--mono-shop-ink);
+}
+.mono-shop__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+.mono-shop__more {
+  margin-top: 2.5rem;
+}
+.mono-item {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--mono-surface);
+  border: 1px solid var(--mono-hairline);
+}
+.mono-item__media {
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: rgba(17, 27, 33, 0.04);
+}
+.mono-item__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+.mono-item:hover .mono-item__media img {
+  transform: scale(1.04);
+}
+.mono-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex: 1;
+  padding: 1.25rem;
+}
+.mono-item__name {
+  font-size: 1.15rem;
+}
+.mono-item__desc {
+  font-size: 0.9rem;
+  color: var(--mono-ink-muted);
+}
+.mono-item__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: auto;
+  padding: 0 1.25rem 1.25rem;
+}
+.mono-item__price {
+  margin-right: auto;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.mono-item__order {
+  flex: none;
+}
+
+/* Dark shop variant */
+.mono-shop--dark .mono-section__title {
+  color: #ffffff;
+}
+.mono-shop--dark .mono-section__lede {
+  color: rgba(255, 255, 255, 0.6);
+}
+.mono-shop--dark .mono-item {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.mono-shop--dark .mono-item__media {
+  background: rgba(255, 255, 255, 0.06);
+}
+.mono-shop--dark .mono-item__desc {
+  color: rgba(255, 255, 255, 0.6);
+}
+.mono-shop--dark .mono-item__price {
+  color: #ffffff;
+}
+.mono-shop--dark .mono-chip {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+.mono-shop--dark .mono-chip--ok {
+  background: color-mix(in srgb, #4ade80 16%, transparent);
+  color: #4ade80;
+}
+.mono-shop--dark .mono-chip--warn {
+  background: color-mix(in srgb, #fbbf24 16%, transparent);
+  color: #fbbf24;
+}
+.mono-shop--dark .mono-chip--off {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+}
+.mono-shop--dark .mono-btn--soft {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.mono-shop--dark .mono-btn--soft:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* --------------------------------------------------------------------------
+   Gallery — full-bleed 1:1 mosaic (mono-gallery sits outside the container)
+   -------------------------------------------------------------------------- */
+.mono-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px;
+}
+.mono-gallery__frame {
+  margin: 0;
+  overflow: hidden;
+  background: #e5e2da;
+}
+.mono-gallery__frame img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  transition: transform 0.45s ease;
+}
+.mono-gallery__frame:hover img {
+  transform: scale(1.04);
+}
+
+/* --------------------------------------------------------------------------
+   Reviews — plain editorial blockquotes
+   -------------------------------------------------------------------------- */
+.mono-reviews {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+.mono-review {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.75rem;
+  border: 1px solid var(--mono-hairline);
+  background: var(--mono-surface);
+}
+.mono-review__comment {
+  flex: 1;
+  line-height: 1.65;
+}
+.mono-review__foot {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--mono-ink-muted);
+}
+.mono-review__name {
+  color: var(--mono-ink);
+  font-weight: 700;
+}
+
+/* --------------------------------------------------------------------------
+   FAQ — hairline accordion
+   -------------------------------------------------------------------------- */
+.mono-faq {
+  border-top: 1px solid var(--mono-hairline);
+}
+.mono-faq__entry {
+  border-bottom: 1px solid var(--mono-hairline);
+}
+.mono-faq__entry summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 0;
+  list-style: none;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.mono-faq__entry summary::-webkit-details-marker {
+  display: none;
+}
+.mono-faq__entry summary::after {
+  content: '+';
+  flex: none;
+  color: var(--mono-accent);
+  font-size: 1.35rem;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+.mono-faq__entry[open] summary::after {
+  transform: rotate(45deg);
+}
+.mono-faq__entry p {
+  margin: 0 0 1.25rem;
+  max-width: 62ch;
+  color: var(--mono-ink-muted);
+  line-height: 1.65;
+}
+
+/* --------------------------------------------------------------------------
+   Hours
+   -------------------------------------------------------------------------- */
+.mono-hours {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 480px;
+}
+.mono-hours__list {
+  border-top: 1px solid var(--mono-hairline);
+}
+.mono-hours__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-block: 0.9rem;
+  border-bottom: 1px solid var(--mono-hairline);
+  font-size: 0.95rem;
+}
+.mono-hours__day {
+  font-weight: 600;
+}
+.mono-hours__time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Contact — rows + social links (mono-contact--dark sits on the section)
+   -------------------------------------------------------------------------- */
+.mono-section--contact.mono-contact--dark {
+  background: var(--mono-contact-bg);
+  color: var(--mono-contact-ink);
+}
+.mono-contact__card {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  border: 1px solid var(--mono-hairline);
+  background: var(--mono-surface);
+}
+.mono-contact__rows {
+  display: flex;
+  flex-direction: column;
+}
+.mono-contact__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.75rem 1rem;
+  padding-block: 1rem;
+  border-bottom: 1px solid var(--mono-hairline);
+}
+.mono-contact__row:first-child {
+  padding-top: 0;
+}
+.mono-contact__label {
+  flex: 0 0 84px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--mono-ink-muted);
+}
+.mono-contact__value {
+  font-size: 1rem;
+  text-decoration: none;
+}
+a.mono-contact__value:hover {
+  text-decoration: underline;
+}
+.mono-contact__action {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--mono-accent);
+  text-decoration: none;
+}
+.mono-contact__action:hover {
+  text-decoration: underline;
+}
+.mono-contact__socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+.mono-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--mono-hairline);
+  color: inherit;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+.mono-social svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.mono-social:hover {
+  background: var(--mono-accent);
+  border-color: var(--mono-accent);
+  color: var(--mono-cta-ink);
+}
+.mono-contact--dark .mono-contact__card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.mono-contact--dark .mono-contact__row {
+  border-bottom-color: rgba(255, 255, 255, 0.12);
+}
+.mono-contact--dark .mono-contact__label {
+  color: rgba(255, 255, 255, 0.55);
+}
+.mono-contact--dark .mono-contact__action {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+.mono-footer {
+  background: #111b21;
+  color: rgba(255, 255, 255, 0.72);
+  padding: clamp(2.5rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 2rem);
+}
+.mono-footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1.5rem 3rem;
+  max-width: 1120px;
+  margin-inline: auto;
+}
+.mono-footer__brand {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.mono-footer__name {
+  color: #ffffff;
+  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.mono-footer__meta {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+.mono-footer__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.82rem;
+}
+.mono-footer__nav a {
+  color: rgba(255, 255, 255, 0.7);
+  text-decoration: none;
+}
+.mono-footer__nav a:hover {
+  color: #ffffff;
+}
+.mono-footer__legal {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+   -------------------------------------------------------------------------- */
+@media (max-width: 860px) {
+  .mono-nav {
+    display: none;
+  }
+}
+@media (max-width: 720px) {
+  [data-orient='stacked'] .mono-hero__media {
+    aspect-ratio: 4 / 3;
+  }
+  .mono-root[data-orient='immersive'] .mono-hero {
+    min-height: 560px;
+  }
+  .mono-root[data-orient='immersive'] .mono-hero__inner {
+    padding-block: 5rem;
+  }
+  .mono-contact__row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  .mono-contact__action {
+    margin-left: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .mono-root *,
+  .mono-root *::before,
+  .mono-root *::after {
+    transition: none !important;
+  }
+  .mono-root img {
+    transform: none !important;
+  }
+}

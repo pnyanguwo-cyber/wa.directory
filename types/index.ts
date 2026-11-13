@@ -96,8 +96,8 @@ export interface SiteHoursEntry {
   close: string
 }
 
-// Choosable auto-website templates + font pairings (lib/site-design.ts).
-export type SiteDesignKey = 'classic' | 'maison' | 'bolt' | 'craft'
+// Choosable auto-website templates + font pairings (lib/site-design.ts, registry/websites.ts).
+export type SiteDesignKey = 'classic' | 'maison' | 'bolt' | 'craft' | 'atlas' | 'monolith' | 'market'
 export type SiteFontKey = 'modern' | 'editorial' | 'grotesk' | 'warm'
 
 export interface SiteContentBlocks {

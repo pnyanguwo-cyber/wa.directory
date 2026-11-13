@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
 import type { SiteHoursEntry, SiteFaqEntry, SiteContentBlocks } from '@/types'
+import type { WebsiteThemeMeta } from '@/registry/websites'
 
 type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
-type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string }
+type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string; orientation?: string }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const THEME_ROWS: { key: ThemeKey; label: string; hint: string }[] = [
@@ -45,6 +46,7 @@ function sortDays(rows: SiteHoursEntry[]): SiteHoursEntry[] {
 
 export default function PortalSite({
   businessId,
+  businessSlug,
   businessName,
   generateSite: generateSiteProp,
   siteHero,
@@ -53,8 +55,10 @@ export default function PortalSite({
   siteTheme,
   siteSocials,
   siteContent,
+  themeGallery,
 }: {
   businessId: string
+  businessSlug: string
   businessName: string
   generateSite: boolean
   siteHero: string
@@ -63,6 +67,7 @@ export default function PortalSite({
   siteTheme?: Partial<SiteTheme> | null
   siteSocials?: Partial<Record<SocialKey, string>> | null
   siteContent?: SiteContentBlocks | null
+  themeGallery?: WebsiteThemeMeta[] | null
 }) {
   const router = useRouter()
   const [hero, setHero] = useState(siteHero)
@@ -77,7 +82,9 @@ export default function PortalSite({
     accent: siteTheme?.accent || '',
     design: siteTheme?.design || '',
     font: siteTheme?.font || '',
+    orientation: siteTheme?.orientation || '',
   })
+  const [prevDesign, setPrevDesign] = useState('')
   const [socials, setSocials] = useState<Record<SocialKey, string>>({
     twitter: siteSocials?.twitter || '',
     instagram: siteSocials?.instagram || '',
@@ -155,16 +162,18 @@ export default function PortalSite({
     }
   }
 
-  async function handleSave(ai = false) {
+  async function handleSave(ai = false, overrides?: { theme?: SiteTheme }) {
     setBusy(true)
     setGenerating(ai)
     setError('')
     setNotice('')
     try {
+      const base = payload()
+      if (overrides?.theme) base.site_theme = overrides.theme
       const res = await fetch('/api/portal/site', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ai ? { ...payload(), generate_ai: true } : payload()),
+        body: JSON.stringify(ai ? { ...base, generate_ai: true } : base),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -194,6 +203,22 @@ export default function PortalSite({
     }
   }
 
+  function applyRegistryTheme(meta: WebsiteThemeMeta) {
+    if (busy) return
+    const next: SiteTheme = { ...theme, design: meta.id }
+    setPrevDesign(theme.design || 'classic')
+    setTheme(next)
+    handleSave(false, { theme: next })
+  }
+
+  function undoRegistryTheme() {
+    if (busy || !prevDesign) return
+    const next: SiteTheme = { ...theme, design: prevDesign === 'classic' ? '' : prevDesign }
+    setPrevDesign('')
+    setTheme(next)
+    handleSave(false, { theme: next })
+  }
+
   async function handleUpload(file: File) {
     if (file.size === 0) return
     if (file.size > 2 * 1024 * 1024) {
@@ -219,6 +244,8 @@ export default function PortalSite({
       if (uploadInput.current) uploadInput.current.value = ''
     }
   }
+
+  const activeRegistryMeta = themeGallery?.find(m => m.id === theme.design) || null
 
   return (
     <div className="space-y-6">
@@ -332,6 +359,73 @@ export default function PortalSite({
             )
           })}
         </div>
+        {themeGallery && themeGallery.length > 0 && (
+          <div className="mt-5 border-t border-gray-100 pt-5">
+            <h4 className="text-sm font-bold text-text-primary">Website themes</h4>
+            <p className="text-xs text-text-secondary mt-0.5 mb-3">
+              Full makeovers — a whole new layout, fonts and motion. Preview one on your live site, then apply it in one tap.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {themeGallery.map(meta => {
+                const active = theme.design === meta.id
+                return (
+                  <div
+                    key={meta.id}
+                    className={`rounded-xl border p-3 transition-all ${
+                      active
+                        ? 'border-whatsapp-500 bg-whatsapp-50 ring-1 ring-whatsapp-400'
+                        : 'border-gray-200/80 bg-surface hover:border-whatsapp-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-text-primary">{meta.name}</span>
+                      {active && <span aria-hidden="true">✓</span>}
+                    </div>
+                    <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{meta.description}</p>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {meta.orientations.map(o => (
+                        <span
+                          key={o}
+                          className="rounded-full bg-white border border-gray-200/80 px-2 py-0.5 text-[10px] font-medium text-text-secondary"
+                        >
+                          {o}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+                      <a
+                        href={`/site/${businessSlug}?theme=${meta.id}&preview=1`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs font-semibold text-whatsapp-600 underline underline-offset-2 hover:text-whatsapp-700"
+                      >
+                        Preview on your site ↗
+                      </a>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => applyRegistryTheme(meta)}
+                        className="rounded-full px-3 py-1.5 text-xs font-bold text-white bg-text-primary hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
+                      >
+                        {active ? 'Reapply' : 'Use this theme'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {prevDesign && (theme.design || 'classic') !== prevDesign && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={undoRegistryTheme}
+                className="mt-3 text-xs font-semibold text-text-secondary underline underline-offset-2 hover:text-text-primary disabled:opacity-50"
+              >
+                Undo — go back to {prevDesign}
+              </button>
+            )}
+          </div>
+        )}
         <label className="block mt-4">
           <span className="block text-xs font-semibold text-text-primary mb-1.5">Font pairing</span>
           <select
@@ -345,6 +439,22 @@ export default function PortalSite({
           </select>
           <span className="block text-xs text-text-secondary mt-1">Leave as the template default unless you have a brand font taste.</span>
         </label>
+        {activeRegistryMeta && (
+          <label className="block mt-4">
+            <span className="block text-xs font-semibold text-text-primary mb-1.5">Layout orientation</span>
+            <select
+              value={theme.orientation || ''}
+              onChange={(e) => setTheme((prev) => ({ ...prev, orientation: e.target.value }))}
+              className="input text-sm"
+            >
+              <option value="">Auto ({activeRegistryMeta.defaultOrientation})</option>
+              {activeRegistryMeta.orientations.map(o => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+            <span className="block text-xs text-text-secondary mt-1">How the theme arranges its hero and shop. Saved when you press Save website settings below.</span>
+          </label>
+        )}
         <p className="text-xs text-text-secondary mt-3">
           Changes go live when you press Save website settings below.
         </p>

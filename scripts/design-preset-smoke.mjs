@@ -73,6 +73,25 @@ if (!classicHead) { console.log('FAIL font-var: classic page missing --site-head
 else if (distinct.size < 3) { console.log(`FAIL font-var: expected ≥3 distinct heading fonts across presets, got ${distinct.size}`); exitCode = 1 }
 else console.log(`PASS font-var — ${distinct.size} distinct heading fonts across pages`)
 
+const registrySrc = readFileSync('registry/websites.ts', 'utf8')
+if (!registrySrc.includes('WEBSITE_THEMES')) { console.log('FAIL registry: WEBSITE_THEMES missing'); exitCode = 1 }
+else console.log('PASS registry — WEBSITE_THEMES declared (dormant)')
+
+const previewSrc = readFileSync('app/site-preview/[slug]/page.tsx', 'utf8')
+if (!previewSrc.includes('index: false') || !previewSrc.includes('follow: false')) { console.log('FAIL noindex: preview metadata missing robots directives'); exitCode = 1 }
+else console.log('PASS noindex — preview page sets robots index/follow false')
+
+const previewRes = await fetch(`${BASE}/site/${SLUG}?theme=atlas&preview=1`, { cache: 'no-store', redirect: 'manual' })
+if (previewRes.status === 200) { console.log('FAIL preview-auth: unauthenticated preview returned 200'); exitCode = 1 }
+else console.log(`PASS preview-auth — unauthenticated preview → HTTP ${previewRes.status}`)
+
+await supabase.from('businesses').update({ site_theme: { ...(original.site_theme || {}), design: 'atlas', orientation: 'sideways' } }).eq('slug', SLUG)
+const unknownRes = await fetch(`${BASE}/site/${SLUG}`, { cache: 'no-store' })
+const unknownHtml = await unknownRes.text()
+if (unknownRes.status !== 200) { console.log(`FAIL unknown-values HTTP ${unknownRes.status}`); exitCode = 1 }
+else if (!unknownHtml.includes('mbuya') && unknownHtml.length < 1000) { console.log('FAIL unknown-values: page body looks empty'); exitCode = 1 }
+else console.log('PASS unknown-values — live page renders 200 with unknown design/orientation')
+
 // Restore the owner's original theme.
 await supabase.from('businesses').update({ site_theme: original.site_theme }).eq('slug', SLUG)
 const { data: restored } = await supabase.from('businesses').select('site_theme').eq('slug', SLUG).maybeSingle()

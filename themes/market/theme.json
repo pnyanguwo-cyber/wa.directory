@@ -1,0 +1,14 @@
+{
+  "id": "market",
+  "name": "Market",
+  "version": "1.0.0",
+  "family": "market",
+  "description": "Warm market-stall feel with a catalogue-first shop, photo collage hero, soft badges and rounded cards.",
+  "orientations": ["catalogue", "stacked"],
+  "defaultOrientation": "catalogue",
+  "defaultFont": "warm",
+  "fonts": ["warm", "editorial", "modern", "grotesk"],
+  "supports": { "cart": true, "voiceOnly": true, "dark": true, "reducedMotion": true },
+  "sections": ["hero", "stats", "shop", "services", "gallery", "reviews", "faq", "hours", "contact"],
+  "preview": null
+}

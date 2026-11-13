@@ -52,6 +52,12 @@ async function verifyAdminToken(token: string): Promise<boolean> {
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname
 
+  if (path.startsWith('/site/') && request.nextUrl.searchParams.get('preview') === '1') {
+    const preview = request.nextUrl.clone()
+    preview.pathname = `/site-preview/${path.slice('/site/'.length)}`
+    return NextResponse.rewrite(preview)
+  }
+
   if (path.startsWith('/admin')) {
     const token = request.cookies.get(ADMIN_COOKIE)
     if (!token || !(await verifyAdminToken(token.value))) {
@@ -74,5 +80,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/portal/:path*'],
+  matcher: ['/admin/:path*', '/portal/:path*', '/site/:path*'],
 }

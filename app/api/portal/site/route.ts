@@ -4,16 +4,18 @@ import { getActingPortalBusiness } from '@/lib/portal'
 import { getSupabase } from '@/lib/supabase-server'
 import { parseSiteContent, generateSiteSections, generateSiteDesign } from '@/lib/site-content'
 import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
+import { WEBSITE_THEMES } from '@/registry/websites'
 import { imageLuminanceFromUrl } from '@/lib/image-luminance'
+import { ORIENTATIONS } from '@/lib/site-view'
 import type { SiteContentBlocks } from '@/types'
 
 const MAX_TEXT = 2000
 const MAX_EMAIL = 320
 
 // Whitelisted per-section theme keys; values must be '' (default) or strict #RRGGBB.
-const DESIGN_KEYS: string[] = SITE_DESIGNS.map(d => d.key)
+const DESIGN_KEYS: string[] = [...SITE_DESIGNS.map(d => d.key), ...Object.keys(WEBSITE_THEMES)]
 const FONT_KEYS: string[] = SITE_FONTS.map(f => f.key)
-const THEME_KEYS = ['header', 'hero', 'shop', 'contact', 'accent', 'design', 'font'] as const
+const THEME_KEYS = ['header', 'hero', 'shop', 'contact', 'accent', 'design', 'font', 'orientation'] as const
 type ThemeKey = (typeof THEME_KEYS)[number]
 const HEX_KEYS = ['header', 'hero', 'shop', 'contact', 'accent'] as const
 type HexKey = (typeof HEX_KEYS)[number]
@@ -22,7 +24,7 @@ const HEX_RE = /^#[0-9a-fA-F]{6}$/
 function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return null
   const src = input as Record<string, unknown>
-  const out: Record<ThemeKey, string> = { header: '', hero: '', shop: '', contact: '', accent: '', design: '', font: '' }
+  const out: Record<ThemeKey, string> = { header: '', hero: '', shop: '', contact: '', accent: '', design: '', font: '', orientation: '' }
   let touched = false
   for (const key of THEME_KEYS) {
     const raw = src[key]
@@ -32,6 +34,9 @@ function parseSiteTheme(input: unknown): Record<ThemeKey, string> | null {
       out[key] = v
       touched = true
     } else if (key === 'font' && (v === '' || FONT_KEYS.includes(v))) {
+      out[key] = v
+      touched = true
+    } else if (key === 'orientation' && (v === '' || (ORIENTATIONS as readonly string[]).includes(v))) {
       out[key] = v
       touched = true
     } else if ((HEX_KEYS as readonly string[]).includes(key)) {

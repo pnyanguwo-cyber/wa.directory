@@ -13,6 +13,9 @@ import { accentFor } from '@/lib/category-style'
 import { getPreset } from '@/lib/site-design'
 import { washForLuminance } from '@/lib/image-luminance'
 import { getFontPair } from '@/lib/site-fonts'
+import { resolveTheme } from '@/registry/websites'
+import { buildSiteView, type ThemeProps } from '@/lib/site-view'
+import type { ComponentType } from 'react'
 
 import Reveal from '@/components/site/reveal'
 import SiteNav from '@/components/site/site-nav'
@@ -123,6 +126,27 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   )
     .filter((r) => r.comment.trim())
     .slice(0, 6)
+
+  const site = await buildSiteView(business, itemList, testimonials)
+
+  const themeEntry = await resolveTheme(site.theme.design)
+  if (themeEntry) {
+    let Theme: ComponentType<ThemeProps> | null = null
+    try {
+      Theme = (await themeEntry.load()).default
+    } catch {
+      Theme = null
+    }
+    if (Theme) {
+      return (
+        <Theme
+          site={site}
+          orientation={site.theme.orientation || themeEntry.meta.defaultOrientation}
+          mode="live"
+        />
+      )
+    }
+  }
 
   const cleanCats = dedupeCategories(business.category)
   const content =

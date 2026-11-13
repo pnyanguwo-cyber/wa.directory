@@ -1,0 +1,19 @@
+{
+  "id": "monolith",
+  "name": "Monolith",
+  "version": "1.0.0",
+  "family": "monolith",
+  "description": "Bold single-brand statement layout with full-bleed galleries.",
+  "orientations": ["immersive", "stacked"],
+  "defaultOrientation": "immersive",
+  "defaultFont": "grotesk",
+  "fonts": ["modern", "editorial", "grotesk", "warm"],
+  "supports": {
+    "cart": false,
+    "voiceOnly": true,
+    "dark": true,
+    "reducedMotion": true
+  },
+  "sections": ["hero", "stats", "services", "shop", "gallery", "reviews", "faq", "hours", "contact"],
+  "preview": null
+}

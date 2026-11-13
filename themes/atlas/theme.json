@@ -1,0 +1,19 @@
+{
+  "id": "atlas",
+  "name": "Atlas",
+  "version": "1.0.0",
+  "family": "atlas",
+  "description": "Split editorial layout for service businesses.",
+  "orientations": ["split", "stacked"],
+  "defaultOrientation": "split",
+  "defaultFont": "grotesk",
+  "fonts": ["grotesk", "serif", "rounded", "display"],
+  "supports": {
+    "cart": false,
+    "voiceOnly": true,
+    "dark": true,
+    "reducedMotion": true
+  },
+  "sections": ["hero", "stats", "services", "shop", "gallery", "reviews", "faq", "hours", "contact"],
+  "preview": null
+}
