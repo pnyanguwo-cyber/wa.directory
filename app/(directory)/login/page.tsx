@@ -27,6 +27,26 @@ const SPINNER = (
   </svg>
 )
 
+const BACK_ICON = (
+  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+  </svg>
+)
+
+function BackButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full inline-flex items-center justify-center gap-1.5 border border-gray-200 bg-white/80 text-text-secondary rounded-full px-4 py-2 text-xs font-medium hover:border-whatsapp-400 hover:text-whatsapp-700 transition-colors disabled:opacity-60"
+    >
+      {BACK_ICON}
+      {label}
+    </button>
+  )
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [mode, setMode] = useState<Mode>('login')
@@ -324,14 +344,7 @@ export default function LoginPage() {
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              onClick={cancelChoice}
-              disabled={busy}
-              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium"
-            >
-              Back
-            </button>
+            <BackButton label="Back" onClick={cancelChoice} disabled={busy} />
           </div>
         )}
 
@@ -371,13 +384,6 @@ export default function LoginPage() {
           <form onSubmit={doLogin} className="space-y-4">
             <div className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5">
               <p>Signing in to <b>{selectedBusinessName}</b></p>
-              <button
-                type="button"
-                onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); setSelectedBusinessId(''); setSelectedBusinessName('') }}
-                className="mt-1 text-[11px] text-text-secondary hover:text-text-primary font-medium"
-              >
-                Use a different account
-              </button>
             </div>
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">Password</label>
@@ -429,6 +435,11 @@ export default function LoginPage() {
             >
               Forgot your password?
             </button>
+            <BackButton
+              label="Use a different account"
+              onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); setSelectedBusinessId(''); setSelectedBusinessName('') }}
+              disabled={busy}
+            />
           </form>
         )}
 
@@ -450,16 +461,7 @@ export default function LoginPage() {
               {busy && SPINNER}
               {busy ? 'Sending...' : 'Send Code'}
             </button>
-            <button
-              type="button"
-              onClick={() => setMode('login')}
-              className="w-full inline-flex items-center justify-center gap-1.5 bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 text-white rounded-full px-4 py-2 text-xs font-medium shadow-sm hover:from-whatsapp-600 hover:to-whatsapp-700 transition-all"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Back to login
-            </button>
+            <BackButton label="Back to login" onClick={() => setMode('login')} disabled={busy} />
           </form>
         )}
 
@@ -488,11 +490,17 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setMode('otp'); setOtp('') }}
-              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium"
+              onClick={() => doSendCode(undefined, selectedBusinessId || undefined)}
+              disabled={busy}
+              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium disabled:opacity-60"
             >
               Resend code
             </button>
+            <BackButton
+              label="Back"
+              onClick={() => { setMode('otp'); setOtp('') }}
+              disabled={busy}
+            />
           </form>
         )}
 
@@ -533,11 +541,17 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => setMode('forgot')}
-              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium"
+              onClick={() => doSendCode(undefined, selectedBusinessId || undefined)}
+              disabled={busy}
+              className="w-full text-center text-xs text-text-secondary hover:text-text-primary font-medium disabled:opacity-60"
             >
               Resend code
             </button>
+            <BackButton
+              label="Back"
+              onClick={() => { setMode('forgot'); setOtp('') }}
+              disabled={busy}
+            />
           </form>
         )}
 
