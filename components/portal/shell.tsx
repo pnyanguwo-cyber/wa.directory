@@ -269,7 +269,7 @@ export default function PortalShell({
           <aside className="hidden lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-2rem)] lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/80 lg:bg-white/95 lg:shadow-card">
             <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 py-3.5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500 text-white shadow-soft-glow">
-                <MessageCircle className="h-4.5 w-4.5" aria-hidden="true" />
+                <MessageCircle className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-[9.5px] font-bold uppercase tracking-[0.12em] text-whatsapp-700">{eyebrow}</p>
@@ -292,7 +292,7 @@ export default function PortalShell({
               <div className="absolute inset-y-0 left-0 flex w-[82vw] max-w-[300px] flex-col bg-white shadow-2xl">
                 <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 py-3.5">
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500 text-white">
-                    <MessageCircle className="h-4.5 w-4.5" aria-hidden="true" />
+                    <MessageCircle className="h-5 w-5" aria-hidden="true" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[9.5px] font-bold uppercase tracking-[0.12em] text-whatsapp-700">{eyebrow}</p>

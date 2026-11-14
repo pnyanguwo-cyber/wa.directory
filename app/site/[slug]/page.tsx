@@ -598,7 +598,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                     {[0, 1, 2, 3, 4].map((i) => (
                       <svg
                         key={i}
-                        className="w-4.5 h-4.5 drop-shadow-sm"
+                        className="w-5 h-5 drop-shadow-sm"
                         fill={i < Math.round(business.rating) ? 'currentColor' : 'rgba(0,0,0,0.14)'}
                         viewBox="0 0 24 24"
                         aria-hidden="true"
@@ -1056,7 +1056,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
                       title={SOCIAL_META[s.key].label}
                       className="w-10 h-10 rounded-2xl border border-current/25 flex items-center justify-center hover:bg-white/15 transition-all focus-visible:ring-2"
                     >
-                      <SocialIcon platform={s.key} className="w-4.5 h-4.5" />
+                      <SocialIcon platform={s.key} className="w-5 h-5" />
                     </a>
                   ))}
 
