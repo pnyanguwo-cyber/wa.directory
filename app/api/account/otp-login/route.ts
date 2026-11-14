@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs'
 import { setBusinessSession } from '@/lib/business-auth'
 import { getSupabase } from '@/lib/supabase-server'
 import {
-  findBusinessesByPhone,
+  findBusinessesByIdentifier,
   getBusinessAccounts,
   sortChoicesForDisplay,
   toBusinessChoice,
@@ -13,12 +13,18 @@ export async function POST(request: Request) {
   try {
     const { phone, otp, business_id } = await request.json()
     if (!phone || !otp) {
-      return NextResponse.json({ error: 'Phone and code are required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Phone number or username and code are required' },
+        { status: 400 }
+      )
     }
 
-    const matches = await findBusinessesByPhone(phone)
+    const matches = await findBusinessesByIdentifier(phone)
     if (matches.length === 0) {
-      return NextResponse.json({ error: 'No account found for this number.' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No account found for that phone number or username.' },
+        { status: 404 }
+      )
     }
 
     const scoped = business_id
@@ -27,7 +33,7 @@ export async function POST(request: Request) {
 
     if (scoped.length === 0) {
       return NextResponse.json(
-        { error: 'That business is not linked to this phone number.' },
+        { error: 'That business is not linked to this phone number or username.' },
         { status: 400 }
       )
     }

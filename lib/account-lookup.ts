@@ -1,11 +1,13 @@
 import { getSupabase } from '@/lib/supabase-server'
 import { normalizePhone } from '@/lib/business-auth'
+import { normalizeUsername } from '@/lib/username'
 
 export type PhoneBusiness = {
   id: string
   name: string
   slug: string | null
   phone: string | null
+  username: string | null
   branch_label: string | null
   is_hq: boolean | null
   verified: boolean | null
@@ -40,13 +42,32 @@ export async function findBusinessesByPhone(phone: string): Promise<PhoneBusines
   const given = normalizePhone(phone)
   const { data } = await getSupabase()
     .from('businesses')
-    .select('id, name, slug, phone, branch_label, is_hq, verified, created_at')
+    .select('id, name, slug, phone, username, branch_label, is_hq, verified, created_at')
     .order('created_at', { ascending: true })
     .limit(1000)
 
   return ((data || []) as PhoneBusiness[]).filter(
     business => normalizePhone(business.phone || '') === given
   )
+}
+
+export async function findBusinessesByIdentifier(input: string): Promise<PhoneBusiness[]> {
+  const raw = String(input || '').trim()
+  if (!raw) return []
+
+  const byPhone = await findBusinessesByPhone(raw)
+  if (byPhone.length > 0) return byPhone
+
+  const username = normalizeUsername(raw)
+  if (!username) return []
+
+  const { data } = await getSupabase()
+    .from('businesses')
+    .select('id, name, slug, phone, username, branch_label, is_hq, verified, created_at')
+    .eq('username', username)
+    .order('created_at', { ascending: true })
+
+  return ((data || []) as PhoneBusiness[])
 }
 
 

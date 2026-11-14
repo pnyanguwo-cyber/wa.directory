@@ -84,12 +84,12 @@ export default function LoginPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data.error || 'Could not find that number')
+        setError(data.error || 'Could not find that account')
         return
       }
       const list: BusinessChoice[] = data.businesses || []
       if (list.length === 0) {
-        setError('No account found for that number. List your business first.')
+        setError('No account found for that phone number or username. List your business first.')
         return
       }
       if (list.length === 1) {
@@ -266,7 +266,7 @@ export default function LoginPage() {
   }
 
   const headings: Record<Mode, { title: string; subtitle: string }> = {
-    login: { title: 'Business Login', subtitle: 'Enter the WhatsApp number linked to your listing' },
+    login: { title: 'Business Login', subtitle: 'Enter the phone number or username linked to your listing' },
     choose: { title: 'Choose a Business', subtitle: 'This number is linked to more than one listing' },
     password: { title: 'Enter Your Password', subtitle: 'Log in to the business you selected' },
     otp: { title: 'Log In With a Code', subtitle: 'A free one-time code is sent to your WhatsApp' },
@@ -338,19 +338,19 @@ export default function LoginPage() {
         {mode === 'login' && (
           <form onSubmit={lookupBusinesses} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">WhatsApp Phone Number</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Phone number or username</label>
               <input
-                type="tel"
+                type="text"
                 required
                 value={phone}
                 onChange={e => changePhone(e.target.value)}
                 className="input-field"
-                placeholder="077 379 1864 or +263 77 379 1864"
-                autoComplete="tel"
+                placeholder="Phone number / username"
+                autoComplete="username"
                 autoFocus
               />
               <p className="text-[11px] text-text-secondary mt-1">
-                077…, 26377… and +26377… all work (we recognise them as the same number).
+                Your WhatsApp number (077…, 26377… or +26377…) or your listing username.
               </p>
             </div>
             <button type="submit" disabled={busy} className="btn-primary w-full py-3 text-[15px] font-semibold flex items-center justify-center gap-2">
@@ -376,7 +376,7 @@ export default function LoginPage() {
                 onClick={() => { setMode('login'); setPassword(''); setError(''); setNotice(''); setSelectedBusinessId(''); setSelectedBusinessName('') }}
                 className="mt-1 text-[11px] text-text-secondary hover:text-text-primary font-medium"
               >
-                Use a different number
+                Use a different account
               </button>
             </div>
             <div>
@@ -435,14 +435,14 @@ export default function LoginPage() {
         {(mode === 'otp' || mode === 'forgot') && (
           <form onSubmit={doSendCode} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">WhatsApp Phone Number</label>
+              <label className="block text-sm font-medium text-text-primary mb-1.5">Phone number or username</label>
               <input
-                type="tel"
+                type="text"
                 required
                 value={phone}
                 onChange={e => changePhone(e.target.value)}
                 className="input-field"
-                placeholder="+263 77 123 4567"
+                placeholder="Phone number / username"
                 autoFocus
               />
             </div>

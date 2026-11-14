@@ -1,24 +1,24 @@
 import { NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { setBusinessSession } from '@/lib/business-auth'
-import { findBusinessesByPhone, getBusinessAccounts } from '@/lib/account-lookup'
+import { findBusinessesByIdentifier, getBusinessAccounts } from '@/lib/account-lookup'
 
 export async function POST(request: Request) {
   try {
     const { phone, password, business_id } = await request.json()
     if (!phone || !password || !business_id) {
       return NextResponse.json(
-        { error: 'Phone number, password and business are required' },
+        { error: 'Phone number or username, password and business are required' },
         { status: 400 }
       )
     }
 
-    const matches = await findBusinessesByPhone(phone)
+    const matches = await findBusinessesByIdentifier(phone)
     const business = matches.find(match => match.id === business_id)
 
     if (!business) {
       return NextResponse.json(
-        { error: 'That business is not linked to this phone number.' },
+        { error: 'That business is not linked to this phone number or username.' },
         { status: 400 }
       )
     }

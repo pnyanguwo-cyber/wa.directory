@@ -5,7 +5,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { normalizePhone } from '@/lib/business-auth'
 import { SITE_URL } from '@/lib/site-url'
 import {
-  findBusinessesByPhone,
+  findBusinessesByIdentifier,
   getBusinessAccounts,
   sortChoicesForDisplay,
   toBusinessChoice,
@@ -15,12 +15,15 @@ export async function POST(request: Request) {
   try {
     const { phone, business_id } = await request.json()
     if (!phone) {
-      return NextResponse.json({ error: 'Phone is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Phone number or username is required' }, { status: 400 })
     }
 
-    const matches = await findBusinessesByPhone(phone)
+    const matches = await findBusinessesByIdentifier(phone)
     if (matches.length === 0) {
-      return NextResponse.json({ error: 'No account found for this number.' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No account found for that phone number or username.' },
+        { status: 404 }
+      )
     }
 
     const accounts = await getBusinessAccounts(matches.map(business => business.id))
@@ -46,13 +49,13 @@ export async function POST(request: Request) {
 
     if (!match) {
       return NextResponse.json(
-        { error: 'That business is not linked to this phone number.' },
+        { error: 'That business is not linked to this phone number or username.' },
         { status: 400 }
       )
     }
 
     const account = accounts.get(match.id)
-    const given = normalizePhone(phone)
+    const given = match.phone || normalizePhone(phone)
 
     // A business registered through the WhatsApp bot never chose a password,
     // so there is no account row to store the OTP on. Sending the account

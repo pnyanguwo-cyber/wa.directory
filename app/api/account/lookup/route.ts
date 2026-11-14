@@ -1,26 +1,29 @@
 import { NextResponse } from 'next/server'
 import {
-  findBusinessesByPhone,
+  findBusinessesByIdentifier,
   getBusinessAccounts,
   sortChoicesForDisplay,
   toBusinessChoice,
 } from '@/lib/account-lookup'
 
-// Step 1 of login: resolve the WhatsApp number to the listing(s) on it.
+// Step 1 of login: resolve the phone number or username to the listing(s) on it.
 // The password is only checked after the user has chosen one of these
-// businesses, so a number with several listings never guesses which account
-// the entered password belongs to.
+// businesses, so an identifier with several listings never guesses which
+// account the entered password belongs to.
 export async function POST(request: Request) {
   try {
     const { phone } = await request.json()
     if (!phone) {
-      return NextResponse.json({ error: 'Phone number is required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'Phone number or username is required' },
+        { status: 400 }
+      )
     }
 
-    const matches = await findBusinessesByPhone(phone)
+    const matches = await findBusinessesByIdentifier(phone)
     if (matches.length === 0) {
       return NextResponse.json(
-        { error: 'No account found for that number. List your business first.' },
+        { error: 'No account found for that phone number or username. List your business first.' },
         { status: 404 }
       )
     }
