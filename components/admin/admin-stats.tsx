@@ -26,7 +26,7 @@ interface Financial {
     this_month: number
     this_week: number
     this_year: number
-    avg_weekly: number
+    avg_transaction_value: number
   }
   registrations: {
     this_month: number
@@ -189,8 +189,8 @@ export default function AdminStats() {
                   <p className="text-2xl font-extrabold text-blue-600 mt-1">${financial.revenue.this_year.toFixed(2)}</p>
                 </div>
                 <div className="neo-card p-4 border-l-4 border-purple-500">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Avg Weekly Revenue</p>
-                  <p className="text-2xl font-extrabold text-purple-600 mt-1">${financial.revenue.avg_weekly.toFixed(2)}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Avg Transaction Value</p>
+                  <p className="text-2xl font-extrabold text-purple-600 mt-1">${financial.revenue.avg_transaction_value.toFixed(2)}</p>
                 </div>
                 <div className="neo-card p-4 border-l-4 border-green-500">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Registrations This Month</p>
@@ -204,7 +204,7 @@ export default function AdminStats() {
 
               {/* Payment Performance & Recent Payments */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <ChartCard title="Payment Performance (30d)">
+                <ChartCard title="Payment Performance (This Month)">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div className="bg-green-50 border border-green-200 rounded-xl p-3">
                       <p className="text-[10px] font-semibold text-green-700">Successful</p>

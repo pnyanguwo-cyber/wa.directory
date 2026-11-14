@@ -86,6 +86,7 @@ export async function getConfirmedPayments(opts: {
     .lte('created_at', to)
 
   for (const sub of (premiumSubs || [])) {
+    if (Number(sub.amount || 0) <= 0) continue
     payments.push({
       id: sub.id,
       source: 'premium_subscription',
@@ -124,7 +125,7 @@ export async function getConfirmedPayments(opts: {
         id: sub.id,
         source: 'listing_payment',
         businessId: sub.business_id,
-        amount: Number(sub.amount || 2), // Default $2 if not set
+        amount: Number(sub.amount || 0),
         currency: 'USD',
         reference: `LISTING-${sub.id}`,
         status: 'confirmed',
@@ -283,12 +284,16 @@ export async function getRevenueSummary(opts: {
       break
     case 'monthly':
       from = opts.from || getHarareStartOfCurrentMonth()
-      const prevMonth = new Date(now.setMonth(now.getMonth() - 1))
-      previousFrom = getHarareStartOfCurrentMonth()
+      const prevStart = new Date(from)
+      prevStart.setUTCMonth(prevStart.getUTCMonth() - 1)
+      previousFrom = prevStart.toISOString()
       previousTo = from
       break
     case 'yearly':
       from = opts.from || getHarareStartOfCurrentYear()
+      const prevYearStart = new Date(from)
+      prevYearStart.setUTCFullYear(prevYearStart.getUTCFullYear() - 1)
+      previousFrom = prevYearStart.toISOString()
       previousTo = from
       break
     default:

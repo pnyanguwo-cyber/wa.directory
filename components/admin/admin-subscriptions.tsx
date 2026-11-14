@@ -314,7 +314,7 @@ export default function AdminSubscriptions() {
                         {daysLeft !== null && s.status === 'active' && <> · <span className={daysLeft <= 3 ? 'text-red-600 font-semibold' : daysLeft <= 7 ? 'text-amber-600 font-semibold' : ''}>{daysLeft}d left</span></>}
                       </p>
                       <p className="text-[11px] text-text-secondary">
-                        {planLabel} · Requested {new Date(s.created_at).toLocaleDateString()} · ${Number(s.amount || 0).toFixed(2)}
+                        {planLabel} · Requested {new Date(s.created_at).toLocaleDateString()} · {s.is_trial || Number(s.amount || 0) <= 0 ? 'Free trial' : `$${Number(s.amount || 0).toFixed(2)}`}
                         {s.pro_assistance && <> · +Pro</>}
                       </p>
                       {(s.is_trial || s.trial_status) && (
@@ -330,6 +330,12 @@ export default function AdminSubscriptions() {
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${statusStyle[s.status] || statusStyle.cancelled}`}>
                       {s.status}
                     </span>
+
+                    {s.is_trial && (
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-amber-50 text-amber-700 border-amber-200">
+                        🆓 Trial
+                      </span>
+                    )}
 
                     {s.auto_confirmed_at ? (
                       <span
@@ -426,7 +432,7 @@ export default function AdminSubscriptions() {
                       Requested {new Date(s.created_at).toLocaleDateString()}
                       {s.started_at && <> · active since {new Date(s.started_at).toLocaleDateString()}</>}
                       {s.expires_at && <> · expires {new Date(s.expires_at).toLocaleDateString()}</>}
-                      {' · '}${Number(s.amount || 0).toFixed(2)}/mo
+                      {Number(s.amount || 0) > 0 ? <> · ${Number(s.amount).toFixed(2)}/mo</> : s.status === 'active' ? ' · Free trial (no charge)' : ' · $0.00/mo'}
                     </p>
                     {s.admin_note && <p className="text-[11px] text-text-secondary italic mt-0.5">Note: {s.admin_note}</p>}
                   </div>
@@ -434,6 +440,12 @@ export default function AdminSubscriptions() {
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold capitalize ${statusStyle[s.status] || statusStyle.cancelled}`}>
                     {s.status}
                   </span>
+
+                  {s.status === 'active' && Number(s.amount || 0) <= 0 && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full border text-[11px] font-bold bg-amber-50 text-amber-700 border-amber-200">
+                      🆓 Trial
+                    </span>
+                  )}
 
                   {s.status === 'pending' && (
                     <div className="flex items-center gap-2">

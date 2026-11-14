@@ -214,11 +214,17 @@ export async function GET(request: Request) {
     .map(([date, types]) => ({ date, ...types }))
 
   const revenueMap = new Map<string, number>()
-  for (const p of paymentsData) {
+  for (const p of recentPayments) {
     const month = p.createdAt.slice(0, 7)
     revenueMap.set(month, (revenueMap.get(month) || 0) + p.amount)
   }
   const revenue = [...revenueMap.entries()].map(([month, amount]) => ({ month, amount }))
+
+  const registrations = {
+    this_month: (growthData.data || []).filter(r => r.created_at >= thisMonthStart).length,
+    this_week: (growthData.data || []).filter(r => r.created_at >= sevenDaysAgoDate).length,
+    this_year: (growthData.data || []).filter(r => r.created_at >= thisYearStart).length
+  }
 
   // Average weekly revenue (based on last 12 weeks)
   const twelveWeeksAgo = getHarareStartOfDaysAgo(84)
@@ -237,7 +243,7 @@ export async function GET(request: Request) {
 
   // Recent payments with business names
   const recentPaymentsData = await Promise.all(
-    (paymentsData || []).map(async (p) => {
+    (recentPayments || []).map(async (p) => {
       let businessName = 'Unknown'
       if (p.businessId) {
         const { data: biz } = await supabase
@@ -287,13 +293,9 @@ export async function GET(request: Request) {
         this_year: revenueThisYear,
         by_source: revenueBySource,
         source_labels: sourceLabels,
-        avg_weekly: financialSummary.avgTransactionValue,
+                    avg_transaction_value: financialSummary.avgTransactionValue,
       },
-      registrations: {
-        this_month: 0, // Registration counts not yet implemented in financial reporting
-        this_week: 0,
-        this_year: 0,
-      },
+                  registrations,
       premium_members: premiumCount.count || 0,
       payment_performance: paymentStats,
       recent_payments: recentPaymentsData,
