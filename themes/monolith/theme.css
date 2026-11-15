@@ -363,6 +363,9 @@
   position: relative;
   overflow: hidden;
 }
+.mono-root .mono-hero {
+  color: var(--mono-hero-ink);
+}
 .mono-hero__media {
   position: relative;
 }

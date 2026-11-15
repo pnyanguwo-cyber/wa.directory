@@ -201,19 +201,19 @@ export default function MarketTheme({
       >
         <header className="market-header">
           <div className="market-header__inner">
-            <a className="market-brand" href="#top">
+            <a className="market-header__brand" href="#top">
               {site.logoUrl ? (
-                <img className="market-brand__logo" src={site.logoUrl} alt={site.name} />
+                <img className="market-header__logo" src={site.logoUrl} alt={site.name} />
               ) : (
-                <span className="market-brand__monogram" aria-hidden="true">
-                  {site.initials}
+                <span className="market-header__logo" aria-hidden="true">
+                  <span className="market-header__monogram">{site.initials}</span>
                 </span>
               )}
-              <span className="market-brand__name">{site.name}</span>
+              <span className="market-header__name">{site.name}</span>
             </a>
-            <nav className="market-nav" aria-label="Sections">
+            <nav className="market-header__nav" aria-label="Sections">
               {site.navItems.map((nav) => (
-                <a className="market-nav__link" href={nav.href} key={nav.href}>
+                <a className="market-header__link" href={nav.href} key={nav.href}>
                   {nav.label}
                 </a>
               ))}

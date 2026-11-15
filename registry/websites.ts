@@ -32,9 +32,9 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
     meta: {
       id: 'atlas',
       name: 'Atlas',
-      version: '1.0.0',
+      version: '1.1.0',
       family: 'atlas',
-      description: 'Split editorial layout for service businesses.',
+      description: 'High-tech hardware & gadget store layout with dynamic reactive telemetry and quick inspect.',
       orientations: ['split', 'stacked'],
       defaultOrientation: 'split',
       supports: { cart: false, voiceOnly: true, dark: true, reducedMotion: true },

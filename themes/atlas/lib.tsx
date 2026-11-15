@@ -130,6 +130,20 @@ export function itemOrderHref(site: ThemeSiteView, item: ThemeItem): string {
   return `https://wa.me/${site.orderDigits}?text=${text}`
 }
 
+export function itemOrderHrefWithQty(site: ThemeSiteView, item: ThemeItem, qty: number): string {
+  if (site.voiceOnly) {
+    const tel = site.voicePhone || site.phoneClean
+    return tel ? `tel:${tel}` : ''
+  }
+  const priceSnippet = item.price && item.price_type !== 'on_request'
+    ? ` ($${(Number(item.price) * qty).toFixed(2)})`
+    : ''
+  const text = encodeURIComponent(
+    `Hi ${site.name}, I'd like to order: ${qty > 1 ? `${qty}x ` : ''}${item.name}${priceSnippet}`
+  )
+  return `https://wa.me/${site.orderDigits}?text=${text}`
+}
+
 /* ------------------------------------------------------------------ */
 /* Hero wash                                                           */
 /* ------------------------------------------------------------------ */
@@ -246,8 +260,10 @@ export function Placeholder({
 }): ReactNode {
   return (
     <div className={`atlas-placeholder${tone === 'dark' ? ' atlas-placeholder--dark' : ''}`}>
+      <span className="atlas-placeholder__grid" aria-hidden="true" />
       <span className="atlas-placeholder__initials">{getInitials(label, 'WA')}</span>
       {category ? <span className="atlas-placeholder__category">{category}</span> : null}
+      <span className="atlas-placeholder__code">SYS.SPEC // NO_MEDIA</span>
     </div>
   )
 }
