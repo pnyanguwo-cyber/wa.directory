@@ -180,11 +180,18 @@ export async function notifyBusinessLive(biz: {
     editToken: biz.editToken ?? null,
   })
 
-  sendWhatsAppTemplate(
-    to,
-    process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
-    [biz.name, `${SITE_URL}/business/${slug}`]
-  ).catch(() => {})
+  // Serverless freezes the function the instant the last awaited task ends,
+  // killing any send still in flight — so every send here is awaited. Each is
+  // wrapped so one failure never blocks the next.
+  try {
+    await sendWhatsAppTemplate(
+      to,
+      process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
+      [biz.name, `${SITE_URL}/business/${slug}`]
+    )
+  } catch (e) {
+    console.error('[admin-verify] you_are_live template failed:', e)
+  }
 
   const links = [
     `🏢 Profile: ${SITE_URL}/business/${slug}`,
@@ -192,22 +199,30 @@ export async function notifyBusinessLive(biz: {
     ...portalLines,
     '📸 Send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
   ]
-  sendWhatsAppMessage(
-    to,
-    [
-      '🎉 *You are live on WA Directory!*',
-      '',
-      `${biz.name} is approved${biz.username ? ` (@${biz.username})` : ''} — customers can find you in search now.`,
-      '',
-      ...links,
-      '',
-      'Reply *help* anytime.',
-    ].join('\n')
-  ).catch(() => {})
+  try {
+    await sendWhatsAppMessage(
+      to,
+      [
+        '🎉 *You are live on WA Directory!*',
+        '',
+        `${biz.name} is approved${biz.username ? ` (@${biz.username})` : ''} — customers can find you in search now.`,
+        '',
+        ...links,
+        '',
+        'Reply *help* anytime.',
+      ].join('\n')
+    )
+  } catch (e) {
+    console.error('[admin-verify] go-live links message failed:', e)
+  }
 
   const chOverride = await getBotSetting('channel_link')
   const chLink = (chOverride || process.env.CHANNEL_LINK || '').trim()
   if (chLink) {
-    sendWhatsAppMessage(to, renderChannelPitch(chLink)).catch(() => {})
+    try {
+      await sendWhatsAppMessage(to, renderChannelPitch(chLink))
+    } catch (e) {
+      console.error('[admin-verify] channel pitch failed:', e)
+    }
   }
 }

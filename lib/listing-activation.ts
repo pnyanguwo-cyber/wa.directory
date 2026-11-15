@@ -103,41 +103,59 @@ export async function activateListingSubscription(
       const config = sub.plan && PLAN_CONFIG[sub.plan as PlanType] ? PLAN_CONFIG[sub.plan as PlanType] : null
       const planLabel = config ? `${config.label} (${formatUsd(config.price)})` : sub.plan
 
-      // Main confirmation message (clean, focused on review/publishing)
-      await sendWhatsAppMessage(
-        business.phone,
-        [
-          '🎉 *Payment received — you are live!*',
-          '',
-          `${business.name} (@${business.username || 'N/A'}) is now visible on WA Directory.`,
-          `Plan: ${planLabel}`,
-          `Active until ${expiresAt.toISOString().slice(0, 10)}.`,
-          '',
-          ...links,
-          '',
-          ...(editToken
-            ? [`📱 Your QR codes (chat + portal) — print them for customers: ${siteUrl}/my-qr/${bizSlug}`, '']
-            : []),
-          `Renew anytime: ${siteUrl}/pay`,
-          '',
-          'Your listing is live! Customers can now find you in search.',
-          '',
-          'Reply *help* anytime.',
-        ].join('\n')
-      ).catch(() => {})
+      // Serverless freezes the function the instant the last awaited task ends,
+      // killing any send still in flight — so every send here is awaited. Each
+      // is wrapped so one failure never blocks the next.
+      try {
+        await sendWhatsAppMessage(
+          business.phone,
+          [
+            '🎉 *Payment received — you are live!*',
+            '',
+            `${business.name} (@${business.username || 'N/A'}) is now visible on WA Directory.`,
+            `Plan: ${planLabel}`,
+            `Active until ${expiresAt.toISOString().slice(0, 10)}.`,
+            '',
+            ...links,
+            '',
+            ...(editToken
+              ? [`📱 Your QR codes (chat + portal) — print them for customers: ${siteUrl}/my-qr/${bizSlug}`, '']
+              : []),
+            `Renew anytime: ${siteUrl}/pay`,
+            '',
+            'Your listing is live! Customers can now find you in search.',
+            '',
+            'Reply *help* anytime.',
+          ].join('\n')
+        )
+      } catch (e) {
+        console.error('[listing-activation] confirmation message failed:', e)
+      }
 
       // Send category-specific educational image (post-submission onboarding)
-      await sendCategoryEducationalImage(business.phone, business.category).catch(() => {})
+      try {
+        await sendCategoryEducationalImage(business.phone, business.category)
+      } catch (e) {
+        console.error('[listing-activation] category education image failed:', e)
+      }
 
       // Clear conversation state - onboarding complete
-      clearConversationState(business.phone).catch(() => {})
+      try {
+        await clearConversationState(business.phone)
+      } catch (e) {
+        console.error('[listing-activation] clear conversation state failed:', e)
+      }
 
       // Channel pitch: now that the supplier is live, tell them where buyer
       // leads surface (free-form while the session window is open).
       const chOverride = await getBotSetting('channel_link')
       const chLink = (chOverride || process.env.CHANNEL_LINK || '').trim()
       if (chLink) {
-        sendWhatsAppMessage(business.phone, renderChannelPitch(chLink)).catch(() => {})
+        try {
+          await sendWhatsAppMessage(business.phone, renderChannelPitch(chLink))
+        } catch (e) {
+          console.error('[listing-activation] channel pitch failed:', e)
+        }
       }
     }
 
@@ -153,16 +171,20 @@ export async function activateListingSubscription(
           : null
       : null
     if (payerWa && business?.phone !== payerWa) {
-      sendWhatsAppMessage(
-        payerWa,
-        [
-          '🎉 *Payment received!*',
-          '',
-          `${business?.name || 'The listing'} is paid and active until ${expiresAt.toISOString().slice(0, 10)}.`,
-          '',
-          'Thank you for supporting the directory!',
-        ].join('\n')
-      ).catch(() => {})
+      try {
+        await sendWhatsAppMessage(
+          payerWa,
+          [
+            '🎉 *Payment received!*',
+            '',
+            `${business?.name || 'The listing'} is paid and active until ${expiresAt.toISOString().slice(0, 10)}.`,
+            '',
+            'Thank you for supporting the directory!',
+          ].join('\n')
+        )
+      } catch (e) {
+        console.error('[listing-activation] payer message failed:', e)
+      }
     }
   }
 
