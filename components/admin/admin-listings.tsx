@@ -36,14 +36,20 @@ interface EditForm {
 
 function SkeletonRow() {
   return (
-    <div className="neo-card p-4 flex items-center gap-4">
-      <div className="skeleton h-10 w-10 rounded-2xl shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="skeleton h-4 w-48 rounded" />
-        <div className="skeleton h-3 w-32 rounded" />
+    <div className="neo-card p-4 flex flex-col gap-3 h-full">
+      <div className="flex items-center gap-4">
+        <div className="skeleton h-10 w-10 rounded-2xl shrink-0" />
+        <div className="flex-1 space-y-2 min-w-0">
+          <div className="skeleton h-4 w-full max-w-48 rounded" />
+          <div className="skeleton h-3 w-2/3 max-w-32 rounded" />
+        </div>
       </div>
-      <div className="skeleton h-8 w-20 rounded-full" />
-      <div className="skeleton h-8 w-8 rounded-lg" />
+      <div className="skeleton h-3 w-1/2 rounded" />
+      <div className="grid grid-cols-3 gap-2 mt-auto">
+        <div className="skeleton h-9 rounded-xl" />
+        <div className="skeleton h-9 rounded-xl" />
+        <div className="skeleton h-9 rounded-xl" />
+      </div>
     </div>
   )
 }
@@ -712,8 +718,8 @@ export default function AdminListings() {
       )}
 
       {dataLoading ? (
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map(i => <SkeletonRow key={i} />)}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map(i => <SkeletonRow key={i} />)}
         </div>
       ) : filtered.length === 0 ? (
         <div className="neo-card p-12 text-center">
@@ -746,9 +752,9 @@ export default function AdminListings() {
             </label>
           </div>
 
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
             {paginated.map(b => (
-              <div key={b.id} className="neo-card p-3.5 sm:p-4 flex flex-col gap-3">
+              <div key={b.id} className="neo-card p-3.5 sm:p-4 flex flex-col gap-3 h-full">
                 {/* Row 1: identity */}
                 <div className="flex items-center gap-3 min-w-0">
                   <input
@@ -815,7 +821,7 @@ export default function AdminListings() {
                 </div>
 
                 {/* Row 3: actions — 3 equal buttons always one clean line */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-2 mt-auto">
                   {b.verified ? (
                     <button
                       onClick={() => handleToggleVerify(b.id, true)}
