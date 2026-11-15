@@ -203,7 +203,7 @@ export default async function SearchPage({
 
   // One shell, three modes. `all` is the default so old links and shared
   // URLs keep resolving to the directory they were built for.
-  const mode = (searchParams.mode === 'products' ? 'products' : searchParams.mode === 'all' ? 'all' : 'services') as 'all' | 'products' | 'services'
+  const mode = (searchParams.mode === 'products' ? 'products' : searchParams.mode === 'services' ? 'services' : 'all') as 'all' | 'products' | 'services'
   const page = Math.max(Number.parseInt(searchParams.page || '1', 10) || 1, 1)
   const category = searchParams.category || ''
   const availability = searchParams.availability || ''
@@ -211,7 +211,7 @@ export default async function SearchPage({
   const modeHref = (next: 'all' | 'products' | 'services') => {
     const params = new URLSearchParams()
     if (next === 'products') params.set('mode', 'products')
-    if (next === 'all') params.set('mode', 'all')
+    if (next === 'services') params.set('mode', 'services')
     if (q) params.set('q', q)
     if ((next === 'products' || next === 'all') && category) params.set('category', category)
     if ((next === 'products' || next === 'all') && availability) params.set('availability', availability)

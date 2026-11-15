@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 
 export default function SearchBar({ large = false }: { large?: boolean }) {
   const [query, setQuery] = useState('')
-  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<{ type: 'product' | 'business'; label: string }[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState<number>(-1)
@@ -64,9 +64,13 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
       e.preventDefault()
       const chosen = suggestions[selectedIndex]
       if (chosen) {
-        setQuery(chosen)
+        setQuery(chosen.label)
         setShowDropdown(false)
-        router.push(`/search?q=${encodeURIComponent(chosen)}`)
+        router.push(
+          chosen.type === 'product'
+            ? `/search?q=${encodeURIComponent(chosen.label)}&mode=products`
+            : `/search?q=${encodeURIComponent(chosen.label)}`
+        )
       }
     } else if (e.key === 'Escape') {
       setShowDropdown(false)
@@ -167,14 +171,19 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
           role="listbox"
           className="absolute top-full mt-2 left-0 right-0 bg-white/95 backdrop-blur-xl border border-gray-200/90 rounded-2xl shadow-dropdown z-50 overflow-hidden m-0 p-1.5 list-none animate-slide-up"
         >
-          {suggestions.map((name, i) => (
+          {suggestions.map((suggestion, i) => (
             <li
               key={i}
               role="option"
               aria-selected={i === selectedIndex}
+              aria-label={`${suggestion.type === 'product' ? 'Product' : 'Shop'}: ${suggestion.label}`}
               onClick={() => {
                 setShowDropdown(false)
-                router.push(`/search?q=${encodeURIComponent(name)}`)
+                router.push(
+                  suggestion.type === 'product'
+                    ? `/search?q=${encodeURIComponent(suggestion.label)}&mode=products`
+                    : `/search?q=${encodeURIComponent(suggestion.label)}`
+                )
               }}
               className={`w-full text-left px-3.5 py-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer flex items-center justify-between ${
                 i === selectedIndex
@@ -183,14 +192,26 @@ export default function SearchBar({ large = false }: { large?: boolean }) {
               }`}
             >
               <span className="flex items-center gap-2.5 truncate">
-                <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
-                  <circle cx="11" cy="11" r="8" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
-                </svg>
-                <span className="truncate">{name}</span>
+                {suggestion.type === 'product' ? (
+                  <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 7 12 3 4 7m16 0-8 4-8-4m16 0v10l-8 4-8-4V7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-whatsapp-600 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.3-4.3" />
+                  </svg>
+                )}
+                <span className="truncate">{suggestion.label}</span>
               </span>
-              <span className="text-xs text-whatsapp-700 font-medium shrink-0 ml-2">
-                Search &rarr;
+              <span
+                className={`text-[10px] uppercase tracking-wide font-semibold rounded-full px-2 py-0.5 shrink-0 ml-2 ${
+                  suggestion.type === 'product'
+                    ? 'bg-whatsapp-100 text-whatsapp-800'
+                    : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {suggestion.type === 'product' ? 'Product' : 'Shop'}
               </span>
             </li>
           ))}

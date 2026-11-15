@@ -113,9 +113,11 @@ export async function searchProducts(filters: ProductSearchFilters = {}): Promis
   }
   if (filters.city) query = query.eq('businesses.city', filters.city)
 
-  // In-stock first, then newest. Availability is a gate, not a paid placement.
+  // In-stock first, then newest. Descending puts the meaningful states
+  // (in_stock, available_on_order) above availability_unknown, which
+  // sorts alphabetically before them.
   query = query
-    .order('availability_status', { ascending: true })
+    .order('availability_status', { ascending: false })
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -234,7 +236,7 @@ export async function getSellerProducts(businessId: string, limit = 50): Promise
     .select(PRODUCT_COLUMNS)
     .eq('business_id', businessId)
     .eq('status', 'active')
-    .order('availability_status', { ascending: true })
+    .order('availability_status', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(Math.min(limit, 100))
   return (data as unknown as BusinessItem[]) || []
