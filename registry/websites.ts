@@ -60,9 +60,9 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
     meta: {
       id: 'market',
       name: 'Market',
-      version: '1.0.0',
+      version: '1.1.0',
       family: 'market',
-      description: 'Warm market-stall feel with a catalogue-first shop, photo collage hero, soft badges and rounded cards.',
+      description: 'Grand flagship storefront layout with cinematic cover hero, dynamic pointer-reactive ambient background, real-time search & category filters, Quick-Inspect modal, gallery lightbox, and full WhatsApp cart integration.',
       orientations: ['catalogue', 'stacked'],
       defaultOrientation: 'catalogue',
       supports: { cart: true, voiceOnly: true, dark: true, reducedMotion: true },

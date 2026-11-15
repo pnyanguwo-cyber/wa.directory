@@ -1,934 +1,1774 @@
 /* ==========================================================================
-   Monolith theme — theme.css
-   Scope: everything lives under `.mono-root` (matches data-theme="monolith").
-   Self-contained: no html/body/:root selectors, no external CSS.
-   Colours come from inline custom properties set by theme/index.tsx:
-     --mono-head/--mono-body (fonts), --mono-accent, --mono-soft,
-     --mono-muted, --mono-glow, --mono-cta-ink, --mono-header-bg/-ink,
-     --mono-hero-bg/-ink, --mono-shop-bg/-ink, --mono-contact-bg/-ink/-cta
-   Orientation variants are driven by [data-orient='immersive'|'stacked'].
+   Monolith Theme — Architectural Brutalist / Editorial Flagship
+   Scope: strictly scoped under `.mono-root` / `[data-theme="monolith"]`
+   Zero pill shapes: strictly 0px radius, sharp architectural geometry,
+   full-screen cover hero with overlaid copy, dual counter-rolling marquee tracks,
+   kinetic rolling seals, scroll depth gauge, and interactive monolithic modals.
    ========================================================================== */
 
-/* --------------------------------------------------------------------------
-   Root + static tokens
-   -------------------------------------------------------------------------- */
 .mono-root {
-  --mono-surface: #ffffff;
-  --mono-ink: #111b21;
-  --mono-ink-muted: rgba(17, 27, 33, 0.62);
-  --mono-hairline: rgba(17, 27, 33, 0.1);
-  --mono-radius: 0px;
+  --mono-bg: #07080a;
+  --mono-surface: #0e1014;
+  --mono-surface-card: #13161c;
+  --mono-surface-card-hover: #191d25;
+  --mono-ink: #f4f5f7;
+  --mono-ink-muted: #8b929d;
+  --mono-hairline: rgba(255, 255, 255, 0.12);
+  --mono-hairline-bright: rgba(255, 255, 255, 0.28);
+  --mono-accent: #0f766e;
+  --mono-accent-glow: rgba(15, 118, 110, 0.25);
+  --mono-radius: 0px !important;
 
   position: relative;
-  background: #f7f5f0;
+  min-height: 100vh;
+  background-color: var(--mono-bg);
   color: var(--mono-ink);
-  font-family: var(--mono-body, 'Helvetica Neue', Arial, sans-serif);
+  font-family: var(--mono-body, ui-sans-serif, system-ui, -apple-system, sans-serif);
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
-/* Scoped resets — the theme must render standalone (no global reset assumed) */
+/* Scoped Resets (Strictly No Pills / 0px Radius Everywhere) */
 .mono-root *,
 .mono-root *::before,
 .mono-root *::after {
   box-sizing: border-box;
+  border-radius: 0 !important;
 }
+
 .mono-root img {
   max-width: 100%;
   display: block;
 }
+
 .mono-root a {
   color: inherit;
+  text-decoration: none;
 }
+
+.mono-root button,
+.mono-root input,
+.mono-root select,
+.mono-root textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  border-radius: 0 !important;
+}
+
 .mono-root h1,
 .mono-root h2,
 .mono-root h3,
 .mono-root h4 {
   margin: 0;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-weight: 700;
-  line-height: 1.12;
-  letter-spacing: -0.02em;
+  font-family: var(--mono-head, ui-sans-serif, system-ui, sans-serif);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: #ffffff;
 }
-.mono-root p {
-  margin: 0;
-}
-.mono-root ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
+
+.mono-root p,
+.mono-root ul,
+.mono-root figure,
 .mono-root blockquote {
   margin: 0;
 }
-.mono-root figure {
-  margin: 0;
+
+.mono-root ul {
+  padding: 0;
+  list-style: none;
 }
-.mono-root details {
-  margin: 0;
-}
-.mono-root summary {
-  margin: 0;
-  cursor: pointer;
-}
+
 .mono-root [id] {
-  scroll-margin-top: 76px;
+  scroll-margin-top: 80px;
 }
 
 /* --------------------------------------------------------------------------
-   Layout containers
+   Scroll Progress Depth Gauge & Ruler
+   -------------------------------------------------------------------------- */
+.mono-scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 1000;
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mono-scroll-progress__bar {
+  height: 100%;
+  background: var(--mono-accent, #0f766e);
+  box-shadow: 0 0 12px var(--mono-accent, #0f766e);
+  transition: width 0.08s linear;
+}
+
+.mono-scroll-depth-tag {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 90;
+  padding: 0.25rem 0.65rem;
+  background: rgba(14, 16, 20, 0.9);
+  border: 1px solid var(--mono-hairline-bright);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #ffffff;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* --------------------------------------------------------------------------
+   Architectural Background Grid & Pointer Glow
+   -------------------------------------------------------------------------- */
+.mono-ambient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.mono-ambient-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 80px 80px;
+  mask-image: radial-gradient(circle at 50% 40%, black 50%, transparent 90%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, black 50%, transparent 90%);
+}
+
+.mono-ambient-spotlight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    800px circle at var(--mouse-x, 50%) var(--mouse-y, 30%),
+    rgba(15, 118, 110, 0.12),
+    transparent 60%
+  );
+  transition: background 0.15s ease-out;
+  will-change: background;
+}
+
+/* --------------------------------------------------------------------------
+   Layout Containers & Section Spacing
    -------------------------------------------------------------------------- */
 .mono-container {
   width: 100%;
-  max-width: 1120px;
+  max-width: 1240px;
   margin-inline: auto;
-  padding-inline: clamp(1.25rem, 4vw, 2rem);
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
 }
 
 .mono-section {
-  padding-block: clamp(4rem, 8vw, 6rem);
-}
-.mono-section--gallery {
-  padding-bottom: 0;
+  padding-block: clamp(4.5rem, 8vw, 7rem);
+  position: relative;
+  border-bottom: 1px solid var(--mono-hairline);
 }
 
-/* --------------------------------------------------------------------------
-   Section head
-   -------------------------------------------------------------------------- */
 .mono-section__head {
-  max-width: 680px;
-  margin-bottom: clamp(2rem, 4vw, 2.75rem);
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: clamp(2.5rem, 5vw, 3.5rem);
+  max-width: 780px;
 }
+
 .mono-eyebrow {
-  margin-bottom: 0.75rem;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 0.72rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--mono-accent);
+  color: var(--mono-accent, #0f766e);
 }
+
 .mono-section__title {
-  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  font-size: clamp(2.2rem, 4.2vw, 3.6rem);
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
 }
+
 .mono-section__lede {
-  margin-top: 0.75rem;
-  max-width: 56ch;
-  font-size: 1rem;
   color: var(--mono-ink-muted);
+  font-size: 1.08rem;
+  line-height: 1.65;
+  max-width: 64ch;
 }
 
 /* --------------------------------------------------------------------------
-   Buttons
+   Sharp Architectural Buttons & Tags (Strictly NO Pills)
    -------------------------------------------------------------------------- */
 .mono-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.7rem 1.25rem;
-  font-family: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.2;
-  text-decoration: none;
-  border: 1px solid transparent;
-  border-radius: var(--mono-radius);
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
-}
-.mono-btn:focus-visible {
-  outline: 2px solid var(--mono-accent);
-  outline-offset: 2px;
-}
-.mono-btn--cta {
-  background: var(--mono-accent);
-  color: var(--mono-cta-ink);
-}
-.mono-btn--cta:hover {
-  background: color-mix(in srgb, var(--mono-accent) 85%, #000000);
-}
-.mono-btn--soft {
-  background: color-mix(in srgb, var(--mono-accent) 10%, transparent);
-  color: var(--mono-accent);
-}
-.mono-btn--soft:hover {
-  background: color-mix(in srgb, var(--mono-accent) 16%, transparent);
-}
-.mono-btn--ghost {
-  background: transparent;
-  border-color: color-mix(in srgb, var(--mono-hero-ink) 35%, transparent);
-  color: var(--mono-hero-ink);
-}
-.mono-btn--ghost:hover {
-  border-color: var(--mono-hero-ink);
-  background: color-mix(in srgb, var(--mono-hero-ink) 10%, transparent);
-}
-
-/* --------------------------------------------------------------------------
-   Chips (category / status / open-hours)
-   -------------------------------------------------------------------------- */
-.mono-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--mono-ink-muted);
-  background: rgba(17, 27, 33, 0.06);
-  border-radius: var(--mono-radius);
-}
-.mono-chip--ok {
-  background: color-mix(in srgb, #15803d 12%, transparent);
-  color: #15803d;
-}
-.mono-chip--warn {
-  background: color-mix(in srgb, #b45309 14%, transparent);
-  color: #b45309;
-}
-.mono-chip--off {
-  background: rgba(17, 27, 33, 0.08);
-  color: var(--mono-ink-muted);
-}
-
-/* --------------------------------------------------------------------------
-   Verified badge (mirrors atlas conventions, mono naming)
-   -------------------------------------------------------------------------- */
-.mono-verified {
-  width: 1em;
-  height: 1em;
-  flex: none;
-}
-.mono-verified__bg {
-  fill: var(--mono-accent, #0f766e);
-}
-.mono-verified__check {
-  stroke: #ffffff;
-}
-
-/* --------------------------------------------------------------------------
-   Stars (mirrors atlas conventions, mono naming)
-   -------------------------------------------------------------------------- */
-.mono-stars {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-}
-.mono-star {
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  fill: rgba(17, 27, 33, 0.18);
-}
-.mono-star--fill {
-  fill: var(--mono-accent, #0f766e);
-}
-.mono-hero--dark .mono-star {
-  fill: rgba(255, 255, 255, 0.25);
-}
-.mono-hero--dark .mono-star--fill {
-  fill: var(--mono-accent, #0f766e);
-}
-
-/* --------------------------------------------------------------------------
-   Placeholder (media fallback)
-   -------------------------------------------------------------------------- */
-.mono-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  gap: 0.35rem;
-  width: 100%;
-  height: 100%;
-  min-height: 12rem;
-  padding: 1.5rem;
-  text-align: center;
-  background: rgba(17, 27, 33, 0.06);
+  gap: 0.65rem;
+  padding: 0.85rem 1.75rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.84rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.2, 0, 0, 1);
+  white-space: nowrap;
+  user-select: none;
+  background: transparent;
+}
+
+.mono-btn:hover {
+  transform: translateY(-2px);
+}
+
+.mono-btn--cta {
+  background: var(--mono-accent, #0f766e);
+  color: #ffffff;
+  border-color: var(--mono-accent, #0f766e);
+  box-shadow: 0 4px 18px var(--mono-accent-glow);
+}
+
+.mono-btn--cta:hover {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+  box-shadow: 0 8px 24px rgba(255, 255, 255, 0.25);
+}
+
+.mono-btn--outline {
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  background: rgba(14, 16, 20, 0.65);
+  backdrop-filter: blur(8px);
+}
+
+.mono-btn--outline:hover {
+  background: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.mono-btn--ghost {
+  border: 1px solid var(--mono-hairline);
   color: var(--mono-ink-muted);
 }
-.mono-placeholder--dark {
-  background: #1a2429;
-  color: rgba(255, 255, 255, 0.65);
+
+.mono-btn--ghost:hover {
+  color: #ffffff;
+  border-color: var(--mono-hairline-bright);
+  background: rgba(255, 255, 255, 0.05);
 }
-.mono-placeholder__initials {
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 2rem;
-  font-weight: 700;
+
+/* Sharp Technical Chip Tag (NO PILLS) */
+.mono-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.22rem 0.6rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.7rem;
+  font-weight: 750;
   letter-spacing: 0.1em;
-}
-.mono-placeholder__category {
-  font-size: 0.75rem;
-  letter-spacing: 0.14em;
   text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--mono-hairline);
+  color: var(--mono-ink-muted);
+  white-space: nowrap;
+}
+
+.mono-tag--accent {
+  background: rgba(15, 118, 110, 0.15);
+  border-color: rgba(15, 118, 110, 0.45);
+  color: #2dd4bf;
+}
+
+.mono-tag--ok {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #34d399;
+}
+
+.mono-tag--warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+}
+
+.mono-tag--off {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 /* --------------------------------------------------------------------------
-   Header
+   Monolithic Architectural Header (NO Top Pills)
    -------------------------------------------------------------------------- */
 .mono-header {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 50;
-  color: var(--mono-header-ink);
-  background: color-mix(in srgb, var(--mono-header-bg) 82%, transparent);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid color-mix(in srgb, var(--mono-header-ink) 12%, transparent);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  padding-block: 1.25rem;
+  background: linear-gradient(180deg, rgba(7, 8, 10, 0.85) 0%, transparent 100%);
+  border-bottom: 1px solid transparent;
+  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
+
+.mono-header--scrolled {
+  padding-block: 0.85rem;
+  background: rgba(10, 12, 16, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--mono-hairline-bright);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+}
+
 .mono-header__inner {
   display: flex;
   align-items: center;
-  gap: 2rem;
-  max-width: 1120px;
+  justify-content: space-between;
+  gap: 1.75rem;
+  max-width: 1240px;
   margin-inline: auto;
-  padding: 0.9rem clamp(1.25rem, 4vw, 2rem);
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
 }
+
 .mono-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  color: inherit;
-  text-decoration: none;
+  gap: 0.85rem;
+  min-width: 0;
 }
-.mono-brand__logo {
-  width: 2rem;
-  height: 2rem;
-  object-fit: cover;
-  border-radius: var(--mono-radius);
-}
+
 .mono-brand__monogram {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  background: var(--mono-accent);
-  color: var(--mono-cta-ink);
-  border-radius: var(--mono-radius);
-}
-.mono-brand__name {
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.mono-nav {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  margin-left: auto;
-}
-.mono-nav a {
-  font-size: 0.85rem;
-  font-weight: 500;
-  text-decoration: none;
-  color: color-mix(in srgb, var(--mono-header-ink) 75%, transparent);
-}
-.mono-nav a:hover {
-  color: var(--mono-header-ink);
-}
-.mono-nav a:focus-visible {
-  outline: 2px solid var(--mono-accent);
-  outline-offset: 2px;
-}
-.mono-header__cta {
-  flex: none;
-}
-
-/* Immersive: header floats over the hero instead of pushing content down */
-[data-orient='immersive'] .mono-header {
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  background: transparent;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  border-bottom-color: transparent;
-}
-
-/* --------------------------------------------------------------------------
-   Hero
-   Base rules serve `stacked`; `immersive` overrides below via [data-orient].
-   -------------------------------------------------------------------------- */
-.mono-hero {
-  position: relative;
-  overflow: hidden;
-}
-.mono-root .mono-hero {
-  color: var(--mono-hero-ink);
-}
-.mono-hero__media {
-  position: relative;
-}
-.mono-hero__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.mono-hero__wash {
-  position: absolute;
-  inset: 0;
-}
-.mono-hero--dark .mono-hero__media::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), transparent 40%, rgba(0, 0, 0, 0.55));
-}
-.mono-hero__inner {
-  position: relative;
-  z-index: 1;
-  max-width: 1120px;
-  margin-inline: auto;
-  padding-inline: clamp(1.25rem, 4vw, 2rem);
-}
-.mono-hero__content {
-  max-width: 720px;
-}
-.mono-hero__title {
-  font-size: clamp(2.5rem, 6vw, 4.5rem);
-}
-.mono-hero__title .mono-verified {
-  margin-left: 0.35rem;
-}
-.mono-hero__lede {
-  margin-top: 1rem;
-  font-size: clamp(1.05rem, 2vw, 1.25rem);
-  color: color-mix(in srgb, var(--mono-hero-ink) 75%, transparent);
-}
-.mono-hero__rating {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 1.25rem;
-  font-size: 0.95rem;
-  color: color-mix(in srgb, var(--mono-hero-ink) 78%, transparent);
-}
-.mono-hero__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 2rem;
-}
-
-/* Stacked: media is a banner above the text block */
-[data-orient='stacked'] .mono-hero__media {
-  aspect-ratio: 21 / 9;
-}
-[data-orient='stacked'] .mono-hero__inner {
-  padding-block: clamp(3rem, 6vw, 4.5rem);
-}
-
-/* Immersive: media is a full-bleed cover behind the statement */
-[data-orient='immersive'] .mono-hero {
-  display: flex;
-  align-items: center;
-  min-height: clamp(640px, 88vh, 820px);
-}
-[data-orient='immersive'] .mono-hero__media {
-  position: absolute;
-  inset: 0;
-}
-[data-orient='immersive'] .mono-hero__inner {
-  padding-block: 7rem;
-}
-
-/* --------------------------------------------------------------------------
-   Stats strip
-   -------------------------------------------------------------------------- */
-.mono-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 2rem;
-}
-.mono-stat__value {
-  display: block;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--mono-accent);
-}
-.mono-stat__label {
-  display: block;
-  margin-top: 0.25rem;
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--mono-ink-muted);
-}
-
-/* --------------------------------------------------------------------------
-   Services — numbered editorial rows
-   -------------------------------------------------------------------------- */
-.mono-services {
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--mono-hairline);
-}
-.mono-service {
-  display: flex;
-  align-items: baseline;
-  gap: clamp(1rem, 3vw, 2.5rem);
-  padding-block: 1.4rem;
-  border-bottom: 1px solid var(--mono-hairline);
-}
-.mono-service__num {
-  flex: none;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 1.1rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--mono-accent);
-}
-.mono-service__label {
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: clamp(1.15rem, 2.2vw, 1.6rem);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-/* --------------------------------------------------------------------------
-   Shop — per-item WhatsApp ordering, no cart
-   -------------------------------------------------------------------------- */
-.mono-section--shop {
-  background: var(--mono-shop-bg);
-  color: var(--mono-shop-ink);
-}
-.mono-shop__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-.mono-shop__more {
-  margin-top: 2.5rem;
-}
-.mono-item {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background: var(--mono-surface);
-  border: 1px solid var(--mono-hairline);
-}
-.mono-item__media {
-  aspect-ratio: 1 / 1;
-  overflow: hidden;
-  background: rgba(17, 27, 33, 0.04);
-}
-.mono-item__media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-.mono-item:hover .mono-item__media img {
-  transform: scale(1.04);
-}
-.mono-item__body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-  padding: 1.25rem;
-}
-.mono-item__name {
-  font-size: 1.15rem;
-}
-.mono-item__desc {
-  font-size: 0.9rem;
-  color: var(--mono-ink-muted);
-}
-.mono-item__foot {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: auto;
-  padding: 0 1.25rem 1.25rem;
-}
-.mono-item__price {
-  margin-right: auto;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 1.05rem;
-  font-weight: 700;
-}
-.mono-item__order {
-  flex: none;
-}
-
-/* Dark shop variant */
-.mono-shop--dark .mono-section__title {
-  color: #ffffff;
-}
-.mono-shop--dark .mono-section__lede {
-  color: rgba(255, 255, 255, 0.6);
-}
-.mono-shop--dark .mono-item {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-.mono-shop--dark .mono-item__media {
-  background: rgba(255, 255, 255, 0.06);
-}
-.mono-shop--dark .mono-item__desc {
-  color: rgba(255, 255, 255, 0.6);
-}
-.mono-shop--dark .mono-item__price {
-  color: #ffffff;
-}
-.mono-shop--dark .mono-chip {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-.mono-shop--dark .mono-chip--ok {
-  background: color-mix(in srgb, #4ade80 16%, transparent);
-  color: #4ade80;
-}
-.mono-shop--dark .mono-chip--warn {
-  background: color-mix(in srgb, #fbbf24 16%, transparent);
-  color: #fbbf24;
-}
-.mono-shop--dark .mono-chip--off {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.6);
-}
-.mono-shop--dark .mono-btn--soft {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-}
-.mono-shop--dark .mono-btn--soft:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-/* --------------------------------------------------------------------------
-   Gallery — full-bleed 1:1 mosaic (mono-gallery sits outside the container)
-   -------------------------------------------------------------------------- */
-.mono-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 4px;
-}
-.mono-gallery__frame {
-  margin: 0;
-  overflow: hidden;
-  background: #e5e2da;
-}
-.mono-gallery__frame img {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  transition: transform 0.45s ease;
-}
-.mono-gallery__frame:hover img {
-  transform: scale(1.04);
-}
-
-/* --------------------------------------------------------------------------
-   Reviews — plain editorial blockquotes
-   -------------------------------------------------------------------------- */
-.mono-reviews {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 1.5rem;
-}
-.mono-review {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.75rem;
-  border: 1px solid var(--mono-hairline);
-  background: var(--mono-surface);
-}
-.mono-review__comment {
-  flex: 1;
-  line-height: 1.65;
-}
-.mono-review__foot {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--mono-ink-muted);
-}
-.mono-review__name {
-  color: var(--mono-ink);
-  font-weight: 700;
-}
-
-/* --------------------------------------------------------------------------
-   FAQ — hairline accordion
-   -------------------------------------------------------------------------- */
-.mono-faq {
-  border-top: 1px solid var(--mono-hairline);
-}
-.mono-faq__entry {
-  border-bottom: 1px solid var(--mono-hairline);
-}
-.mono-faq__entry summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.1rem 0;
-  list-style: none;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-.mono-faq__entry summary::-webkit-details-marker {
-  display: none;
-}
-.mono-faq__entry summary::after {
-  content: '+';
-  flex: none;
-  color: var(--mono-accent);
-  font-size: 1.35rem;
-  line-height: 1;
-  transition: transform 0.2s ease;
-}
-.mono-faq__entry[open] summary::after {
-  transform: rotate(45deg);
-}
-.mono-faq__entry p {
-  margin: 0 0 1.25rem;
-  max-width: 62ch;
-  color: var(--mono-ink-muted);
-  line-height: 1.65;
-}
-
-/* --------------------------------------------------------------------------
-   Hours
-   -------------------------------------------------------------------------- */
-.mono-hours {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  max-width: 480px;
-}
-.mono-hours__list {
-  border-top: 1px solid var(--mono-hairline);
-}
-.mono-hours__row {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-block: 0.9rem;
-  border-bottom: 1px solid var(--mono-hairline);
-  font-size: 0.95rem;
-}
-.mono-hours__day {
-  font-weight: 600;
-}
-.mono-hours__time {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-  color: var(--mono-ink-muted);
-}
-
-/* --------------------------------------------------------------------------
-   Contact — rows + social links (mono-contact--dark sits on the section)
-   -------------------------------------------------------------------------- */
-.mono-section--contact.mono-contact--dark {
-  background: var(--mono-contact-bg);
-  color: var(--mono-contact-ink);
-}
-.mono-contact__card {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-  border: 1px solid var(--mono-hairline);
-  background: var(--mono-surface);
-}
-.mono-contact__rows {
-  display: flex;
-  flex-direction: column;
-}
-.mono-contact__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.75rem 1rem;
-  padding-block: 1rem;
-  border-bottom: 1px solid var(--mono-hairline);
-}
-.mono-contact__row:first-child {
-  padding-top: 0;
-}
-.mono-contact__label {
-  flex: 0 0 84px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--mono-ink-muted);
-}
-.mono-contact__value {
-  font-size: 1rem;
-  text-decoration: none;
-}
-a.mono-contact__value:hover {
-  text-decoration: underline;
-}
-.mono-contact__action {
-  margin-left: auto;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--mono-accent);
-  text-decoration: none;
-}
-.mono-contact__action:hover {
-  text-decoration: underline;
-}
-.mono-contact__socials {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.7rem;
-}
-.mono-social {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
-  border: 1px solid var(--mono-hairline);
-  color: inherit;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease;
+  background: #000000;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-weight: 900;
+  font-size: 1rem;
+  letter-spacing: 0.05em;
+  flex: none;
 }
-.mono-social svg {
-  width: 1.1rem;
-  height: 1.1rem;
+
+.mono-brand__logo {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border: 1px solid var(--mono-hairline-bright);
 }
-.mono-social:hover {
-  background: var(--mono-accent);
-  border-color: var(--mono-accent);
-  color: var(--mono-cta-ink);
+
+.mono-brand__name {
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.25rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: #ffffff;
+  white-space: nowrap;
 }
-.mono-contact--dark .mono-contact__card {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.12);
+
+.mono-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.75rem;
 }
-.mono-contact--dark .mono-contact__row {
-  border-bottom-color: rgba(255, 255, 255, 0.12);
+
+.mono-nav__link {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+  transition: color 0.18s ease;
+  position: relative;
 }
-.mono-contact--dark .mono-contact__label {
-  color: rgba(255, 255, 255, 0.55);
+
+.mono-nav__link:hover {
+  color: #ffffff;
 }
-.mono-contact--dark .mono-contact__action {
-  color: rgba(255, 255, 255, 0.85);
+
+.mono-nav__link--active {
+  color: #ffffff !important;
+}
+
+.mono-nav__link--active::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--mono-accent, #0f766e);
+}
+
+.mono-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
 }
 
 /* --------------------------------------------------------------------------
-   Footer
+   FULL-SCREEN COVER HERO (Cover Image Fills Whole Screen, Copy Overlaid)
    -------------------------------------------------------------------------- */
-.mono-footer {
-  background: #111b21;
-  color: rgba(255, 255, 255, 0.72);
-  padding: clamp(2.5rem, 5vw, 3.5rem) clamp(1.25rem, 4vw, 2rem);
-}
-.mono-footer__inner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 1.5rem 3rem;
-  max-width: 1120px;
-  margin-inline: auto;
-}
-.mono-footer__brand {
+.mono-hero {
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-}
-.mono-footer__name {
-  color: #ffffff;
-  font-family: var(--mono-head, 'Helvetica Neue', Arial, sans-serif);
-  font-size: 1.05rem;
-  font-weight: 600;
-}
-.mono-footer__meta {
-  font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-.mono-footer__nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  font-size: 0.82rem;
-}
-.mono-footer__nav a {
-  color: rgba(255, 255, 255, 0.7);
-  text-decoration: none;
-}
-.mono-footer__nav a:hover {
-  color: #ffffff;
-}
-.mono-footer__legal {
-  flex-basis: 100%;
-  display: flex;
-  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 0.35rem 1rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+  background: #000000;
+}
+
+.mono-hero__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.mono-hero__cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.02);
+  transition: transform 0.8s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.mono-hero:hover .mono-hero__cover {
+  transform: scale(1.04);
+}
+
+/* Dramatic Scrim Wash Layer For Crisp Contrast */
+.mono-hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 6, 8, 0.78) 0%,
+    rgba(5, 6, 8, 0.45) 40%,
+    rgba(5, 6, 8, 0.96) 100%
+  );
+  pointer-events: none;
+}
+
+/* Fallback Bare Monolith Cover */
+.mono-hero__cover--bare {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(circle 900px at 50% 40%, #151a21, #060709 85%);
+  position: relative;
+  overflow: hidden;
+}
+
+.mono-hero__bare-monogram {
+  font-family: var(--mono-head, sans-serif);
+  font-size: clamp(8rem, 28vw, 24rem);
+  font-weight: 950;
+  color: rgba(255, 255, 255, 0.03);
+  user-select: none;
+  letter-spacing: -0.05em;
+}
+
+/* Hero Content Area Overlaid on Cover */
+.mono-hero__inner {
+  position: relative;
+  z-index: 10;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 7rem;
+  padding-bottom: 4rem;
+  max-width: 1240px;
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.mono-hero__stage {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: flex-end;
+  gap: 3rem;
+}
+
+.mono-hero__copy {
+  display: grid;
+  gap: 1.25rem;
+  max-width: 820px;
+}
+
+.mono-hero__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.mono-hero__coordinates {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  color: var(--mono-accent, #0f766e);
+  text-transform: uppercase;
+}
+
+.mono-hero__title {
+  font-size: clamp(2.8rem, 7.5vw, 6.2rem);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: #ffffff;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, 0.9);
+}
+
+.mono-hero__lede {
+  font-size: clamp(1.05rem, 1.8vw, 1.35rem);
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 60ch;
+  line-height: 1.6;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.9);
+}
+
+.mono-hero__rating-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  background: rgba(14, 16, 20, 0.8);
+  border: 1px solid var(--mono-hairline-bright);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  color: #ffffff;
+}
+
+.mono-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
 }
 
 /* --------------------------------------------------------------------------
-   Responsive
+   ROLLING KINETIC SEAL / COMPASS BADGE (Rolls & Rotates Continuously)
    -------------------------------------------------------------------------- */
-@media (max-width: 860px) {
+.mono-rolling-seal {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.mono-rolling-seal__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: monoRollSpin 24s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes monoRollSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.mono-rolling-seal__center {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  background: #000000;
+  border: 1px solid var(--mono-hairline-bright);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: var(--mono-accent, #0f766e);
+}
+
+/* Bottom Scroll Prompt Bar */
+.mono-hero__bottom-bar {
+  position: relative;
+  z-index: 10;
+  border-top: 1px solid var(--mono-hairline);
+  background: rgba(7, 8, 10, 0.75);
+  backdrop-filter: blur(10px);
+}
+
+.mono-hero__bottom-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding: 0.85rem clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.mono-hero__scroll-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ffffff;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.mono-hero__scroll-link:hover {
+  color: var(--mono-accent, #0f766e);
+  transform: translateY(2px);
+}
+
+.mono-hero__scroll-arrow {
+  animation: monoRollArrow 2s infinite ease-in-out;
+}
+
+@keyframes monoRollArrow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+
+/* --------------------------------------------------------------------------
+   DUAL COUNTER-ROLLING KINETIC TYPOGRAPHY TRACKS
+   (One track rolls left, one track rolls right)
+   -------------------------------------------------------------------------- */
+.mono-rolling-container {
+  display: flex;
+  flex-direction: column;
+  background: #000000;
+  border-top: 1px solid var(--mono-hairline-bright);
+  border-bottom: 1px solid var(--mono-hairline-bright);
+  overflow: hidden;
+  user-select: none;
+}
+
+.mono-rolling-track-wrap {
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  padding-block: 0.85rem;
+}
+
+.mono-rolling-track-wrap--reverse {
+  background: #0b0d11;
+  border-top: 1px solid var(--mono-hairline);
+}
+
+.mono-rolling-track {
+  display: inline-flex;
+  gap: 2.5rem;
+  will-change: transform;
+}
+
+.mono-rolling-track--left {
+  animation: monoRollLeft 30s linear infinite;
+}
+
+.mono-rolling-track--right {
+  animation: monoRollRight 32s linear infinite;
+}
+
+.mono-rolling-container:hover .mono-rolling-track {
+  animation-play-state: paused;
+}
+
+@keyframes monoRollLeft {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes monoRollRight {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+.mono-rolling-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.mono-rolling-item__dot {
+  color: var(--mono-accent, #0f766e);
+}
+
+.mono-rolling-item--alt {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.88rem;
+  letter-spacing: 0.18em;
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Telemetry Ticker Strip (Harare Clock & Live Status)
+   -------------------------------------------------------------------------- */
+.mono-telemetry-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+}
+
+.mono-telemetry-beacon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ffffff;
+}
+
+.mono-telemetry-beacon__dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: monoBeaconPulse 2s infinite ease-in-out;
+}
+
+@keyframes monoBeaconPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* --------------------------------------------------------------------------
+   Stats Strip (Monolithic Slabs with Brackets)
+   -------------------------------------------------------------------------- */
+.mono-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--mono-hairline);
+  border: 1px solid var(--mono-hairline);
+}
+
+.mono-stat-slab {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 2rem 1.8rem;
+  background: var(--mono-surface);
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.mono-stat-slab:hover {
+  background: var(--mono-surface-card-hover);
+}
+
+.mono-stat-slab__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mono-stat-slab__idx {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  color: var(--mono-accent, #0f766e);
+  letter-spacing: 0.12em;
+}
+
+.mono-stat-slab__value {
+  font-family: var(--mono-head, sans-serif);
+  font-size: clamp(2.4rem, 4vw, 3.6rem);
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #ffffff;
+}
+
+.mono-stat-slab__label {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Catalogue Showcase & Filter Console (NO PILLS)
+   -------------------------------------------------------------------------- */
+.mono-console {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+  border: 1px solid var(--mono-hairline);
+  background: var(--mono-surface);
+  padding: 1.5rem;
+}
+
+.mono-console__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.mono-search-box {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+.mono-search-box__input {
+  width: 100%;
+  padding: 0.85rem 2.8rem 0.85rem 1rem;
+  background: #090a0d;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.86rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.mono-search-box__input:focus {
+  border-color: var(--mono-accent, #0f766e);
+  box-shadow: 0 0 0 2px var(--mono-accent-glow);
+}
+
+.mono-search-box__clear {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--mono-ink-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.mono-sort-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.mono-sort-box__label {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+}
+
+.mono-sort-box__select {
+  padding: 0.8rem 1.2rem;
+  background: #090a0d;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.82rem;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Sharp Rectangular Category Index Tabs (NO PILLS) */
+.mono-categories {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  padding-top: 1rem;
+  border-top: 1px solid var(--mono-hairline);
+}
+
+.mono-cat-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 1.15rem;
+  background: #090a0d;
+  border: 1px solid var(--mono-hairline);
+  color: var(--mono-ink-muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.mono-cat-tab:hover {
+  border-color: var(--mono-hairline-bright);
+  color: #ffffff;
+}
+
+.mono-cat-tab--active {
+  background: var(--mono-accent, #0f766e);
+  border-color: var(--mono-accent, #0f766e);
+  color: #ffffff;
+}
+
+.mono-cat-tab__count {
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+/* Monolithic Items Grid */
+.mono-items-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.mono-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1),
+              border-color 0.25s ease,
+              box-shadow 0.25s ease;
+}
+
+.mono-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--mono-hairline-bright);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+}
+
+.mono-card__media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #000000;
+  border-bottom: 1px solid var(--mono-hairline);
+}
+
+.mono-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.mono-card:hover .mono-card__media img {
+  transform: scale(1.05);
+}
+
+.mono-card__corner-tags {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.mono-card__inspect-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  padding: 0.45rem 1rem;
+  background: rgba(14, 16, 20, 0.95);
+  border: 1px solid var(--mono-hairline-bright);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #ffffff;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  white-space: nowrap;
+}
+
+.mono-card:hover .mono-card__inspect-btn {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.mono-card__body {
+  display: flex;
+  flex-direction: column;
+  padding: 1.6rem;
+  flex: 1;
+  gap: 1rem;
+}
+
+.mono-card__title {
+  font-size: 1.25rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: -0.015em;
+  color: #ffffff;
+}
+
+.mono-card__desc {
+  font-size: 0.9rem;
+  color: var(--mono-ink-muted);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  flex: 1;
+}
+
+.mono-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--mono-hairline);
+}
+
+.mono-card__price {
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Services Section (Architectural Monolithic Slabs)
+   -------------------------------------------------------------------------- */
+.mono-services-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.mono-service-slab {
+  display: flex;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  transition: all 0.2s ease;
+}
+
+.mono-service-slab:hover {
+  border-color: var(--mono-hairline-bright);
+  background: var(--mono-surface-card-hover);
+  transform: translateY(-2px);
+}
+
+.mono-service-slab__num {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--mono-accent, #0f766e);
+}
+
+.mono-service-slab__body {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.mono-service-slab__title {
+  font-size: 1.25rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Photo Gallery Grid & Reel (Click to Lightbox)
+   -------------------------------------------------------------------------- */
+.mono-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.mono-gallery-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #000000;
+  border: 1px solid var(--mono-hairline);
+  cursor: pointer;
+}
+
+.mono-gallery-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.mono-gallery-frame:hover img {
+  transform: scale(1.06);
+}
+
+.mono-gallery-frame__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, 0.85) 100%);
+  display: flex;
+  align-items: flex-end;
+  padding: 1rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.mono-gallery-frame:hover .mono-gallery-frame__overlay {
+  opacity: 1;
+}
+
+.mono-gallery-frame__caption {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Customer Testimonials Section
+   -------------------------------------------------------------------------- */
+.mono-reviews-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.mono-review-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  transition: all 0.2s ease;
+}
+
+.mono-review-card:hover {
+  border-color: var(--mono-hairline-bright);
+}
+
+.mono-review-card__stars {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.mono-review-card__comment {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--mono-ink);
+  font-style: italic;
+}
+
+.mono-review-card__foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 1rem;
+  border-top: 1px solid var(--mono-hairline);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.mono-review-card__author {
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.mono-review-card__date {
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   FAQ Accordions (Sharp Rectilinear Slabs)
+   -------------------------------------------------------------------------- */
+.mono-faq-list {
+  display: grid;
+  gap: 0.85rem;
+  max-width: 860px;
+}
+
+.mono-faq-item {
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  transition: border-color 0.2s ease;
+}
+
+.mono-faq-item[open] {
+  border-color: var(--mono-hairline-bright);
+}
+
+.mono-faq-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  padding: 1.35rem 1.6rem;
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #ffffff;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.mono-faq-summary::-webkit-details-marker {
+  display: none;
+}
+
+.mono-faq-indicator {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 1.25rem;
+  color: var(--mono-accent, #0f766e);
+  transition: transform 0.2s ease;
+}
+
+.mono-faq-item[open] .mono-faq-indicator {
+  transform: rotate(45deg);
+}
+
+.mono-faq-body {
+  padding: 0 1.6rem 1.35rem;
+  color: var(--mono-ink-muted);
+  font-size: 0.98rem;
+  line-height: 1.65;
+}
+
+/* --------------------------------------------------------------------------
+   Opening Hours Monolithic Block
+   -------------------------------------------------------------------------- */
+.mono-hours-block {
+  max-width: 620px;
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  padding: 2rem;
+}
+
+.mono-hours-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--mono-hairline);
+  margin-bottom: 1.25rem;
+}
+
+.mono-hours-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-block: 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.86rem;
+}
+
+.mono-hours-row:last-child {
+  border-bottom: none;
+}
+
+.mono-hours-row--today {
+  background: rgba(15, 118, 110, 0.12);
+  padding-inline: 0.65rem;
+  border-bottom-color: rgba(15, 118, 110, 0.35);
+}
+
+.mono-hours-day {
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.mono-hours-time {
+  color: var(--mono-ink-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Contact Concierge Block
+   -------------------------------------------------------------------------- */
+.mono-contact-card {
+  max-width: 820px;
+  background: var(--mono-surface-card);
+  border: 1px solid var(--mono-hairline);
+  padding: 2.5rem;
+  display: grid;
+  gap: 2rem;
+}
+
+.mono-contact-rows {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.mono-contact-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--mono-hairline);
+}
+
+.mono-contact-row:last-child {
+  border-bottom: none;
+}
+
+.mono-contact-label {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mono-ink-muted);
+}
+
+.mono-contact-val {
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.mono-contact-val--accent {
+  color: #2dd4bf;
+}
+
+/* --------------------------------------------------------------------------
+   Monolithic Footer
+   -------------------------------------------------------------------------- */
+.mono-footer {
+  background: #040507;
+  border-top: 1px solid var(--mono-hairline-bright);
+  padding-block: 4rem;
+}
+
+.mono-footer__inner {
+  display: grid;
+  gap: 2.5rem;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.mono-footer__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.mono-footer__nav {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.mono-footer__legal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--mono-hairline);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Quick-Inspect Hardware & Bakery Modal (NO PILLS, 0px Radius)
+   -------------------------------------------------------------------------- */
+.mono-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.mono-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 5, 7, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.mono-modal__dialog {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: #0f1116;
+  border: 1px solid var(--mono-hairline-bright);
+  z-index: 201;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+}
+
+.mono-modal__close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: #000000;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+
+.mono-modal__close:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+.mono-modal__body {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 2.25rem;
+  padding: 2.5rem;
+}
+
+.mono-modal__media {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  background: #000000;
+  border: 1px solid var(--mono-hairline);
+}
+
+.mono-modal__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.mono-modal__details {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.mono-modal__title {
+  font-size: 1.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mono-modal__price {
+  font-family: var(--mono-head, sans-serif);
+  font-size: 1.85rem;
+  font-weight: 950;
+  color: #ffffff;
+}
+
+.mono-modal__stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem;
+  background: #08090c;
+  border: 1px solid var(--mono-hairline);
+}
+
+.mono-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: #14161d;
+  border: 1px solid var(--mono-hairline-bright);
+  padding: 0.35rem 0.85rem;
+}
+
+.mono-stepper__btn {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mono-stepper__val {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 1.1rem;
+  font-weight: 900;
+  min-width: 1.8rem;
+  text-align: center;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Full-Screen Gallery Lightbox (NO PILLS)
+   -------------------------------------------------------------------------- */
+.mono-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.mono-lightbox__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 4, 6, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.mono-lightbox__content {
+  position: relative;
+  z-index: 301;
+  max-width: 90vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.mono-lightbox__img {
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  border: 1px solid var(--mono-hairline-bright);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
+}
+
+.mono-lightbox__nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3.25rem;
+  height: 3.25rem;
+  background: #000000;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 302;
+  transition: all 0.18s ease;
+}
+
+.mono-lightbox__nav-btn:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+.mono-lightbox__prev { left: 1.5rem; }
+.mono-lightbox__next { right: 1.5rem; }
+
+.mono-lightbox__caption {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.82rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+/* --------------------------------------------------------------------------
+   Floating Monolithic Action Button (FAB)
+   -------------------------------------------------------------------------- */
+.mono-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 60;
+  padding: 0.85rem 1.4rem;
+  background: #25d366;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  box-shadow: 0 10px 30px rgba(37, 211, 102, 0.4);
+  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
+}
+
+.mono-fab:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 36px rgba(37, 211, 102, 0.6);
+}
+
+.mono-scroll-top-btn {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  z-index: 60;
+  width: 44px;
+  height: 44px;
+  background: #090a0d;
+  border: 1px solid var(--mono-hairline-bright);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.mono-scroll-top-btn:hover {
+  background: #ffffff;
+  color: #000000;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive Breakpoints
+   -------------------------------------------------------------------------- */
+@media (max-width: 960px) {
+  .mono-hero__stage {
+    grid-template-columns: 1fr;
+  }
+
+  .mono-rolling-seal {
+    display: none;
+  }
+
+  .mono-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mono-items-grid,
+  .mono-gallery-grid,
+  .mono-reviews-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mono-services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mono-modal__body {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+    padding: 1.75rem;
+  }
+}
+
+@media (max-width: 640px) {
   .mono-nav {
     display: none;
   }
-}
-@media (max-width: 720px) {
-  [data-orient='stacked'] .mono-hero__media {
-    aspect-ratio: 4 / 3;
+
+  .mono-stats-grid,
+  .mono-items-grid,
+  .mono-gallery-grid,
+  .mono-reviews-grid {
+    grid-template-columns: 1fr;
   }
-  .mono-root[data-orient='immersive'] .mono-hero {
-    min-height: 560px;
+
+  .mono-hero__title {
+    font-size: 2.6rem;
   }
-  .mono-root[data-orient='immersive'] .mono-hero__inner {
-    padding-block: 5rem;
-  }
-  .mono-contact__row {
+
+  .mono-hero__actions {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+  }
+
+  .mono-btn {
+    width: 100%;
+  }
+
+  .mono-contact-row {
+    grid-template-columns: 1fr;
     gap: 0.35rem;
   }
-  .mono-contact__action {
-    margin-left: 0;
+
+  .mono-console__top {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
-/* --------------------------------------------------------------------------
-   Reduced motion
-   -------------------------------------------------------------------------- */
+/* Motion Preferences */
 @media (prefers-reduced-motion: reduce) {
   .mono-root *,
   .mono-root *::before,
   .mono-root *::after {
+    animation: none !important;
     transition: none !important;
-  }
-  .mono-root img {
-    transform: none !important;
   }
 }

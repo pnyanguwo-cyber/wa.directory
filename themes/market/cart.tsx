@@ -41,7 +41,7 @@ interface CartEntry {
   qty: number;
 }
 
-interface BusinessCart {
+export interface BusinessCart {
   business: CartBusiness;
   counts: Record<string, number>;
   items: ThemeItem[];
@@ -224,7 +224,7 @@ export function CartProvider({
   return <CartContext.Provider value={ctx}>{children}</CartContext.Provider>;
 }
 
-function useCart(): BusinessCart {
+export function useCart(): BusinessCart {
   const ctx = useContext(CartContext);
   return (
     ctx ?? {
