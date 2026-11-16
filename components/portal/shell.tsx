@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   BarChart3,
   Building2,
@@ -139,14 +139,17 @@ export default function PortalShell({
 }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const contentRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     setOpen(false)
   }, [pathname, activeId])
 
   // A tab is a new screen: start it at the top, not where the last one ended.
+  // On desktop the content column scrolls instead of the page, so reset both.
   useEffect(() => {
     window.scrollTo(0, 0)
+    contentRef.current?.scrollTo({ top: 0 })
   }, [pathname, activeId])
 
   useEffect(() => {
@@ -164,7 +167,7 @@ export default function PortalShell({
   }
 
   const navBody = (
-    <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-4" aria-label="Portal sections">
+    <nav className="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 space-y-4" aria-label="Portal sections">
       {nav.map((group, groupIndex) => (
         <div key={group.title || groupIndex} className="space-y-0.5">
           {group.title && (
@@ -242,8 +245,8 @@ export default function PortalShell({
   )
 
   return (
-    <div className="min-h-screen bg-[#f6f8f7]">
-      <div className={`mx-auto w-full ${fullBleed ? 'max-w-[1800px]' : 'max-w-[1680px]'} px-2.5 sm:px-4 py-2.5 sm:py-4`}>
+    <div className="min-h-screen bg-[#f6f8f7] lg:h-screen lg:overflow-hidden">
+      <div className={`mx-auto flex w-full flex-col lg:h-full lg:min-h-0 ${fullBleed ? 'max-w-[1800px]' : 'max-w-[1680px]'} px-2.5 sm:px-4 py-2.5 sm:py-4`}>
         {/* Mobile bar */}
         <div className="mb-2.5 flex items-center gap-2.5 rounded-2xl border border-white/80 bg-white/90 px-3 py-2 shadow-card lg:hidden">
           <button
@@ -264,9 +267,9 @@ export default function PortalShell({
           {actions}
         </div>
 
-        <div className="lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-4">
+        <div className="lg:grid lg:h-full lg:min-h-0 lg:grid-cols-[232px_minmax(0,1fr)] lg:gap-4">
           {/* Desktop sidebar */}
-          <aside className="hidden lg:sticky lg:top-4 lg:flex lg:h-[calc(100vh-2rem)] lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/80 lg:bg-white/95 lg:shadow-card">
+          <aside className="hidden lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/80 lg:bg-white/95 lg:shadow-card">
             <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 py-3.5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500 text-white shadow-soft-glow">
                 <MessageCircle className="h-5 w-5" aria-hidden="true" />
@@ -315,7 +318,7 @@ export default function PortalShell({
             </div>
           )}
 
-          <section className="min-w-0" aria-label="Portal content">
+          <section ref={contentRef} className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pb-4 lg:pr-1" aria-label="Portal content">
             {(subtitle || actions) && (
               <div className="mb-3 hidden items-center justify-between gap-3 lg:flex">
                 <div className="min-w-0">

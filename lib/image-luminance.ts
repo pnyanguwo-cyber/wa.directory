@@ -51,3 +51,14 @@ export function washForLuminance(lum: number | null | undefined): HeroWash {
   if (lum > 0.62) return { scrimL: 0.78, scrimM: 0.6, scrimB: 0.58 } // bright photo
   return HERO_WASH_DEFAULT
 }
+
+// Owner-set section transparency (site_theme.overlay, 0-100). 50 leaves the
+// automatic wash untouched, lower lets more of the cover photo through, higher
+// makes the section more solid so text stays readable.
+export function withOverlay(wash: HeroWash, overlay?: string | number | null): HeroWash {
+  const raw = typeof overlay === 'string' ? Number(overlay) : overlay
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return wash
+  const factor = Math.max(0, Math.min(100, raw)) / 50
+  const scale = (v: number) => Math.min(0.95, v * factor)
+  return { scrimL: scale(wash.scrimL), scrimM: scale(wash.scrimM), scrimB: scale(wash.scrimB) }
+}

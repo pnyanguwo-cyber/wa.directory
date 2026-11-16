@@ -22,7 +22,7 @@ export const SITE_DESIGNS: DesignPreset[] = [
   {
     key: 'classic',
     label: 'Classic',
-    desc: 'The flagship WA Directory look — wash hero, frosted tiles.',
+    desc: 'The flagship WA Directory look. Wash hero, frosted tiles.',
     defaultFont: 'modern',
     radiusPill: 'rounded-2xl',
     radiusCard: 'rounded-2xl',
@@ -34,7 +34,7 @@ export const SITE_DESIGNS: DesignPreset[] = [
   {
     key: 'maison',
     label: 'Maison',
-    desc: 'Editorial luxury — serif display, centered hero, thin rules.',
+    desc: 'Editorial luxury. Serif display, centered hero, thin rules.',
     defaultFont: 'editorial',
     radiusPill: 'rounded-full',
     radiusCard: 'rounded-lg',
@@ -46,7 +46,7 @@ export const SITE_DESIGNS: DesignPreset[] = [
   {
     key: 'bolt',
     label: 'Bolt',
-    desc: 'Bold conversion — huge headline, stat chips, chunky cards.',
+    desc: 'Bold conversion. Huge headline, stat chips and chunky cards.',
     defaultFont: 'grotesk',
     radiusPill: 'rounded-full',
     radiusCard: 'rounded-3xl',
@@ -58,7 +58,7 @@ export const SITE_DESIGNS: DesignPreset[] = [
   {
     key: 'craft',
     label: 'Craft',
-    desc: 'Warm market feel — photo collage hero, tilted badges, soft pills.',
+    desc: 'Warm market feel. Photo collage hero, tilted badges and soft pills.',
     defaultFont: 'warm',
     radiusPill: 'rounded-full',
     radiusCard: 'rounded-[1.75rem]',
@@ -75,7 +75,7 @@ export function getPreset(key?: string | null): DesignPreset {
 
 // ---- Font pairs (loaded server-side via next/font in the template) --------
 export const SITE_FONTS: { key: SiteFontKey; label: string; desc: string }[] = [
-  { key: 'modern', label: 'Modern Sans', desc: 'Inter — the WA Directory system look' },
+  { key: 'modern', label: 'Modern Sans', desc: 'Inter, the WA Directory system look' },
   { key: 'editorial', label: 'Editorial Serif', desc: 'Playfair Display + Inter' },
   { key: 'grotesk', label: 'Grotesk', desc: 'Space Grotesk + Inter' },
   { key: 'warm', label: 'Warm Serif', desc: 'DM Serif Display + DM Sans' },

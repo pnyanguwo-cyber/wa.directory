@@ -13,7 +13,7 @@ import { getInitials, dedupeCategories } from '@/lib/utils'
 import { accentFor } from '@/lib/category-style'
 import { getPreset, SITE_DESIGN_KEYS } from '@/lib/site-design'
 import { WEBSITE_THEMES } from '@/registry/websites'
-import { washForLuminance } from '@/lib/image-luminance'
+import { washForLuminance, withOverlay } from '@/lib/image-luminance'
 import { getFontPair } from '@/lib/site-fonts'
 import { getSocialLinks } from '@/components/social-icons'
 import { getCategoryImage } from '@/data/category-images'
@@ -36,6 +36,8 @@ export interface ThemeSelection {
   hero?: string
   shop?: string
   contact?: string
+  // 0-100; 50 keeps the automatic wash. See withOverlay().
+  overlay?: string
 }
 
 export type ThemeDisplayMode = 'live' | 'preview' | 'print'
@@ -169,6 +171,10 @@ export function parseThemeSelection(raw: unknown): ThemeSelection {
     hero: pick('hero'),
     shop: pick('shop'),
     contact: pick('contact'),
+    overlay:
+      str('overlay') !== '' && Number.isFinite(Number(str('overlay')))
+        ? String(Math.max(0, Math.min(100, Number(str('overlay')))))
+        : undefined,
   }
 }
 
@@ -261,7 +267,7 @@ export async function buildSiteView(
   const heroLuminance = blocks.gallery?.[0]
     ? (business.site_cover_luminance ?? null)
     : (itemList.find((i) => i.image_url)?.image_luminance ?? null)
-  const heroWash = washForLuminance(heroLuminance)
+  const heroWash = withOverlay(washForLuminance(heroLuminance), theme.overlay)
 
   const accentSoftBg = `color-mix(in srgb, ${accent} 10%, transparent)`
   const accentMutedBg = `color-mix(in srgb, ${accent} 18%, transparent)`

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
@@ -8,7 +9,7 @@ import type { SiteHoursEntry, SiteFaqEntry, SiteContentBlocks } from '@/types'
 import type { WebsiteThemeMeta } from '@/registry/websites'
 
 type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
-type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string; orientation?: string }
+type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string; orientation?: string; overlay?: string }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const THEME_ROWS: { key: ThemeKey; label: string; hint: string }[] = [
@@ -42,6 +43,47 @@ function sortDays(rows: SiteHoursEntry[]): SiteHoursEntry[] {
     .filter((row, i) => rows.findIndex(r => r.day === row.day) === i)
     .slice(0, 7)
     .sort((a, b) => order.indexOf(a.day) - order.indexOf(b.day))
+}
+
+// Collapsible card. Every block on this page uses it so the editor stays short
+// and the page reads as a list of clearly named sections.
+function Section({
+  title,
+  desc,
+  action,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  desc?: string
+  action?: ReactNode
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="rounded-2xl border border-gray-200/80 bg-white shadow-card">
+      <div className="flex w-full items-start gap-3 px-5 py-4">
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-start gap-3 text-left"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-text-primary">{title}</span>
+            {desc && <span className="mt-0.5 block text-xs text-text-secondary">{desc}</span>}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className={`mt-0.5 h-4 w-4 shrink-0 text-text-secondary transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </button>
+        {action && <div className="flex shrink-0 items-center">{action}</div>}
+      </div>
+      {open && <div className="border-t border-gray-100 px-5 pb-5 pt-4">{children}</div>}
+    </div>
+  )
 }
 
 export default function PortalSite({
@@ -83,6 +125,7 @@ export default function PortalSite({
     design: siteTheme?.design || '',
     font: siteTheme?.font || '',
     orientation: siteTheme?.orientation || '',
+    overlay: siteTheme?.overlay || '',
   })
   const [prevDesign, setPrevDesign] = useState('')
   const [socials, setSocials] = useState<Record<SocialKey, string>>({
@@ -154,7 +197,7 @@ export default function PortalSite({
         return
       }
       if (data.site_theme) setTheme((t) => ({ ...t, design: data.site_theme.design || '', font: data.site_theme.font || '' }))
-      setNotice(`AI picked the "${data.site_theme?.design || 'classic'}" design — press Save to apply.`)
+      setNotice(`AI picked the "${data.site_theme?.design || 'classic'}" design. Press Save to apply.`)
       router.refresh()
     } catch {
       setError('AI design pick failed. Check your connection and try again.')
@@ -187,7 +230,7 @@ export default function PortalSite({
         if (fresh.tagline) setTagline(fresh.tagline)
         if (fresh.faq) setFaq(fresh.faq)
       }
-      setNotice(ai ? 'AI content generated and saved.' : 'Site settings saved — changes are live now.')
+      setNotice(ai ? 'AI content generated and saved.' : 'Site settings saved. Changes are live now.')
       setSocialTicked({
         twitter: !!socials.twitter,
         instagram: !!socials.instagram,
@@ -284,53 +327,11 @@ export default function PortalSite({
         </p>
       </div>
 
-      {/* Social profiles */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-text-primary">Social profiles</h3>
-          <p className="text-xs text-text-secondary mt-0.5">Tick the networks you&apos;re on and add your page link. Shown on your website and profile.</p>
-        </div>
-        <div className="space-y-3">
-          {SOCIAL_KEYS.map(key => (
-            <div key={key} className="rounded-2xl border border-gray-200/80 p-3.5">
-              <label className="flex items-center gap-2.5 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={socialTicked[key]}
-                  onChange={e => { setSocialTicked(t => ({ ...t, [key]: e.target.checked })); setNotice('') }}
-                  className="w-4 h-4 accent-whatsapp-600 shrink-0"
-                />
-                <span className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                  <SocialIcon platform={key} className="w-4 h-4 text-text-secondary" />
-                  I have a {SOCIAL_META[key].label} page
-                </span>
-              </label>
-              {socialTicked[key] && (
-                <input
-                  type="url"
-                  value={socials[key]}
-                  onChange={e => { setSocials(s => ({ ...s, [key]: e.target.value.slice(0, 200) })); setNotice('') }}
-                  placeholder={SOCIAL_META[key].placeholder}
-                  className="input-field w-full mt-2.5 text-sm"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <p className="text-[11px] text-text-secondary mt-3">
-          Only links matching the network&apos;s web address are saved. Untick a network to remove it.
-        </p>
-      </div>
-
-      {/* Design template */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-text-primary">Design</h3>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Pick the look of your website — layout, fonts and feel change instantly.
-            </p>
-          </div>
+        <Section
+          title="Design"
+          desc="Pick a template, then fine-tune the font and layout. Applying a website theme replaces the look in one tap."
+          defaultOpen
+          action={
           <button
             type="button"
             onClick={handleDesignAi}
@@ -339,7 +340,8 @@ export default function PortalSite({
           >
             {generating ? 'Thinking…' : '✨ Let AI decide'}
           </button>
-        </div>
+          }
+        >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {SITE_DESIGNS.map(d => {
             const active = (theme.design || 'classic') === d.key
@@ -367,7 +369,7 @@ export default function PortalSite({
           <div className="mt-5 border-t border-gray-100 pt-5">
             <h4 className="text-sm font-bold text-text-primary">Website themes</h4>
             <p className="text-xs text-text-secondary mt-0.5 mb-3">
-              Full makeovers — a whole new layout, fonts and motion. Preview one on your live site, then apply it in one tap.
+              Full makeovers: a whole new layout, fonts and motion. Preview one on your live site, then apply it in one tap.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {themeGallery.map(meta => {
@@ -385,7 +387,17 @@ export default function PortalSite({
                       <span className="text-sm font-bold text-text-primary">{meta.name}</span>
                       {active && <span aria-hidden="true">✓</span>}
                     </div>
-                    <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{meta.description}</p>
+                    {(meta.preview?.card || meta.preview?.desktop) && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={(meta.preview.card || meta.preview.desktop) as string}
+                        alt={`${meta.name} theme preview`}
+                        loading="lazy"
+                        decoding="async"
+                        className="mt-2 w-full aspect-[16/10] object-cover rounded-lg border border-gray-200/80 bg-gray-100"
+                      />
+                    )}
+                    <p className="text-xs text-text-secondary mt-2 leading-relaxed">{meta.description}</p>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {meta.orientations.map(o => (
                         <span
@@ -425,7 +437,7 @@ export default function PortalSite({
                 onClick={undoRegistryTheme}
                 className="mt-3 text-xs font-semibold text-text-secondary underline underline-offset-2 hover:text-text-primary disabled:opacity-50"
               >
-                Undo — go back to {prevDesign}
+                Undo and go back to {prevDesign}
               </button>
             )}
           </div>
@@ -438,7 +450,7 @@ export default function PortalSite({
             className="input text-sm"
           >
             {SITE_FONTS.map(f => (
-              <option key={f.key} value={f.key}>{f.label} — {f.desc}</option>
+              <option key={f.key} value={f.key}>{f.label} ({f.desc})</option>
             ))}
           </select>
           <span className="block text-xs text-text-secondary mt-1">Leave as the template default unless you have a brand font taste.</span>
@@ -462,15 +474,14 @@ export default function PortalSite({
         <p className="text-xs text-text-secondary mt-3">
           Changes go live when you press Save website settings below.
         </p>
-      </div>
+        </Section>
 
-      {/* Colours */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-text-primary">Colours</h3>
-          <p className="text-xs text-text-secondary mt-0.5">Quick-pick a full colour scheme, or fine-tune each section below.</p>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        <Section
+          title="Colours"
+          desc="Quick-pick a colour scheme, or fine-tune each section. Changes go live when you save."
+          defaultOpen
+        >
+        <div className="grid grid-cols-2 gap-2 mb-4">
           {PALETTES.map(p => {
             const active =
               theme.header === (p.theme.header || '') &&
@@ -480,16 +491,16 @@ export default function PortalSite({
               <button
                 key={p.name}
                 type="button"
-                onClick={() => { setTheme({ ...p.theme }); setNotice('') }}
+                onClick={() => { setTheme(t => ({ ...t, ...p.theme })); setNotice('') }}
                 aria-pressed={active}
-                className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors ${active ? 'border-whatsapp-500 bg-whatsapp-50/60 ring-1 ring-whatsapp-400' : 'border-gray-200/80 bg-surface hover:border-whatsapp-400 hover:bg-whatsapp-50'}`}
+                className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors ${active ? 'border-whatsapp-500 bg-whatsapp-50/60 ring-1 ring-whatsapp-400' : 'border-gray-200/80 bg-surface hover:border-whatsapp-400 hover:bg-whatsapp-50'}`}
               >
-                <span className="flex -space-x-1">
+                <span className="flex shrink-0 -space-x-1">
                   {[p.theme.header || '#ffffff', p.theme.accent, p.theme.contact].slice(0, 3).map((c, i) => (
-                    <span key={i} className="w-5 h-5 rounded-full border border-white shadow-sm" style={{ backgroundColor: c || '#e5e7eb' }} />
+                    <span key={i} className="w-4 h-4 rounded-full border border-white shadow-sm" style={{ backgroundColor: c || '#e5e7eb' }} />
                   ))}
                 </span>
-                <span className={`text-xs font-semibold ${active ? 'text-whatsapp-700' : 'text-text-primary'}`}>{p.name}</span>
+                <span className={`truncate text-[11.5px] font-semibold ${active ? 'text-whatsapp-700' : 'text-text-primary'}`}>{p.name}</span>
               </button>
             )
           })}
@@ -548,14 +559,62 @@ export default function PortalSite({
         <p className="text-[11px] text-text-secondary mt-3">
           Tip: for dark colours the text on your website switches to white automatically.
         </p>
-      </div>
-
-      {/* Hero + services text */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-text-primary">Hero / bio</h3>
-          <p className="text-xs text-text-secondary mt-0.5">This section appears at the top of your website.</p>
+        <div className="rounded-2xl border border-gray-200/80 p-3.5 mt-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-text-primary">Cover overlay</p>
+              <p className="text-[11px] text-text-secondary mt-0.5">How much the cover photo is dimmed behind your hero text. Slide left to show more photo.</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-surface px-2 py-1 text-[11px] font-bold tabular-nums text-text-primary">{theme.overlay || '50'}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={5}
+            value={theme.overlay || '50'}
+            onChange={e => { setTheme(t => ({ ...t, overlay: e.target.value })); setNotice('') }}
+            aria-label="Cover overlay strength"
+            className="mt-3 w-full accent-whatsapp-600"
+          />
+          <div className="mt-1 flex justify-between text-[10px] text-text-secondary">
+            <span>Clear photo</span>
+            <span>Solid</span>
+          </div>
         </div>
+        </Section>
+
+        <Section
+          title="Tagline"
+          desc="The big headline on your opening section."
+          action={
+          <button
+            type="button"
+            onClick={() => handleSave(true)}
+            disabled={busy || generating}
+            className="rounded-full border border-whatsapp-300 bg-whatsapp-50 px-4 py-2 text-xs font-bold text-whatsapp-800 hover:bg-whatsapp-100 transition-colors disabled:opacity-60 shrink-0"
+          >
+            {generating ? 'Generating…' : '✨ Generate with AI'}
+          </button>
+          }
+        >
+        <input
+          type="text"
+          value={tagline}
+          onChange={e => { setTagline(e.target.value.slice(0, 140)); setNotice('') }}
+          className="input-field w-full"
+          placeholder="Quality plumbing, right when you need it"
+          maxLength={140}
+        />
+        <p className="text-[11px] text-text-secondary mt-2">
+          Generates a fresh tagline + starter FAQ. It won&apos;t touch your opening hours or photos.
+        </p>
+        </Section>
+
+        <Section
+          title="Hero and services"
+          desc="The intro text and the service cards on your website."
+        >
         <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Hero / bio text</label>
           <textarea
@@ -578,7 +637,13 @@ export default function PortalSite({
           />
           <p className="text-[11px] text-text-secondary mt-1">{services.length}/2000 characters</p>
         </div>
-        <div className="mt-4">
+        </Section>
+
+        <Section
+          title="Contact and socials"
+          desc="Where customers reach you online, shown on your website and profile."
+        >
+        <div>
           <label className="block text-sm font-medium text-text-primary mb-1.5">Contact email</label>
           <input
             type="email"
@@ -589,44 +654,42 @@ export default function PortalSite({
           />
           <p className="text-[11px] text-text-secondary mt-1">Shown to customers as your contact email on the website.</p>
         </div>
-      </div>
-
-      {/* Tagline */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="text-sm font-bold text-text-primary">Tagline</h3>
-            <p className="text-xs text-text-secondary mt-0.5">The big headline on your website&apos;s opening section.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => handleSave(true)}
-            disabled={busy || generating}
-            className="rounded-full border border-whatsapp-300 bg-whatsapp-50 px-4 py-2 text-xs font-bold text-whatsapp-800 hover:bg-whatsapp-100 transition-colors disabled:opacity-60 shrink-0"
-          >
-            {generating ? 'Generating…' : '✨ Generate with AI'}
-          </button>
+        <div className="space-y-3">
+          {SOCIAL_KEYS.map(key => (
+            <div key={key} className="rounded-2xl border border-gray-200/80 p-3.5">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={socialTicked[key]}
+                  onChange={e => { setSocialTicked(t => ({ ...t, [key]: e.target.checked })); setNotice('') }}
+                  className="w-4 h-4 accent-whatsapp-600 shrink-0"
+                />
+                <span className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                  <SocialIcon platform={key} className="w-4 h-4 text-text-secondary" />
+                  I have a {SOCIAL_META[key].label} page
+                </span>
+              </label>
+              {socialTicked[key] && (
+                <input
+                  type="url"
+                  value={socials[key]}
+                  onChange={e => { setSocials(s => ({ ...s, [key]: e.target.value.slice(0, 200) })); setNotice('') }}
+                  placeholder={SOCIAL_META[key].placeholder}
+                  className="input-field w-full mt-2.5 text-sm"
+                />
+              )}
+            </div>
+          ))}
         </div>
-        <input
-          type="text"
-          value={tagline}
-          onChange={e => { setTagline(e.target.value.slice(0, 140)); setNotice('') }}
-          className="input-field w-full"
-          placeholder="Quality plumbing, right when you need it"
-          maxLength={140}
-        />
-        <p className="text-[11px] text-text-secondary mt-2">
-          Generates a fresh tagline + starter FAQ. It won&apos;t touch your opening hours or photos.
+        <p className="text-[11px] text-text-secondary mt-3">
+          Only links matching the network&apos;s web address are saved. Untick a network to remove it.
         </p>
-      </div>
+        </Section>
 
-      {/* FAQ */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-text-primary">FAQ</h3>
-            <p className="text-xs text-text-secondary mt-0.5">Common questions customers ask (up to 8).</p>
-          </div>
+        <Section
+          title="FAQ"
+          desc="Common questions customers ask (up to 8)."
+          action={
           <button
             type="button"
             onClick={() => { if (faq.length < 8) setFaq(f => [...f, { q: '', a: '' }]); setNotice('') }}
@@ -635,7 +698,8 @@ export default function PortalSite({
           >
             + Add question
           </button>
-        </div>
+          }
+        >
         {faq.length === 0 && (
           <p className="text-xs text-text-secondary">No FAQ yet. Use ✨ Generate with AI to create a starter set, or add your own.</p>
         )}
@@ -669,14 +733,12 @@ export default function PortalSite({
             </div>
           ))}
         </div>
-      </div>
+        </Section>
 
-      {/* Opening hours */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-text-primary">Opening hours</h3>
-          <p className="text-xs text-text-secondary mt-0.5">Tick the days you&apos;re open and set the times. Unticked days show as closed.</p>
-        </div>
+        <Section
+          title="Opening hours"
+          desc="Tick the days you are open and set the times. Unticked days show as closed."
+        >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {hours.map((h, i) => {
             const open = h.open !== '' && h.close !== ''
@@ -716,14 +778,12 @@ export default function PortalSite({
             )
           })}
         </div>
-      </div>
+        </Section>
 
-      {/* Gallery */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="mb-4">
-          <h3 className="text-sm font-bold text-text-primary">Gallery photos</h3>
-          <p className="text-xs text-text-secondary mt-0.5">Up to 8 photos of your work or products (PNG, JPEG or WebP, max 2MB each).</p>
-        </div>
+        <Section
+          title="Photos"
+          desc="Up to 8 photos of your work or products (PNG, JPEG or WebP, max 2MB each)."
+        >
         <div className="flex flex-wrap gap-3">
           {gallery.map((url, i) => (
             <div key={url + i} className="relative w-20 h-20 rounded-2xl border border-gray-200/80 overflow-hidden group">
@@ -749,7 +809,7 @@ export default function PortalSite({
             </label>
           )}
         </div>
-      </div>
+        </Section>
 
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>}
       {notice && <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>}
@@ -825,3 +885,4 @@ export default function PortalSite({
     </div>
   )
 }
+

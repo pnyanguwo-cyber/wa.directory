@@ -18,6 +18,8 @@ export interface WebsiteThemeMeta {
   preview: {
     desktop: string
     mobile: string
+    /** Optimised card thumbnail shown in the portal theme picker. */
+    card?: string
   }
 }
 
@@ -38,7 +40,11 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
       orientations: ['split', 'stacked'],
       defaultOrientation: 'split',
       supports: { cart: false, voiceOnly: true, dark: true, reducedMotion: true },
-      preview: { desktop: '/previews/atlas/desktop.png', mobile: '/previews/atlas/mobile.png' },
+      preview: {
+        desktop: '/previews/atlas/desktop.png',
+        mobile: '/previews/atlas/mobile.png',
+        card: '/previews/atlas/card.webp',
+      },
     },
   },
   monolith: {
@@ -52,7 +58,11 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
       orientations: ['immersive', 'stacked'],
       defaultOrientation: 'immersive',
       supports: { cart: false, voiceOnly: true, dark: true, reducedMotion: true },
-      preview: { desktop: '/previews/monolith/desktop.png', mobile: '/previews/monolith/mobile.png' },
+      preview: {
+        desktop: '/previews/monolith/desktop.png',
+        mobile: '/previews/monolith/mobile.png',
+        card: '/previews/monolith/card.webp',
+      },
     },
   },
   market: {
@@ -66,7 +76,11 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
       orientations: ['catalogue', 'stacked'],
       defaultOrientation: 'catalogue',
       supports: { cart: true, voiceOnly: true, dark: true, reducedMotion: true },
-      preview: { desktop: '/previews/market/desktop.png', mobile: '/previews/market/mobile.png' },
+      preview: {
+        desktop: '/previews/market/desktop.png',
+        mobile: '/previews/market/mobile.png',
+        card: '/previews/market/card.webp',
+      },
     },
   },
 }

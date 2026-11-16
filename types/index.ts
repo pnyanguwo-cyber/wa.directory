@@ -60,6 +60,9 @@ export interface Business {
     // Choosable template + font pair (whitelist-validated on write).
     design?: SiteDesignKey
     font?: SiteFontKey
+    // Section transparency: how strongly the cover photo is dimmed behind
+    // hero text. 0-100 as a string; "50" matches the automatic wash.
+    overlay?: string
   } | null
   // Optional social profiles shown on the auto-generated website + profile page.
   // Empty string / missing key = the platform is not linked.

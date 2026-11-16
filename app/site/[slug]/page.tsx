@@ -11,7 +11,7 @@ import { digitsOnly } from '@/lib/phone'
 import { formatPrice, getInitials, dedupeCategories } from '@/lib/utils'
 import { accentFor } from '@/lib/category-style'
 import { getPreset } from '@/lib/site-design'
-import { washForLuminance } from '@/lib/image-luminance'
+import { washForLuminance, withOverlay } from '@/lib/image-luminance'
 import { getFontPair } from '@/lib/site-fonts'
 import { resolveTheme } from '@/registry/websites'
 import { buildSiteView, type ThemeProps } from '@/lib/site-view'
@@ -222,6 +222,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
     accent?: string
     design?: string
     font?: string
+    overlay?: string
   }
 
   // Choosable template preset + font pair (portal "Design" panel writes these).
@@ -256,7 +257,7 @@ export default async function BusinessSitePage({ params }: { params: { slug: str
   const heroLuminance = blocks.gallery?.[0]
     ? (business.site_cover_luminance ?? null)
     : (itemList.find((i) => i.image_url)?.image_luminance ?? null)
-  const heroWash = washForLuminance(heroLuminance)
+  const heroWash = withOverlay(washForLuminance(heroLuminance), theme.overlay)
 
   // Derived color tokens via color-mix()
   const accentSoftBg = `color-mix(in srgb, ${accent} 10%, transparent)`
