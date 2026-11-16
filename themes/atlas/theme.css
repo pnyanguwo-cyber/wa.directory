@@ -380,6 +380,7 @@
   color: var(--atlas-ink-muted);
   transition: color 0.15s ease, text-shadow 0.15s ease;
   padding: 0.3rem 0.2rem;
+  white-space: nowrap;
 }
 
 .atlas-nav__link:hover {
@@ -387,16 +388,32 @@
   text-shadow: 0 0 12px color-mix(in srgb, var(--atlas-accent, #00e5ff) 60%, transparent);
 }
 
+/* Mobile: stack nav links vertically when they overflow */
+@media (max-width: 640px) {
+  .atlas-nav {
+    justify-content: flex-start;
+  }
+  .atlas-nav__link {
+    border-radius: var(--atlas-radius-xs);
+    padding: 0.55rem 0.9rem;
+    width: auto;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+}
+
 .atlas-header__actions {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .atlas-header__cta {
   padding: 0.55rem 1.15rem;
   font-size: 0.84rem;
 }
+
 
 /* ------------------------------------------------------------------ */
 /* Buttons & Chips                                                     */
@@ -569,18 +586,37 @@
   justify-items: start;
 }
 
-.atlas-hero__telemetry-badge {
+.atlas-hero__meta {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: var(--atlas-radius-xs);
-  background: color-mix(in srgb, var(--atlas-accent, #00e5ff) 10%, #0d1520);
-  border: 1px solid color-mix(in srgb, var(--atlas-accent, #00e5ff) 26%, transparent);
+  gap: 0.65rem;
+  flex-wrap: wrap;
   font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: var(--atlas-ink);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--atlas-ink-muted);
+}
+
+.atlas-hero__meta-signal {
+  width: 22px;
+  height: 1px;
+  background: var(--atlas-accent, #00e5ff);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--atlas-accent, #00e5ff) 70%, transparent);
+  flex: none;
+}
+
+.atlas-hero__meta-category {
+  color: #ffffff;
+}
+
+.atlas-hero__meta-sep {
+  color: color-mix(in srgb, var(--atlas-accent, #00e5ff) 70%, transparent);
+}
+
+.atlas-hero__meta-city {
+  color: color-mix(in srgb, var(--atlas-accent, #00e5ff) 80%, #ffffff);
 }
 
 .atlas-hero__title {
@@ -1901,9 +1937,9 @@
   width: 2.35rem;
   height: 2.35rem;
   border-radius: var(--atlas-radius-sm);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--atlas-hairline);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--atlas-contact-ink, #ffffff) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--atlas-contact-ink, #ffffff) 20%, transparent);
+  color: var(--atlas-contact-ink, #ffffff);
   transition: all 0.18s ease;
 }
 
@@ -1915,8 +1951,10 @@
 }
 
 .atlas-social svg {
-  width: 1.1rem;
-  height: 1.1rem;
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  fill: currentColor;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1987,42 +2025,6 @@
   font-size: 0.68rem;
   letter-spacing: 0.08em;
   color: var(--atlas-accent, #00e5ff);
-}
-
-/* ------------------------------------------------------------------ */
-/* Floating Reactive WhatsApp Concierge Dock                           */
-/* ------------------------------------------------------------------ */
-
-.atlas-float-dock {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 50;
-}
-
-.atlas-float-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.75rem 1.25rem;
-  border-radius: 999px;
-  background: #25d366;
-  color: #ffffff;
-  font-weight: 750;
-  font-size: 0.9rem;
-  box-shadow: 0 8px 30px rgba(37, 211, 102, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.2s ease;
-}
-
-.atlas-float-btn:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 12px 36px rgba(37, 211, 102, 0.65);
-}
-
-.atlas-float-btn .atlas-svg-icon {
-  width: 1.25em;
-  height: 1.25em;
 }
 
 /* ------------------------------------------------------------------ */
@@ -2133,40 +2135,102 @@
   }
 
   .atlas-header__inner {
-    gap: 0.85rem;
+    flex-wrap: nowrap;
+    gap: 0.65rem;
+    padding-block: 0.6rem;
   }
 
   .atlas-brand {
-    flex: 1 1 100%;
+    flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+  }
+
+  .atlas-brand__logo,
+  .atlas-brand__monogram {
+    width: 2rem;
+    height: 2rem;
+    flex: none;
   }
 
   .atlas-brand__text {
     min-width: 0;
   }
 
+  .atlas-brand__tag {
+    display: none;
+  }
+
   .atlas-brand__name {
-    white-space: normal;
-    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.98rem;
     line-height: 1.2;
   }
 
   .atlas-header__actions {
-    width: 100%;
+    width: auto;
+    flex: none;
   }
 
   .atlas-header__cta {
-    width: 100%;
+    width: auto;
     margin-left: 0;
+    padding: 0.5rem 0.8rem;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .atlas-hero {
+    padding-block: 2.25rem 2.75rem;
+  }
+
+  .atlas-hero__content {
+    gap: 1rem;
+  }
+
+  .atlas-hero__meta {
+    gap: 0.5rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.12em;
+  }
+
+  .atlas-hero__meta-signal {
+    width: 14px;
+  }
+
+  .atlas-hero__title {
+    font-size: clamp(2rem, 9vw, 2.7rem);
   }
 
   .atlas-hero__stage {
     width: 100%;
     max-width: 100%;
+    padding: 7px;
   }
 
   .atlas-hero__media {
     min-height: 0;
+    aspect-ratio: 4 / 3;
+  }
+
+  .atlas-hero__hud-tag {
+    left: 12px;
+    bottom: 12px;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .atlas-hero__guarantees {
+    gap: 0.65rem 1rem;
+  }
+
+  .atlas-contact__card {
+    padding: 1.35rem;
+  }
+
+  .atlas-contact__socials {
+    flex-wrap: wrap;
   }
 
   .atlas-stats {
@@ -2197,14 +2261,6 @@
     grid-column: 1;
   }
 
-  .atlas-float-btn__text {
-    display: none;
-  }
-
-  .atlas-float-btn {
-    padding: 0.75rem;
-    border-radius: 50%;
-  }
 }
 
 /* ------------------------------------------------------------------ */

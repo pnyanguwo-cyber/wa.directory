@@ -840,7 +840,7 @@ export default function AtlasTheme({
                 ) : (
                   <>
                     <WhatsAppIcon />
-                    <span>WhatsApp Concierge</span>
+                    <span className="atlas-header__cta-text">WhatsApp</span>
                   </>
                 )}
               </a>
@@ -860,12 +860,19 @@ export default function AtlasTheme({
         <div className="atlas-hero__ambient" aria-hidden="true" />
         <div className="atlas-hero__inner">
           <div className="atlas-hero__content">
-            <div className="atlas-hero__telemetry-badge">
-              <span className="atlas-led-dot atlas-led-dot--live" />
-              <span>
-                {[site.category || 'GADGETS', site.city || 'STORE'].filter(Boolean).join(' // ')}
+            <div className="atlas-hero__meta">
+              <span className="atlas-hero__meta-signal" aria-hidden="true" />
+              <span className="atlas-hero__meta-category">
+                {site.category || 'GADGETS'}
               </span>
-              <span className="atlas-tech-code">NODE.01</span>
+              {site.city ? (
+                <>
+                  <span className="atlas-hero__meta-sep" aria-hidden="true">
+                    /
+                  </span>
+                  <span className="atlas-hero__meta-city">{site.city}</span>
+                </>
+              ) : null}
             </div>
 
             <h1 className="atlas-hero__title">
@@ -1408,7 +1415,10 @@ export default function AtlasTheme({
                     rel="noopener noreferrer"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d={SOCIAL_ICONS[link.key]} fill="currentColor" />
+                      <path
+                        d={SOCIAL_ICONS[link.key] ?? SOCIAL_ICONS.twitter}
+                        fill="currentColor"
+                      />
                     </svg>
                   </a>
                 ))}
@@ -1446,25 +1456,6 @@ export default function AtlasTheme({
           </div>
         </div>
       </footer>
-
-      {/* ---------------------------------------------------------- */}
-      {/* Floating Reactive WhatsApp Concierge Dock                   */}
-      {/* ---------------------------------------------------------- */}
-      {orderHref ? (
-        <aside className="atlas-float-dock" aria-label="Quick WhatsApp Concierge">
-          <a
-            href={orderHref}
-            className="atlas-float-btn"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Chat with Tech Support on WhatsApp"
-          >
-            <span className="atlas-led-dot atlas-led-dot--live" />
-            <WhatsAppIcon />
-            <span className="atlas-float-btn__text">Order Concierge</span>
-          </a>
-        </aside>
-      ) : null}
 
       {/* ---------------------------------------------------------- */}
       {/* Interactive Modal: Quick Hardware Spec Inspector            */}

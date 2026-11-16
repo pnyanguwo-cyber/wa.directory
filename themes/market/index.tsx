@@ -538,7 +538,8 @@ function HeaderCartButton(): ReactNode {
       onClick={() => cart.setOpen(true)}
       aria-label={`Open WhatsApp cart: ${totalCount} items`}
     >
-      <span>🧺 Basket</span>
+      <span className="market-header__cart-icon" aria-hidden="true">🧺</span>
+      <span className="market-header__cart-label">Basket</span>
       {totalCount > 0 ? (
         <span className="market-header__cart-count">{totalCount}</span>
       ) : null}
@@ -1370,7 +1371,10 @@ export default function MarketTheme({
                       rel="noopener noreferrer"
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d={SOCIAL_ICONS[link.key]} fill="currentColor" />
+                        <path
+                          d={SOCIAL_ICONS[link.key] ?? SOCIAL_ICONS.twitter}
+                          fill="currentColor"
+                        />
                       </svg>
                     </a>
                   ))}

@@ -511,7 +511,6 @@ export default function MonolithTheme({
   /* Scroll depth tracking */
   const [scrollProgress, setScrollProgress] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeSection, setActiveSection] = useState<string>('top');
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   /* Pointer ambient lighting */
@@ -534,17 +533,6 @@ export default function MonolithTheme({
       setScrollProgress(scrolled);
       setIsScrolled(winScroll > 60);
       setShowScrollTop(winScroll > 450);
-
-      /* Section spy */
-      const sections = ['services', 'shop', 'gallery', 'reviews', 'faq', 'hours', 'contact'];
-      for (let i = sections.length - 1; i >= 0; i--) {
-        const el = document.getElementById(sections[i]);
-        if (el && el.getBoundingClientRect().top <= 140) {
-          setActiveSection(sections[i]);
-          return;
-        }
-      }
-      setActiveSection('top');
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -637,13 +625,13 @@ export default function MonolithTheme({
   /* Navigation Items */
   const navItems = useMemo(() => {
     return [
-      site.menuServices.length > 0 ? { href: '#services', label: '01 // Services', id: 'services' } : null,
-      site.items.length > 0 ? { href: '#shop', label: '02 // Catalogue', id: 'shop' } : null,
-      site.gallery.length > 0 ? { href: '#gallery', label: '03 // Visuals', id: 'gallery' } : null,
-      site.testimonials.length > 0 ? { href: '#reviews', label: '04 // Reviews', id: 'reviews' } : null,
-      site.faq.length > 0 ? { href: '#faq', label: '05 // Inquiries', id: 'faq' } : null,
-      site.hours && site.hours.length > 0 ? { href: '#hours', label: '06 // Schedule', id: 'hours' } : null,
-      { href: '#contact', label: '07 // Contact', id: 'contact' },
+      site.menuServices.length > 0 ? { href: '#services', label: 'Services', id: 'services' } : null,
+      site.items.length > 0 ? { href: '#shop', label: 'Catalogue', id: 'shop' } : null,
+      site.gallery.length > 0 ? { href: '#gallery', label: 'Visuals', id: 'gallery' } : null,
+      site.testimonials.length > 0 ? { href: '#reviews', label: 'Reviews', id: 'reviews' } : null,
+      site.faq.length > 0 ? { href: '#faq', label: 'Inquiries', id: 'faq' } : null,
+      site.hours && site.hours.length > 0 ? { href: '#hours', label: 'Schedule', id: 'hours' } : null,
+      { href: '#contact', label: 'Contact', id: 'contact' },
     ].filter(Boolean) as { href: string; label: string; id: string }[];
   }, [site]);
 
@@ -715,33 +703,6 @@ export default function MonolithTheme({
             <span className="mono-brand__name">{site.name}</span>
           </a>
 
-          <nav className="mono-nav" aria-label="Monolith Sections">
-            {navItems.map((nav) => {
-              const isActive = activeSection === nav.id;
-              return (
-                <a
-                  key={nav.href}
-                  href={nav.href}
-                  className={`mono-nav__link${isActive ? ' mono-nav__link--active' : ''}`}
-                >
-                  {nav.label}
-                </a>
-              );
-            })}
-          </nav>
-
-          <div className="mono-header__actions">
-            {orderHref ? (
-              <a
-                className="mono-btn mono-btn--cta"
-                href={orderHref}
-                target={site.voiceOnly ? undefined : '_blank'}
-                rel="noopener noreferrer"
-              >
-                {site.voiceOnly ? '[ CALL DESK ]' : '[ ORDER // WHATSAPP ]'}
-              </a>
-            ) : null}
-          </div>
         </div>
       </header>
 
@@ -1303,19 +1264,20 @@ export default function MonolithTheme({
               ) : null}
 
               {site.socialLinks.length > 0 ? (
-                <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <div className="mono-contact__socials">
                   {site.socialLinks.map((link) => (
                     <a
                       key={link.key}
-                      className="mono-tag"
+                      className="mono-social"
                       href={socialHref(link.key, link.url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={SOCIAL_LABELS[link.key] ?? link.key}
-                      style={{ padding: '0.65rem 0.85rem' }}
-                    >
-                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                        <path d={SOCIAL_ICONS[link.key]} />
+                    >                      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                        <path
+                          d={SOCIAL_ICONS[link.key] ?? SOCIAL_ICONS.twitter}
+                          fill="currentColor"
+                        />
                       </svg>
                     </a>
                   ))}

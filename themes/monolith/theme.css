@@ -392,6 +392,7 @@
   display: flex;
   align-items: center;
   gap: 1.75rem;
+  flex-wrap: wrap;
 }
 
 .mono-nav__link {
@@ -403,6 +404,7 @@
   color: var(--mono-ink-muted);
   transition: color 0.18s ease;
   position: relative;
+  white-space: nowrap;
 }
 
 .mono-nav__link:hover {
@@ -421,6 +423,20 @@
   right: 0;
   height: 2px;
   background: var(--mono-accent, #0f766e);
+}
+
+/* Mobile: stack nav links vertically when they overflow */
+@media (max-width: 640px) {
+  .mono-nav {
+    justify-content: flex-start;
+  }
+  .mono-nav__link {
+    border-radius: 0;
+    padding: 0.55rem 0.9rem;
+    width: auto;
+    flex-basis: 100%;
+    max-width: 100%;
+  }
 }
 
 .mono-header__actions {
@@ -1392,6 +1408,38 @@
   color: #2dd4bf;
 }
 
+.mono-contact__socials {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.mono-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  background: color-mix(in srgb, var(--mono-contact-ink, #ffffff) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--mono-contact-ink, #ffffff) 22%, transparent);
+  color: var(--mono-contact-ink, #ffffff);
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.mono-social:hover {
+  background: color-mix(in srgb, var(--mono-accent, #0f766e) 22%, transparent);
+  border-color: var(--mono-accent, #0f766e);
+  color: #ffffff;
+}
+
+.mono-social svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
 /* --------------------------------------------------------------------------
    Monolithic Footer
    -------------------------------------------------------------------------- */
@@ -1739,8 +1787,57 @@
     grid-template-columns: 1fr;
   }
 
+  .mono-scroll-depth-tag {
+    display: none;
+  }
+
+  .mono-header {
+    padding-block: 0.75rem;
+  }
+
+  .mono-header--scrolled {
+    padding-block: 0.55rem;
+  }
+
+  .mono-header__inner {
+    gap: 1rem;
+  }
+
+  .mono-brand {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .mono-brand__logo,
+  .mono-brand__monogram {
+    width: 2.1rem;
+    height: 2.1rem;
+  }
+
+  .mono-brand__name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 1.02rem;
+  }
+
+  .mono-hero__inner {
+    padding-top: 5.5rem;
+    padding-bottom: 2.5rem;
+  }
+
   .mono-hero__title {
-    font-size: 2.6rem;
+    font-size: clamp(2.15rem, 11vw, 3rem);
+    line-height: 1;
+  }
+
+  .mono-hero__meta {
+    gap: 0.55rem;
+  }
+
+  .mono-hero__coordinates {
+    font-size: 0.66rem;
+    letter-spacing: 0.1em;
   }
 
   .mono-hero__actions {
@@ -1752,6 +1849,16 @@
     width: 100%;
   }
 
+  .mono-hero__bottom-inner {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    padding-right: 5.5rem;
+  }
+
+  .mono-contact-card {
+    padding: 1.35rem;
+  }
+
   .mono-contact-row {
     grid-template-columns: 1fr;
     gap: 0.35rem;
@@ -1760,6 +1867,18 @@
   .mono-console__top {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .mono-fab {
+    bottom: 18px;
+    right: 18px;
+    padding: 0.75rem 1rem;
+    font-size: 0.7rem;
+  }
+
+  .mono-scroll-top-btn {
+    bottom: 76px;
+    right: 18px;
   }
 }
 
