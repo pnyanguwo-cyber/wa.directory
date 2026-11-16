@@ -3,6 +3,17 @@
 /* Scoped exclusively under .market-root / [data-theme="market"]       */
 /* ------------------------------------------------------------------ */
 
+/* Paint the full iOS viewport, including the area behind Safari's
+   floating bottom bar, instead of stopping at its visible edge. */
+html:has(.market-root) {
+  background-color: #090d13;
+}
+
+body:has(.market-root) {
+  min-height: 100lvh;
+  background-color: #090d13;
+}
+
 .market-root {
   --market-bg: #090d13;
   --market-surface: #101620;
@@ -17,6 +28,8 @@
   --market-radius-xs: 6px;
 
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: 100lvh;
   background-color: var(--market-bg);
   color: var(--market-ink);
   font-family: var(--market-body, system-ui, -apple-system, sans-serif);
@@ -288,6 +301,7 @@
   position: relative;
   min-height: 100vh;
   min-height: 100dvh;
+  min-height: 100lvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;

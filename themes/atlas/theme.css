@@ -3,6 +3,17 @@
 /* Scoped exclusively under .atlas-root / [data-theme="atlas"]         */
 /* ------------------------------------------------------------------ */
 
+/* Paint the full iOS viewport, including the area behind Safari's
+   floating bottom bar, instead of stopping at its visible edge. */
+html:has(.atlas-root) {
+  background-color: #080c12;
+}
+
+body:has(.atlas-root) {
+  min-height: 100lvh;
+  background-color: #080c12;
+}
+
 .atlas-root {
   --atlas-surface: #0e1520;
   --atlas-surface-card: #121c29;
@@ -21,6 +32,8 @@
   --atlas-pointer-y: 20%;
 
   min-height: 100vh;
+  min-height: 100dvh;
+  min-height: 100lvh;
   background-color: #080c12;
   background-image:
     radial-gradient(circle 800px at var(--atlas-pointer-x) var(--atlas-pointer-y), color-mix(in srgb, var(--atlas-accent, #00e5ff) 10%, transparent), transparent 70%),
