@@ -29,7 +29,7 @@ export default async function PortalPage({ searchParams }: { searchParams: { bra
           Viewing as <b>{business.name}</b> (branch of {session.actor.orgName}). Switch back from the Branches tab.
         </p>
       )}
-      <PortalOverview businessId={business.id} businessName={business.name} businessSlug={business.slug || business.id} paid={paid} rows={chart} lifetime={lifetime} />
+      <PortalOverview businessId={business.id} businessName={business.name} businessSlug={business.slug || business.id} paid={paid} category={business.category} area={business.area} city={business.city} verified={business.verified} rows={chart} lifetime={lifetime} />
     </>
   )
 }

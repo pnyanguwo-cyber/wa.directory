@@ -119,6 +119,8 @@ export default function PortalSite({
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewKey, setPreviewKey] = useState(0)
 
   const payload = () => ({
     generate_site: siteEnabled,
@@ -194,6 +196,7 @@ export default function PortalSite({
         tiktok: !!socials.tiktok,
         youtube: !!socials.youtube,
       })
+      setPreviewKey(k => k + 1)
       router.refresh()
     } catch {
       setError('Could not save site settings. Check your connection and try again.')
@@ -248,7 +251,8 @@ export default function PortalSite({
   const activeRegistryMeta = themeGallery?.find(m => m.id === theme.design) || null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6 lg:items-start">
+      <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-text-primary">Website</h2>
         <p className="text-xs text-text-secondary mt-0.5">
@@ -466,22 +470,29 @@ export default function PortalSite({
           <h3 className="text-sm font-bold text-text-primary">Colours</h3>
           <p className="text-xs text-text-secondary mt-0.5">Quick-pick a full colour scheme, or fine-tune each section below.</p>
         </div>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {PALETTES.map(p => (
-            <button
-              key={p.name}
-              type="button"
-              onClick={() => { setTheme({ ...p.theme }); setNotice('') }}
-              className="flex items-center gap-2 rounded-full border border-gray-200/80 bg-surface px-3 py-1.5 text-xs font-medium hover:border-whatsapp-400 hover:bg-whatsapp-50 transition-colors"
-            >
-              <span className="flex -space-x-1">
-                {[p.theme.header || '#ffffff', p.theme.accent, p.theme.contact].slice(0, 3).map((c, i) => (
-                  <span key={i} className="w-4 h-4 rounded-full border border-white shadow-sm" style={{ backgroundColor: c || '#e5e7eb' }} />
-                ))}
-              </span>
-              {p.name}
-            </button>
-          ))}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+          {PALETTES.map(p => {
+            const active =
+              theme.header === (p.theme.header || '') &&
+              theme.accent === p.theme.accent &&
+              theme.contact === p.theme.contact
+            return (
+              <button
+                key={p.name}
+                type="button"
+                onClick={() => { setTheme({ ...p.theme }); setNotice('') }}
+                aria-pressed={active}
+                className={`flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition-colors ${active ? 'border-whatsapp-500 bg-whatsapp-50/60 ring-1 ring-whatsapp-400' : 'border-gray-200/80 bg-surface hover:border-whatsapp-400 hover:bg-whatsapp-50'}`}
+              >
+                <span className="flex -space-x-1">
+                  {[p.theme.header || '#ffffff', p.theme.accent, p.theme.contact].slice(0, 3).map((c, i) => (
+                    <span key={i} className="w-5 h-5 rounded-full border border-white shadow-sm" style={{ backgroundColor: c || '#e5e7eb' }} />
+                  ))}
+                </span>
+                <span className={`text-xs font-semibold ${active ? 'text-whatsapp-700' : 'text-text-primary'}`}>{p.name}</span>
+              </button>
+            )
+          })}
         </div>
         <div className="space-y-4">
           {THEME_ROWS.map(row => (
@@ -750,6 +761,67 @@ export default function PortalSite({
       >
         {busy ? 'Saving…' : 'Save website settings'}
       </button>
+      </div>
+
+      <aside className="hidden lg:block" aria-label="Live site preview">
+        <div className="sticky top-6">
+          <div className="bg-white border border-gray-200/80 rounded-2xl p-3 shadow-card">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold text-text-primary">Live preview</p>
+              <a
+                href={`/site/${businessSlug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] font-semibold text-whatsapp-600 hover:underline"
+              >
+                Open full site ↗
+              </a>
+            </div>
+            <iframe
+              key={previewKey}
+              title={`Live preview of the ${businessName} website`}
+              src={`/site-preview/${businessSlug}`}
+              className="w-full rounded-xl border border-gray-100 bg-white"
+              style={{ height: 'min(78vh, 720px)' }}
+              loading="lazy"
+            />
+            <p className="mt-2 text-[11px] text-text-secondary">Preview shows your saved site. Press Save to refresh it.</p>
+          </div>
+        </div>
+      </aside>
+
+      <button
+        type="button"
+        onClick={() => setPreviewOpen(true)}
+        className="lg:hidden fixed bottom-20 right-4 z-40 rounded-full bg-text-primary text-white text-xs font-bold px-4 py-3 shadow-lg"
+      >
+        Live preview
+      </button>
+
+      {previewOpen && (
+        <div className="lg:hidden fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setPreviewOpen(false)} />
+          <div className="absolute inset-x-0 bottom-0 top-14 rounded-t-3xl bg-white flex flex-col shadow-xl animate-slide-up">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
+              <p className="text-sm font-bold text-text-primary">Live preview</p>
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(false)}
+                className="text-xs font-semibold text-text-secondary hover:text-text-primary"
+              >
+                Close
+              </button>
+            </div>
+            <iframe
+              key={previewKey}
+              title={`Live preview of the ${businessName} website (mobile)`}
+              src={`/site-preview/${businessSlug}`}
+              className="w-full flex-1"
+            />
+            <p className="px-4 py-2 text-[11px] text-text-secondary border-t border-gray-100 shrink-0">Preview shows your saved site. Press Save to refresh it.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

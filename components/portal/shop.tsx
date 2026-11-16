@@ -41,6 +41,15 @@ interface ListingSuggestion {
   warnings?: string[]
 }
 
+// True when the typed category is not on the approved list yet.
+function isPendingProductCategory(name: string): boolean {
+  return (
+    name.length >= 2 &&
+    name.length <= 60 &&
+    !categories.some(c => c.name.toLowerCase() === name.toLowerCase())
+  )
+}
+
 // Product photo picker: uploads via /api/upload (2 MB cap, PNG/JPEG/WebP)
 // and hands the hosted URL back through onSet. Empty string = no image.
 function ItemImageField({ imageUrl, onSet, inputId }: { imageUrl: string; onSet: (url: string) => void; inputId: string }) {
@@ -149,6 +158,9 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
   const [aiWarnings, setAiWarnings] = useState<string[]>([])
   const [missingFields, setMissingFields] = useState<string[]>([])
   const [usedAI, setUsedAI] = useState(false)
+
+  const categoryTrimmed = newCategory.trim()
+  const categoryIsPending = isPendingProductCategory(categoryTrimmed)
 
   async function loadItems() {
     setLoading(true)
@@ -278,7 +290,19 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
         setError(data.error || 'Could not add item')
         return
       }
-      setNotice('Product published.')
+      if (categoryIsPending) {
+        const businessId = data.item?.business_id
+        if (businessId) {
+          fetch('/api/feature-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ type: 'category', name: categoryTrimmed, business_id: businessId }),
+          }).catch(() => {})
+        }
+        setNotice(`Product published. Your new category "${categoryTrimmed}" is pending review.`)
+      } else {
+        setNotice('Product published.')
+      }
       setNewName('')
       setNewPrice('')
       setNewImageUrl('')
@@ -514,6 +538,11 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                   <option key={category.name} value={category.name} />
                 ))}
               </datalist>
+              {categoryIsPending && (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  New category — "{categoryTrimmed}" is saved with your product and pending review before it joins the category list.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-text-primary mb-1.5">

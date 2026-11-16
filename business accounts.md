@@ -4,11 +4,12 @@ All 30 seeded businesses. The data lives in Supabase; nothing is stored locally.
 
 ## Quick start
 
-1. This project's dev server must run on a free port (3000 is taken by another project):
+1. The dev server is already running on port 3000:
    ```
-   node node_modules/next/dist/bin/next dev -p 3100
+   node node_modules/next/dist/bin/next dev
    ```
-2. Log in at: `http://localhost:3100/login`
+   (Port 3100 is taken by the wa-directory-designs theme preview — don't use it. To restart: `node node_modules/next/dist/bin/next dev -p 3000`.)
+2. Log in at: `http://localhost:3000/login`
    - **Login ID:** the business's phone number (table below)
    - **Password:** `Demo1234` (same for every seeded account)
 
@@ -22,9 +23,9 @@ All 30 seeded businesses. The data lives in Supabase; nothing is stored locally.
 
 ## Where customers see the store
 
-- **Company profile:** `http://localhost:3100/business/<slug>` — Shop section with listed goods
-- **Auto-website:** `http://localhost:3100/site/<slug>` — "Shop" section with the same goods
-- **Directory search:** `http://localhost:3100/search?q=<item>` — goods surface results
+- **Company profile:** `http://localhost:3000/business/<slug>` — Shop section with listed goods
+- **Auto-website:** `http://localhost:3000/site/<slug>` — "Shop" section with the same goods
+- **Directory search:** `http://localhost:3000/search?q=<item>` — goods surface results
 
 ## Accounts
 

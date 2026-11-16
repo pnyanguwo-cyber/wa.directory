@@ -3,6 +3,7 @@ import { getActingPortalBusiness, getDailyStats } from '@/lib/portal'
 import { isPremiumActive } from '@/lib/premium-entitlement'
 import { getSupabase } from '@/lib/supabase-server'
 import { dedupeCategories } from '@/lib/utils'
+import TipsList from '@/components/portal/tips-list'
 
 export const dynamic = 'force-dynamic'
 
@@ -107,17 +108,6 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
 
   const visible = paid ? tips : tips.slice(0, 3)
 
-  const levelStyles: Record<Tip['level'], string> = {
-    good: 'border-whatsapp-200 bg-whatsapp-50/60',
-    warn: 'border-amber-200 bg-amber-50/60',
-    bad: 'border-red-200 bg-red-50/60',
-  }
-  const levelDot: Record<Tip['level'], string> = {
-    good: 'bg-whatsapp-500',
-    warn: 'bg-amber-500',
-    bad: 'bg-red-500',
-  }
-
   return (
     <div className="space-y-6">
       <div>
@@ -162,17 +152,7 @@ export default async function PortalImprovePage({ searchParams }: { searchParams
         </div>
       )}
 
-      <div className="space-y-3">
-        {visible.map((tip, i) => (
-          <div key={i} className={`border rounded-2xl p-4 ${levelStyles[tip.level]}`}>
-            <p className="text-sm font-bold text-text-primary flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${levelDot[tip.level]}`} />
-              {tip.title}
-            </p>
-            <p className="text-xs text-text-secondary mt-1 leading-relaxed">{tip.detail}</p>
-          </div>
-        ))}
-      </div>
+      <TipsList tips={visible} />
 
       {!paid && (
         <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 text-center">

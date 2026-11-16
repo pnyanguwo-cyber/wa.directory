@@ -2,11 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import dynamic from 'next/dynamic'
 import { STAT_EVENT_LABELS, STAT_EVENT_COLORS, getEventLabel, csvEscape } from '@/lib/stats-format'
-
-// Lazy: the QR studio bundle is only needed when the QR card panel is open.
-const QrCard = dynamic(() => import('@/components/qr-card'))
 
 type Range = '7' | '30' | '90' | 'all'
 
@@ -19,11 +15,15 @@ interface DayRow {
 
 const EVENT_TYPES = Object.keys(STAT_EVENT_LABELS) as (keyof typeof STAT_EVENT_LABELS)[]
 
-export default function PortalOverview({ businessId, businessName, businessSlug, paid, rows, lifetime }: {
+export default function PortalOverview({ businessId, businessName, businessSlug, paid, category, area, city, verified, rows, lifetime }: {
   businessId: string
   businessName: string
   businessSlug: string
   paid: boolean
+  category?: string[]
+  area?: string
+  city?: string
+  verified?: boolean
   rows: DayRow[]
   lifetime: Record<string, number>
 }) {
@@ -128,36 +128,29 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         ))}
       </div>
 
-      {grandTotal === 0 && (
-        <div className="bg-gradient-to-br from-whatsapp-50 to-white border border-whatsapp-200 rounded-2xl p-5 shadow-card">
-          <p className="text-sm font-bold text-whatsapp-800">Get found: share your QR codes</p>
-          <p className="text-xs text-text-secondary mt-1">
-            Print these and place them on your counter, shelves and packaging. Customers scan to chat with you directly.
-          </p>
-          <div className="flex flex-wrap gap-4 mt-4">
-            <QrCard
-              value={`https://wadirectory.co.zw/qr/${businessSlug}`}
-              title="Customer chat QR"
-              subtitle="Scans open a chat with you (tracked as QR scans)"
-              size={130}
-              downloadName={`${businessSlug}-customer-chat-qr.png`}
-            />
-            <QrCard
-              value={`https://wadirectory.co.zw/portal`}
-              title="Portal QR"
-              subtitle="Scans open your private portal (stats & settings)"
-              size={130}
-              downloadName={`${businessSlug}-portal-qr.png`}
-            />
-            <Link
-              href={`/my-qr/${businessSlug}`}
-              className="self-center text-xs font-semibold text-whatsapp-600 hover:underline"
-            >
-              View full page →
-            </Link>
-          </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Category</p>
+          <p className="text-sm font-bold text-text-primary mt-1">{category?.[0] || 'Not set'}</p>
         </div>
-      )}
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Location</p>
+          <p className="text-sm font-bold text-text-primary mt-1">{[area, city].filter(Boolean).join(', ') || 'Not set'}</p>
+        </div>
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Verified</p>
+          <p className="text-sm font-bold text-text-primary mt-1">{verified ? 'Yes' : 'Pending'}</p>
+        </div>
+        <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Plan</p>
+          <p className="text-sm font-bold text-text-primary mt-1">{paid ? 'Premium' : 'Free'}</p>
+        </div>
+      </div>
+      <p className="text-xs text-text-secondary">
+        <Link href={`/business/${businessSlug}`} className="font-semibold text-whatsapp-600 hover:underline">
+          View public profile →
+        </Link>
+      </p>
 
       <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
         <div className="flex items-center justify-between mb-3">
