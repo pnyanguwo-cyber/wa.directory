@@ -4,13 +4,24 @@ import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import type { Business } from '@/types'
 import { getInitials, dedupeCategories } from '@/lib/utils'
+import { TemplateFrontSvg } from '@/components/business-card-templates'
 
 // International / US Standard Business Card dimensions (3.5" x 2.0" @ 300 DPI ratio = 7:4)
-const CARD_DESIGNS: { id: CardDesign; name: string; hint: string; line: CardLineStyle; vinyl: CardVinylStyle }[] = [
-  { id: 'signature' as CardDesign, name: 'Signature', hint: 'Full colour ink', line: 'none' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
-  { id: 'fineline' as CardDesign, name: 'Fine line', hint: 'Hairline frame', line: 'frame' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
-  { id: 'editorial' as CardDesign, name: 'Editorial', hint: 'Rules & space', line: 'rules' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
-  { id: 'vinyl' as CardDesign, name: 'Vinyl', hint: 'Bold band', line: 'none' as CardLineStyle, vinyl: 'spine' as CardVinylStyle },
+const CARD_DESIGNS: {
+  id: CardDesign
+  name: string
+  hint: string
+  line: CardLineStyle
+  vinyl: CardVinylStyle
+  layout: CardLayout
+}[] = [
+  { id: 'signature', name: 'Signature', hint: 'Full colour ink', line: 'none', vinyl: 'none', layout: 'classic' },
+  { id: 'fineline', name: 'Fine line', hint: 'Hairline frame', line: 'frame', vinyl: 'none', layout: 'classic' },
+  { id: 'editorial', name: 'Editorial', hint: 'Rules & space', line: 'rules', vinyl: 'none', layout: 'classic' },
+  { id: 'vinyl', name: 'Vinyl', hint: 'Bold band', line: 'none', vinyl: 'spine', layout: 'classic' },
+  { id: 'split', name: 'Split panel', hint: 'Colour side bar', line: 'none', vinyl: 'none', layout: 'split' },
+  { id: 'bold', name: 'Bold type', hint: 'Oversized name', line: 'none', vinyl: 'none', layout: 'bold' },
+  { id: 'centre', name: 'Centred', hint: 'Symmetrical stack', line: 'none', vinyl: 'none', layout: 'centre' },
 ]
 
 const CARD_LINES: { id: CardLineStyle; label: string }[] = [
@@ -35,11 +46,13 @@ const PORTRAIT_W = 600
 const PORTRAIT_H = 1050
 
 export type CardTheme = 'emerald' | 'obsidian' | 'swiss' | 'royal' | 'rose' | 'cyber'
-export type CardDesign = 'signature' | 'fineline' | 'editorial' | 'vinyl'
+export type CardDesign = 'signature' | 'fineline' | 'editorial' | 'vinyl' | 'split' | 'bold' | 'centre'
+export type CardLayout = 'classic' | 'split' | 'bold' | 'centre'
 export type CardLineStyle = 'none' | 'frame' | 'grid' | 'rules'
 export type CardVinylStyle = 'none' | 'spine' | 'sash' | 'block'
 
 export interface CardDecor {
+  layout?: CardLayout
   design: CardDesign
   line: CardLineStyle
   vinyl: CardVinylStyle
@@ -451,7 +464,7 @@ function GuillocheDefs({ themeId, opacity = 0.12 }: { themeId: string; opacity?:
 // vinyl band. Each finish owns its colour so lines and vinyls never fight.
 function CardDecorLayer({ theme, w, h }: { theme: ThemeConfig; w: number; h: number }) {
   const d = theme.decor
-  if (!d || (d.line === 'none' && d.vinyl === 'none')) return null
+  if (!d || (d.layout && d.layout !== 'classic') || (d.line === 'none' && d.vinyl === 'none')) return null
   const line = d.lineColor || theme.accentColor
   const vinyl = d.vinylColor || theme.accentColor
   const cols = Math.max(1, Math.ceil(w / 42))
@@ -512,6 +525,22 @@ function FrontLandscapeSvg({
   uid: string
   voiceOnly: boolean
 }) {
+  if (theme.decor?.layout && theme.decor.layout !== 'classic') {
+    return (
+      <TemplateFrontSvg
+        business={business}
+        theme={theme}
+        logoDataUrl={logoDataUrl}
+        initials={initials}
+        formattedPhone={formattedPhone}
+        locationText={locationText}
+        profileUrl={profileUrl}
+        uid={uid}
+        voiceOnly={voiceOnly}
+        portrait={false}
+      />
+    )
+  }
   const nameLength = business.name.length
   const nameFontSize = nameLength > 28 ? 26 : nameLength > 20 ? 30 : 34
   const nameY = 70
@@ -1027,6 +1056,22 @@ function FrontPortraitSvg({
   uid: string
   voiceOnly: boolean
 }) {
+  if (theme.decor?.layout && theme.decor.layout !== 'classic') {
+    return (
+      <TemplateFrontSvg
+        business={business}
+        theme={theme}
+        logoDataUrl={logoDataUrl}
+        initials={initials}
+        formattedPhone={formattedPhone}
+        locationText={locationText}
+        profileUrl={profileUrl}
+        uid={uid}
+        voiceOnly={voiceOnly}
+        portrait
+      />
+    )
+  }
   const nameLength = business.name.length
   const nameFontSize = nameLength > 24 ? 26 : nameLength > 16 ? 30 : 34
   const displayBio = business.bio ? (business.bio.length > 140 ? business.bio.slice(0, 140) + '...' : business.bio) : ''
@@ -1430,7 +1475,11 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const [orientation, setOrientation] = useState<CardOrientation>('landscape')
   const [activeSide, setActiveSide] = useState<'front' | 'back' | 'both'>('front')
   const [isFlipped, setIsFlipped] = useState(false)
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+  const [listingLogo, setListingLogo] = useState<string | null>(null)
+  const [customLogo, setCustomLogo] = useState<string | null>(null)
+  // listing | custom | none — a card-only picture never touches the listing.
+  const [logoChoice, setLogoChoice] = useState<'listing' | 'custom' | 'none'>('listing')
+  const [logoNotice, setLogoNotice] = useState('')
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState<string | null>(null)
   // Card copy is editable; blank fields fall back to the listing.
@@ -1441,8 +1490,6 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
     location: [business.area, business.city].filter(Boolean).join(', '),
     link: '',
   })
-  // Per-segment ink overrides. '' keeps the selected palette.
-  const [ink, setInk] = useState({ bg: '', accent: '', text: '', footer: '' })
 
   // Interactive 3D tilt state
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50, isHovered: false })
@@ -1467,18 +1514,20 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             ctx.arc(90, 90, 90, 0, Math.PI * 2)
             ctx.clip()
             ctx.drawImage(img, 0, 0, 180, 180)
-            setLogoDataUrl(c.toDataURL('image/png'))
+            setListingLogo(c.toDataURL('image/png'))
           }
         } catch {
-          setLogoDataUrl(null)
+          setListingLogo(null)
         }
       }
       img.onerror = () => {
-        setLogoDataUrl(null)
+        setListingLogo(null)
       }
       img.src = business.logo_url
     }
   }, [business.logo_url])
+
+  const logoDataUrl = logoChoice === 'none' ? null : logoChoice === 'custom' ? customLogo : listingLogo
 
   const cardBusiness = { ...business, name: copy.name.trim() || business.name, bio: copy.tagline }
   const initials = getInitials(cardBusiness.name, 'WA')
@@ -1499,19 +1548,17 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const baseTheme = THEMES[currentTheme]
   // Paper designs always print on white; Signature keeps the full colour
   // finish. Lines and vinyls are independent of the chosen ink.
-  const paletteTheme: ThemeConfig = {
+  const theme: ThemeConfig = {
     ...baseTheme,
     ...(design === 'signature' ? {} : PAPER_THEME),
-  }
-  const theme: ThemeConfig = {
-    ...paletteTheme,
-    ...(ink.bg
-      ? { bgFrom: ink.bg, bgVia: ink.bg, bgTo: ink.bg, backBgFrom: ink.bg, backBgVia: ink.bg, backBgTo: ink.bg, qrBoxBg: ink.bg }
-      : {}),
-    ...(ink.accent ? { accentColor: ink.accent, accentGlow: `${ink.accent}55` } : {}),
-    ...(ink.text ? { primaryText: ink.text, secondaryText: ink.text } : {}),
-    ...(ink.footer ? { footerBg: ink.footer, headerBg: ink.footer } : {}),
-    decor: { design, line: lineStyle, vinyl: vinylStyle, lineColor, vinylColor },
+    decor: {
+      layout: CARD_DESIGNS.find(d => d.id === design)?.layout || 'classic',
+      design,
+      line: lineStyle,
+      vinyl: vinylStyle,
+      lineColor,
+      vinylColor,
+    },
   }
 
   // Mouse Move Tilt Handler
@@ -1538,6 +1585,48 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   }, [])
 
   // Render SVG element to high-res PNG
+  // A picture chosen here lives on the card only; the saved listing logo is
+  // untouched. Crop centre-square and mask to a circle so exports stay clean.
+  function useCardPicture(file: File) {
+    setLogoNotice('')
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      setLogoNotice('Use a PNG, JPEG or WebP picture.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoNotice('Picture must be under 2 MB.')
+      return
+    }
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      const size = 240
+      const c = document.createElement('canvas')
+      c.width = size
+      c.height = size
+      const ctx = c.getContext('2d')
+      if (!ctx) {
+        setLogoNotice('Could not read that picture.')
+        return
+      }
+      const scale = Math.max(size / img.width, size / img.height)
+      const w = img.width * scale
+      const h = img.height * scale
+      ctx.beginPath()
+      ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2)
+      ctx.clip()
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
+      setCustomLogo(c.toDataURL('image/png'))
+      setLogoChoice('custom')
+      URL.revokeObjectURL(url)
+    }
+    img.onerror = () => {
+      setLogoNotice('Could not read that picture.')
+      URL.revokeObjectURL(url)
+    }
+    img.src = url
+  }
+
   async function renderSvgToCanvas(svgEl: SVGElement, scale = 3): Promise<HTMLCanvasElement> {
     const svgData = new XMLSerializer().serializeToString(svgEl)
     const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
@@ -2032,6 +2121,12 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                         <span className="flex h-full w-full flex-col justify-between p-1"><span className="h-px w-full" style={{ backgroundColor: lineColor }} /><span className="h-px w-full" style={{ backgroundColor: lineColor }} /></span>
                       ) : d.id === 'fineline' ? (
                         <span className="h-full w-full border" style={{ borderColor: lineColor }} />
+                      ) : d.layout === 'split' ? (
+                        <span className="flex h-full w-full"><span className="h-full w-1/3 bg-slate-900" /><span className="flex h-full flex-1 flex-col justify-center gap-0.5 pl-1"><span className="h-0.5 w-3/4 bg-gray-400" /><span className="h-0.5 w-1/2 bg-gray-300" /></span></span>
+                      ) : d.layout === 'bold' ? (
+                        <span className="flex h-full w-full flex-col justify-center gap-0.5 px-1"><span className="h-1.5 w-4/5 bg-slate-900" /><span className="h-0.5 w-2/3 bg-gray-400" /><span className="h-0.5 w-1/2 bg-gray-300" /></span>
+                      ) : d.layout === 'centre' ? (
+                        <span className="flex h-full w-full flex-col items-center justify-center gap-0.5"><span className="h-2 w-2 rounded-full border border-slate-900" /><span className="h-0.5 w-3/5 bg-slate-900" /><span className="h-0.5 w-2/5 bg-gray-300" /></span>
                       ) : (
                         <span className="h-full w-full bg-gradient-to-br from-whatsapp-500 via-emerald-700 to-slate-900" />
                       )}
@@ -2076,8 +2171,57 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
           </div>
         </div>
 
-        {/* Card text + segment inks */}
-        <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 lg:grid-cols-2">
+        {/* Card text and logo */}
+        <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
+          <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Logo on the card</span>
+              <span className="text-[10px] font-medium text-text-secondary">
+                {logoChoice === 'none' ? 'No logo — name only' : logoChoice === 'custom' ? 'Your picture' : 'Listing logo'}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => { setLogoChoice('listing'); setLogoNotice('') }}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'listing' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+              >
+                Listing logo
+              </button>
+              <button
+                type="button"
+                onClick={() => { setLogoChoice(customLogo ? 'custom' : 'listing'); setLogoNotice(customLogo ? '' : 'Choose a picture first.') }}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'custom' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+              >
+                My picture
+              </button>
+              <label className="cursor-pointer rounded-lg bg-white px-2.5 py-1.5 text-[10.5px] font-semibold text-text-secondary ring-1 ring-gray-200 transition-colors hover:text-text-primary">
+                Upload
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (file) useCardPicture(file)
+                    e.target.value = ''
+                  }}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => { setLogoChoice('none'); setLogoNotice('') }}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'none' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+              >
+                No logo
+              </button>
+              {logoChoice === 'custom' && customLogo ? (
+                <img src={customLogo} alt="Card picture" className="h-8 w-8 rounded-full border border-gray-200 object-cover" />
+              ) : null}
+            </div>
+            {logoNotice ? <p className="mt-1.5 text-[10px] font-medium text-rose-600">{logoNotice}</p> : null}
+          </div>
+
           <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Card text</span>
@@ -2143,55 +2287,6 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Segment colours</span>
-              <button
-                type="button"
-                onClick={() => setInk({ bg: '', accent: '', text: '', footer: '' })}
-                className="text-[10px] font-semibold text-whatsapp-700 hover:underline"
-              >
-                Use palette
-              </button>
-            </div>
-            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
-              {([
-                { key: 'bg' as const, label: 'Card stock', fallback: paletteTheme.bgFrom },
-                { key: 'accent' as const, label: 'Ink & icons', fallback: paletteTheme.accentColor },
-                { key: 'text' as const, label: 'Name & copy', fallback: paletteTheme.primaryText },
-                { key: 'footer' as const, label: 'Header & footer band', fallback: paletteTheme.footerBg },
-              ]).map(({ key, label, fallback }) => {
-                const active = ink[key]
-                return (
-                  <div key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5">
-                    <input
-                      type="color"
-                      value={active || fallback}
-                      onChange={e => setInk(v => ({ ...v, [key]: e.target.value }))}
-                      aria-label={`${label} colour`}
-                      className="h-6 w-7 shrink-0 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[10.5px] font-semibold text-text-primary">{label}</p>
-                      <p className="text-[9px] uppercase text-text-secondary">{active || 'palette'}</p>
-                    </div>
-                    {active && (
-                      <button
-                        type="button"
-                        onClick={() => setInk(v => ({ ...v, [key]: '' }))}
-                        className="text-[9.5px] font-semibold text-text-secondary hover:text-text-primary"
-                      >
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-            <p className="mt-2 text-[10px] leading-snug text-text-secondary">
-              Signature prints your ink straight on the stock. Paper designs stay on white stock, so the colours act as ink, rule and band tones.
-            </p>
-          </div>
         </div>
       </div>
 
