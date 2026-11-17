@@ -450,12 +450,12 @@ function FrontLandscapeSvg({
       </defs>
 
       {/* Card Base */}
-      <rect width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#frontBg_${uid})`} />
+      <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#frontBg_${uid})`} />
 
       {/* Guilloche & Dot Matrix Texture Layer */}
       <g color={theme.primaryText}>
-        <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#guilloche_${uid})`} />
-        <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#dotMatrix_${uid})`} />
+        <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#guilloche_${uid})`} />
+        <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#dotMatrix_${uid})`} />
       </g>
 
       {/* Specular Radial Ambient Glow */}
@@ -467,18 +467,18 @@ function FrontLandscapeSvg({
         y="2"
         width={CARD_W - 4}
         height={CARD_H - 4}
-        rx="26"
-        ry="26"
+        rx="0"
+        ry="0"
         fill="none"
         stroke={theme.cardBorder}
         strokeWidth="2.5"
       />
 
       {/* Left Prestige Metallic Accent Ribbon */}
-      <rect x="0" y="28" width="10" height={CARD_H - 56} rx="5" fill={`url(#accentBar_${uid})`} />
+      <rect x="0" y="28" width="10" height={CARD_H - 56} rx="0" fill={`url(#accentBar_${uid})`} />
 
       {/* Top Header Region Frosted Strip */}
-      <rect x="10" y="10" width={CARD_W - 20} height="150" fill={theme.headerBg} opacity={0.7} rx="18" />
+      <rect x="10" y="10" width={CARD_W - 20} height="150" fill={theme.headerBg} opacity={0.7} rx="0" />
 
       {/* Logo Avatar or Initials Monogram Frame */}
       <g>
@@ -530,7 +530,7 @@ function FrontLandscapeSvg({
               y="-18"
               width={business.whatsapp_username.length * 10.5 + 40}
               height="26"
-              rx="13"
+              rx="0"
               fill={theme.chipBg}
               stroke={theme.chipBorder}
               strokeWidth="1"
@@ -553,7 +553,7 @@ function FrontLandscapeSvg({
 
       {/* Directory Accreditation Badge (Top Right) */}
       <g transform={`translate(${CARD_W - 245}, 34)`}>
-        <rect width="200" height="34" rx="17" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+        <rect width="200" height="34" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
         <circle cx="18" cy="17" r="5" fill={theme.accentColor} />
         <text x="32" y="22" fill={theme.secondaryText} fontSize="11" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.8">
           WA.DIRECTORY • VERIFIED
@@ -585,7 +585,7 @@ function FrontLandscapeSvg({
           <g transform="translate(45, 195)">
             {chips.map(({ cat, width, x }, i) => (
               <g key={i} transform={`translate(${x}, 0)`}>
-                <rect width={width} height="32" rx="16" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
+                <rect width={width} height="32" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
                 <circle cx="14" cy="16" r="3.5" fill={theme.accentColor} />
                 <text x="26" y="21" fill={theme.chipText} fontSize="13" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
                   {cat.length > 30 ? cat.slice(0, 30) + '...' : cat}
@@ -617,7 +617,7 @@ function FrontLandscapeSvg({
         <rect
           width={CARD_W - 90}
           height="195"
-          rx="18"
+          rx="0"
           fill={theme.isDark ? 'rgba(0, 0, 0, 0.32)' : 'rgba(255, 255, 255, 0.75)'}
           stroke={theme.footerBorder}
           strokeWidth="1.2"
@@ -625,7 +625,7 @@ function FrontLandscapeSvg({
 
         {/* Column 1: WhatsApp Direct */}
         <g transform="translate(25, 42)">
-          <rect width="40" height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="40" height="40" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <WhatsAppIconSvg x={8} y={8} size={24} fill={theme.accentColor} />
           <text x="54" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
             {voiceOnly ? 'VOICE & HOTLINE' : 'WHATSAPP DIRECT'}
@@ -637,7 +637,7 @@ function FrontLandscapeSvg({
 
         {/* Column 2: Location & Area */}
         <g transform="translate(480, 42)">
-          <rect width="40" height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="40" height="40" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <LocationIconSvg x={8} y={8} size={24} fill={theme.accentColor} />
           <text x="54" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
             LOCATION & PRESENCE
@@ -649,7 +649,7 @@ function FrontLandscapeSvg({
 
         {/* Bottom Row: Official Web Profile */}
         <g transform="translate(25, 125)">
-          <rect width="40" height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="40" height="40" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <GlobeIconSvg x={8} y={8} size={24} fill={theme.accentColor} />
           <text x="54" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
             OFFICIAL WEB PROFILE
@@ -662,7 +662,7 @@ function FrontLandscapeSvg({
         {/* Price Tier Pill */}
         {business.price_range && (
           <g transform={`translate(${CARD_W - 270}, 125)`}>
-            <rect width="145" height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+            <rect width="145" height="40" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
             <text x="72" y="25" textAnchor="middle" fill={theme.secondaryText} fontSize="14" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
               Price: {business.price_range}
             </text>
@@ -735,12 +735,12 @@ function BackLandscapeSvg({
       </defs>
 
       {/* Card Base */}
-      <rect width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#backBg_${uid})`} />
+      <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#backBg_${uid})`} />
 
       {/* Guilloche & Dot Matrix Texture Layer */}
       <g color={theme.primaryText}>
-        <rect width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#guilloche_${uid})`} />
-        <rect width={CARD_W} height={CARD_H} rx="28" ry="28" fill={`url(#dotMatrix_${uid})`} />
+        <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#guilloche_${uid})`} />
+        <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#dotMatrix_${uid})`} />
       </g>
 
       {/* Center Radial Glow behind QR */}
@@ -752,8 +752,8 @@ function BackLandscapeSvg({
         y="2"
         width={CARD_W - 4}
         height={CARD_H - 4}
-        rx="26"
-        ry="26"
+        rx="0"
+        ry="0"
         fill="none"
         stroke={theme.cardBorder}
         strokeWidth="2.5"
@@ -788,7 +788,7 @@ function BackLandscapeSvg({
 
         {/* Security Seal */}
         <g transform={`translate(${CARD_W - 330}, 6)`}>
-          <rect width="240" height="42" rx="21" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
+          <rect width="240" height="42" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
           <WhatsAppIconSvg x={12} y={9} size={24} fill={theme.accentColor} />
           <text x="44" y="26" fill={theme.chipText} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">
             {voiceOnly ? 'SCAN TO CALL' : 'INSTANT CHAT QR CODE'}
@@ -803,7 +803,7 @@ function BackLandscapeSvg({
         <rect
           width="320"
           height="320"
-          rx="24"
+          rx="0"
           fill={theme.qrBoxBg}
           stroke={theme.qrBoxBorder}
           strokeWidth="3.5"
@@ -817,19 +817,19 @@ function BackLandscapeSvg({
             bgColor={theme.qrBgColor}
             fgColor={theme.qrFgColor}
             marginSize={0}
-            imageSettings={{
-              src: '/logo.png',
-              height: 52,
-              width: 52,
-              excavate: true,
-            }}
           />
         </g>
 
-        {/* Center Official WA.Directory Logo Overlay on QR */}
+        {/* Center logo: the business's own mark, or its initials. */}
         <g transform="translate(136, 136)">
           <circle cx="24" cy="24" r="24" fill="#FFFFFF" stroke={theme.accentColor} strokeWidth="2.5" />
-          <image href="/logo.png" x="4" y="4" width="40" height="40" clipPath={`url(#qrLogoClip_${uid})`} preserveAspectRatio="xMidYMid meet" />
+          {logoDataUrl ? (
+            <image href={logoDataUrl} x="4" y="4" width="40" height="40" clipPath={`url(#qrLogoClip_${uid})`} preserveAspectRatio="xMidYMid meet" />
+          ) : (
+            <text x="24" y="31" textAnchor="middle" fill="#0F172A" fontSize="18" fontWeight="800" fontFamily="system-ui, -apple-system, sans-serif">
+              {initials}
+            </text>
+          )}
         </g>
       </g>
 
@@ -951,19 +951,19 @@ function FrontPortraitSvg({
       </defs>
 
       {/* Card Base */}
-      <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#pFrontBg_${uid})`} />
+      <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#pFrontBg_${uid})`} />
 
       <g color={theme.primaryText}>
-        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#guilloche_p_${uid})`} />
-        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#dotMatrix_p_${uid})`} />
+        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#guilloche_p_${uid})`} />
+        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#dotMatrix_p_${uid})`} />
       </g>
 
       {/* Outer Border Stroke */}
-      <rect x="2" y="2" width={PORTRAIT_W - 4} height={PORTRAIT_H - 4} rx="26" ry="26" fill="none" stroke={theme.cardBorder} strokeWidth="2.5" />
+      <rect x="2" y="2" width={PORTRAIT_W - 4} height={PORTRAIT_H - 4} rx="0" ry="0" fill="none" stroke={theme.cardBorder} strokeWidth="2.5" />
 
       {/* Top Banner Seal */}
       <g transform="translate(0, 45)">
-        <rect x="180" y="0" width="240" height="34" rx="17" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
+        <rect x="180" y="0" width="240" height="34" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
         <circle cx="200" cy="17" r="5" fill={theme.accentColor} />
         <text x="215" y="22" fill={theme.secondaryText} fontSize="11" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.8">
           WA.DIRECTORY • VERIFIED
@@ -1030,7 +1030,7 @@ function FrontPortraitSvg({
               const x = (PORTRAIT_W - 90 - width) / 2
               return (
                 <g transform={`translate(${x}, 0)`}>
-                  <rect width={width} height="34" rx="17" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
+                  <rect width={width} height="34" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
                   <text x={width / 2} y="22" textAnchor="middle" fill={theme.chipText} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
                     {label}
                   </text>
@@ -1051,7 +1051,7 @@ function FrontPortraitSvg({
               <g transform={`translate(${startX}, 0)`}>
                 {pChips.map(({ label, width, x }, i) => (
                   <g key={i} transform={`translate(${x}, 0)`}>
-                    <rect width={width} height="34" rx="17" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
+                    <rect width={width} height="34" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1.2" />
                     <text x={width / 2} y="22" textAnchor="middle" fill={theme.chipText} fontSize="12" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
                       {label}
                     </text>
@@ -1081,11 +1081,11 @@ function FrontPortraitSvg({
 
       {/* Vertical Contact Box Matrix */}
       <g transform="translate(45, 590)">
-        <rect width={PORTRAIT_W - 90} height="360" rx="20" fill={theme.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.75)'} stroke={theme.footerBorder} strokeWidth="1.2" />
+        <rect width={PORTRAIT_W - 90} height="360" rx="0" fill={theme.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.75)'} stroke={theme.footerBorder} strokeWidth="1.2" />
 
         {/* Row 1: WhatsApp Direct */}
         <g transform="translate(25, 30)">
-          <rect width="44" height="44" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="44" height="44" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <WhatsAppIconSvg x={10} y={10} size={24} fill={theme.accentColor} />
           <text x="58" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
             {voiceOnly ? 'VOICE & HOTLINE' : 'WHATSAPP DIRECT'}
@@ -1097,7 +1097,7 @@ function FrontPortraitSvg({
 
         {/* Row 2: Location */}
         <g transform="translate(25, 120)">
-          <rect width="44" height="44" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="44" height="44" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <LocationIconSvg x={10} y={10} size={24} fill={theme.accentColor} />
           <text x="58" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
             LOCATION & PRESENCE
@@ -1109,7 +1109,7 @@ function FrontPortraitSvg({
 
         {/* Row 3: Web Profile */}
         <g transform="translate(25, 210)">
-          <rect width="44" height="44" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width="44" height="44" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <GlobeIconSvg x={10} y={10} size={24} fill={theme.accentColor} />
           <text x="58" y="16" fill={theme.mutedText} fontSize="12" fontWeight="600" fontFamily="system-ui, -apple-system, sans-serif">
             OFFICIAL WEB PROFILE
@@ -1121,7 +1121,7 @@ function FrontPortraitSvg({
 
         {/* Row 4: Price & Accreditation */}
         <g transform="translate(25, 290)">
-          <rect width={PORTRAIT_W - 140} height="40" rx="12" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
+          <rect width={PORTRAIT_W - 140} height="40" rx="0" fill={theme.chipBg} stroke={theme.chipBorder} strokeWidth="1" />
           <text x={(PORTRAIT_W - 140) / 2} y="25" textAnchor="middle" fill={theme.secondaryText} fontSize="13" fontWeight="700" fontFamily="system-ui, -apple-system, sans-serif">
             {business.price_range ? `Price: ${business.price_range} • ` : ''}Accredited Business
           </text>
@@ -1188,16 +1188,16 @@ function BackPortraitSvg({
       </defs>
 
       {/* Card Base */}
-      <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#pBackBg_${uid})`} />
+      <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#pBackBg_${uid})`} />
 
       <g color={theme.primaryText}>
-        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#guilloche_p_back_${uid})`} />
-        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="28" ry="28" fill={`url(#dotMatrix_p_back_${uid})`} />
+        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#guilloche_p_back_${uid})`} />
+        <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#dotMatrix_p_back_${uid})`} />
       </g>
 
       <circle cx="300" cy="380" r="240" fill={theme.accentGlow} opacity={theme.isDark ? 0.35 : 0.15} />
 
-      <rect x="2" y="2" width={PORTRAIT_W - 4} height={PORTRAIT_H - 4} rx="26" ry="26" fill="none" stroke={theme.cardBorder} strokeWidth="2.5" />
+      <rect x="2" y="2" width={PORTRAIT_W - 4} height={PORTRAIT_H - 4} rx="0" ry="0" fill="none" stroke={theme.cardBorder} strokeWidth="2.5" />
 
       {/* Top Header */}
       <g transform="translate(45, 36)">
@@ -1223,7 +1223,7 @@ function BackPortraitSvg({
 
       {/* QR CONTAINER */}
       <g transform="translate(110, 135)">
-        <rect width="380" height="380" rx="24" fill={theme.qrBoxBg} stroke={theme.qrBoxBorder} strokeWidth="3.5" />
+        <rect width="380" height="380" rx="0" fill={theme.qrBoxBg} stroke={theme.qrBoxBorder} strokeWidth="3.5" />
         <g transform="translate(25, 25)">
           <QRCodeSVG
             value={qrValue}
@@ -1232,18 +1232,19 @@ function BackPortraitSvg({
             bgColor={theme.qrBgColor}
             fgColor={theme.qrFgColor}
             marginSize={0}
-            imageSettings={{
-              src: '/logo.png',
-              height: 60,
-              width: 60,
-              excavate: true,
-            }}
+
           />
         </g>
-        {/* Center WA.Directory Logo Overlay */}
+        {/* Center logo: the business's own mark, or its initials. */}
         <g transform="translate(166, 166)">
           <circle cx="24" cy="24" r="24" fill="#FFFFFF" stroke={theme.accentColor} strokeWidth="2.5" />
-          <image href="/logo.png" x="4" y="4" width="40" height="40" clipPath={`url(#pQrLogoClip_${uid})`} preserveAspectRatio="xMidYMid meet" />
+          {logoDataUrl ? (
+            <image href={logoDataUrl} x="4" y="4" width="40" height="40" clipPath={`url(#pQrLogoClip_${uid})`} preserveAspectRatio="xMidYMid meet" />
+          ) : (
+            <text x="24" y="31" textAnchor="middle" fill="#0F172A" fontSize="18" fontWeight="800" fontFamily="system-ui, -apple-system, sans-serif">
+              {initials}
+            </text>
+          )}
         </g>
       </g>
 
@@ -1315,7 +1316,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const cardContainerRef = useRef<HTMLDivElement>(null)
 
   const [mounted, setMounted] = useState(false)
-  const [currentTheme, setCurrentTheme] = useState<CardTheme>('emerald')
+  const [currentTheme, setCurrentTheme] = useState<CardTheme>('swiss')
   const [orientation, setOrientation] = useState<CardOrientation>('landscape')
   const [activeSide, setActiveSide] = useState<'front' | 'back' | 'both'>('front')
   const [isFlipped, setIsFlipped] = useState(false)

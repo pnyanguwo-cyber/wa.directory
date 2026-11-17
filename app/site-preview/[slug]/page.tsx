@@ -9,6 +9,7 @@ import { getActingPortalBusiness } from '@/lib/portal'
 import { resolveTheme, type WebsiteThemeEntry } from '@/registry/websites'
 import { ORIENTATIONS, buildSiteView, type ThemeProps } from '@/lib/site-view'
 import { CartProvider } from '@/components/order/cart'
+import ClassicSiteView from '@/components/site/classic-site'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,8 +82,24 @@ export default async function SitePreviewPage({
   const site = await buildSiteView(business, itemList, testimonials)
 
   const requestedTheme = typeof searchParams.theme === 'string' ? searchParams.theme.trim() : ''
-  const entry: WebsiteThemeEntry | null = requestedTheme ? await resolveTheme(requestedTheme) : null
-  if (!entry) notFound()
+  // Fall back to the saved design so the pane works without a query param.
+  const savedTheme = business.site_theme as { design?: string } | null
+  const themeId = requestedTheme || savedTheme?.design || ''
+  const entry: WebsiteThemeEntry | null = themeId ? await resolveTheme(themeId) : null
+
+  if (!entry) {
+    // Preset layouts (classic, maison, bolt, craft) share the public page's
+    // renderer. Rendering it here keeps the preview working before the site
+    // is switched on, which the gated public page cannot do.
+    return (
+      <ClassicSiteView
+        business={business}
+        itemList={itemList}
+        testimonials={testimonials}
+        designOverride={themeId || undefined}
+      />
+    )
+  }
 
   const requestedOrientation =
     typeof searchParams.orientation === 'string' ? searchParams.orientation.trim() : ''

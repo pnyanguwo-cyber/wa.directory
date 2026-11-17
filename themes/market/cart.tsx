@@ -169,7 +169,6 @@ export function CartProvider({
       const qty = Math.min(MAX_QTY, (prev[item.id]?.qty || 0) + 1);
       return { ...prev, [item.id]: { item, qty } };
     });
-    setOpen(true);
   }, []);
 
   const setQty = useCallback((id: string, qty: number) => {

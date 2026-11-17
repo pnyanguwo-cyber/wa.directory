@@ -610,6 +610,43 @@ export default function MonolithTheme({
   /* Lightbox State */
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
+  /* Storefront carousel: every active item photo rotates over the cover. */
+  const heroItems = useMemo(
+    () => site.items.filter((item) => Boolean(item.image_url)),
+    [site.items],
+  );
+  const heroCount = heroItems.length;
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [heroMotionOk, setHeroMotionOk] = useState(true);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const sync = () => setHeroMotionOk(!mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  const stepHero = useCallback(
+    (dir: number) => {
+      setHeroIndex((i) => (heroCount ? (i + dir + heroCount) % heroCount : 0));
+    },
+    [heroCount],
+  );
+
+  useEffect(() => {
+    if (heroCount < 2 || !heroMotionOk) return;
+    const timer = window.setInterval(() => {
+      setHeroIndex((i) => (i + 1) % heroCount);
+    }, 5200);
+    return () => window.clearInterval(timer);
+    // Restart the clock whenever the visible slide changes so a manual tap
+    // gets a full beat before the next rotation.
+  }, [heroCount, heroIndex, heroMotionOk]);
+
+  const activeHero = heroCount > 0 ? heroItems[heroIndex % heroCount] : null;
+  const activeHeroOrder = activeHero ? itemOrderHref(site, activeHero) : '';
+
   /* Current Day of Week for Hours Table */
   const currentWeekday = useMemo(() => {
     try {
@@ -712,24 +749,47 @@ export default function MonolithTheme({
       <section className="mono-hero">
         <div className="mono-hero__backdrop">
           {site.coverImage ? (
-            <>
-              <img
-                className="mono-hero__cover"
-                src={site.coverImage}
-                alt={site.name}
-                loading="eager"
-              />
-              <div
-                className="mono-hero__scrim"
-                style={washStyle(site)}
-                aria-hidden="true"
-              />
-            </>
+            <img
+              className="mono-hero__cover"
+              src={site.coverImage}
+              alt={site.name}
+              loading="eager"
+            />
           ) : (
             <div className="mono-hero__cover mono-hero__cover--bare">
               <span className="mono-hero__bare-monogram">{site.initials}</span>
             </div>
           )}
+
+          {/* Store items rotate full-screen above the cover image. */}
+          {heroCount > 0 ? (
+            <div
+              className="mono-hero__carousel"
+              role="group"
+              aria-roledescription="carousel"
+              aria-label={`${site.name} store items`}
+            >
+              {heroItems.map((item, i) => {
+                const active = i === heroIndex % heroCount;
+                return (
+                  <div
+                    key={item.id}
+                    className={`mono-hero__slide${active ? ' mono-hero__slide--active' : ''}`}
+                    aria-hidden={!active}
+                  >
+                    <img
+                      src={item.image_url as string}
+                      alt={active ? `${item.name} at ${site.name}` : ''}
+                      loading={i === 0 ? 'eager' : 'lazy'}
+                      draggable={false}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          <div className="mono-hero__scrim" style={washStyle(site)} aria-hidden="true" />
         </div>
 
         <div className="mono-hero__inner">
@@ -784,6 +844,45 @@ export default function MonolithTheme({
                   </a>
                 ) : null}
               </div>
+
+              {/* The carousel's current item, with its own order link. */}
+              {activeHero ? (
+                <div className="mono-hero__shelf">
+                  <div className="mono-hero__shelf-head">
+                    <span className="mono-tag mono-tag--accent">ON THE SHELF</span>
+                    <span className="mono-hero__shelf-index">
+                      {String((heroIndex % heroCount) + 1).padStart(2, '0')} / {String(heroCount).padStart(2, '0')}
+                    </span>
+                  </div>
+
+                  <div className="mono-hero__shelf-row">
+                    <button
+                      type="button"
+                      className="mono-hero__shelf-name"
+                      onClick={() => handleOpenInspect(activeHero)}
+                      title={`Inspect ${activeHero.name}`}
+                    >
+                      {activeHero.name}
+                    </button>
+                    <span className="mono-hero__shelf-price">{money(activeHero)}</span>
+
+                    {activeHeroOrder ? (
+                      <a
+                        className="mono-btn mono-btn--outline mono-hero__shelf-cta"
+                        href={activeHeroOrder}
+                        target={site.voiceOnly ? undefined : '_blank'}
+                        rel="noopener noreferrer"
+                      >
+                        {site.voiceOnly ? 'CALL FOR THIS' : 'ORDER THIS'}
+                      </a>
+                    ) : null}
+                  </div>
+
+                  {activeHero.description ? (
+                    <p className="mono-hero__shelf-desc">{activeHero.description}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {/* Rolling Kinetic Circular Seal */}
@@ -802,6 +901,32 @@ export default function MonolithTheme({
               <span>•</span>
               <span>{currentTime ? `${currentTime} HARARE LOCAL` : 'CATALOGUE ACTIVE'}</span>
             </div>
+
+            {activeHero ? (
+              <div className="mono-hero__deck">
+                <button
+                  type="button"
+                  className="mono-hero__deck-btn"
+                  onClick={() => stepHero(-1)}
+                  aria-label="Previous store item"
+                >
+                  <ChevronLeftIcon />
+                </button>
+
+                <span className="mono-hero__deck-count" aria-hidden="true">
+                  [ {String((heroIndex % heroCount) + 1).padStart(2, '0')} / {String(heroCount).padStart(2, '0')} ]
+                </span>
+
+                <button
+                  type="button"
+                  className="mono-hero__deck-btn"
+                  onClick={() => stepHero(1)}
+                  aria-label="Next store item"
+                >
+                  <ChevronRightIcon />
+                </button>
+              </div>
+            ) : null}
 
             <a href="#services" className="mono-hero__scroll-link" aria-label="Scroll to discover">
               <span>EXPLORE MONOLITH</span>

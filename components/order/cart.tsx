@@ -287,7 +287,6 @@ export function AddToCartChip({ item }: { item: CartItem }) {
       onClick={(e) => {
         e.preventDefault()
         cart.add(item)
-        cart.setOpen(true)
       }}
       className="inline-flex items-center gap-1 rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-3 py-1 text-xs font-bold text-[#075E54] hover:bg-[#25D366]/20 transition-colors"
     >

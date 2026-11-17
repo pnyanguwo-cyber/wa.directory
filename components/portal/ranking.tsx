@@ -326,180 +326,187 @@ export default function PortalRanking({
         </div>
       </div>
 
-      {/* Current #1 holder */}
-      <div className="rounded-2xl border p-5 shadow-card bg-gradient-to-br from-amber-50 to-white border-amber-200">
-        {(() => {
-          const spot = spots.find(s => s.position === 1)
-          return (
-            <>
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-extrabold text-amber-600">#1 Gold — current holder</p>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">
-                  {spot ? `$${spot.monthlyFee.toFixed(2)}/mo` : 'Open'}
-                </span>
-              </div>
-              <p className="text-base font-bold text-text-primary mt-2 truncate">
-                {spot ? (spot.mine ? 'Your business 🎉' : spot.businessName) : 'No holder yet'}
-              </p>
-              <p className="text-[11px] text-text-secondary mt-0.5">
-                {spot
-                  ? `Held until ${spot.periodEnd}${spot.mine ? ': this is you — outbid yourself to raise the bar' : ' — outbid them by at least $' + MIN_GAP.toFixed(2) + ' to take the spot'}`
-                  : `Minimum bid: $${MIN_GAP.toFixed(2)}`}
-              </p>
-            </>
-          )
-        })()}
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="space-y-4">
+          {/* Current #1 holder */}
+          <div className="rounded-2xl border p-5 shadow-card bg-gradient-to-br from-amber-50 to-white border-amber-200">
+            {(() => {
+              const spot = spots.find(s => s.position === 1)
+              return (
+                <>
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-extrabold text-amber-600">#1 Gold — current holder</p>
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-text-secondary">
+                      {spot ? `$${spot.monthlyFee.toFixed(2)}/mo` : 'Open'}
+                    </span>
+                  </div>
+                  <p className="text-base font-bold text-text-primary mt-2 truncate">
+                    {spot ? (spot.mine ? 'Your business 🎉' : spot.businessName) : 'No holder yet'}
+                  </p>
+                  <p className="text-[11px] text-text-secondary mt-0.5">
+                    {spot
+                      ? `Held until ${spot.periodEnd}${spot.mine ? ': this is you — outbid yourself to raise the bar' : ' — outbid them by at least $' + MIN_GAP.toFixed(2) + ' to take the spot'}`
+                      : `Minimum bid: $${MIN_GAP.toFixed(2)}`}
+                  </p>
+                </>
+              )
+            })()}
       </div>
 
-      {/* Live auction board */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-sm font-bold text-text-primary">Live auction board</p>
-          <span className="text-[11px] text-text-secondary">
-            {category}{city ? ` · ${city}` : ' · Nationwide'}
-          </span>
-        </div>
-        {!loaded ? (
-          <p className="text-xs text-text-secondary py-3">Loading bids…</p>
-        ) : loadError ? (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{loadError}</p>
-        ) : competition.length === 0 ? (
-          <p className="text-xs text-text-secondary py-3">
-            No bids yet for this category{city ? ` in ${city}` : ''}: the first paid bid takes #1.
-          </p>
-        ) : (
-          <div className="space-y-1.5">
-            {competitionSorted.map((b, i) => (
-              <div
-                key={b.id}
-                className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
-                  b.mine
-                    ? 'bg-whatsapp-50 border-whatsapp-300'
-                    : 'bg-surface/60 border-gray-200/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
-                    i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {i + 1}
-                  </span>
-                  <p className="text-sm font-semibold text-text-primary truncate">
-                    {b.mine ? 'Your business' : b.businessName}
-                  </p>
-                  {b.mine && (
-                    <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 shrink-0">You</span>
-                  )}
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-sm font-bold text-text-primary">${b.amount.toFixed(2)}</p>
-                  <p className={`text-[10px] font-semibold capitalize ${
-                    b.status === 'approved' || b.status === 'paid'
-                      ? 'text-whatsapp-700'
-                      : b.status === 'outbid'
-                        ? 'text-gray-400'
-                        : 'text-amber-600'
-                  }`}>
-                    {b.status === 'pending' ? 'awaiting payment' : b.status}
-                  </p>
-                </div>
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>
+          )}
+          {notice && (
+            <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>
+          )}
+
+          {/* Bid form: amount only — payment happens in the modal card */}
+          {canBid && (
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                const fee = Number(amount)
+                setError('')
+                if (!Number.isFinite(fee) || fee < minBid) {
+                  setError(minBid > MIN_GAP
+                    ? `Your bid must be at least $${minBid.toFixed(2)} to beat the current #1.`
+                    : `Minimum bid is $${minBid.toFixed(2)}.`)
+                  return
+                }
+                openPaymentModal({ id: '', amount: fee })
+              }}
+              className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card space-y-4"
+            >
+              <div>
+                <p className="text-sm font-bold text-text-primary">
+                  Bid for #1: {category}{city ? `, ${city}` : ' (nationwide)'}
+                </p>
+                <p className="text-xs text-text-secondary mt-0.5">
+                  {minBid > MIN_GAP
+                    ? `Current #1 fee is $${(minBid - MIN_GAP).toFixed(2)} — you must bid at least $${minBid.toFixed(2)}.`
+                    : `This spot is open — minimum bid is $${minBid.toFixed(2)}.`}
+                  {' '}You&rsquo;ll pay with EcoCash right after this.
+                </p>
               </div>
-            ))}
-            <p className="text-[11px] text-text-secondary pt-1">
-              {leader
-                ? `${leader.mine ? 'You lead' : `${leader.businessName} leads`} with $${leader.amount.toFixed(2)}. Bid at least $${(leader.amount + MIN_GAP).toFixed(2)} to take the lead.`
-                : ''}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {error && (
-        <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</p>
-      )}
-      {notice && (
-        <p className="text-xs text-whatsapp-700 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 animate-fade-in">{notice}</p>
-      )}
-
-      {/* Bid form: amount only — payment happens in the modal card */}
-      {canBid && (
-        <form
-          onSubmit={e => {
-            e.preventDefault()
-            const fee = Number(amount)
-            setError('')
-            if (!Number.isFinite(fee) || fee < minBid) {
-              setError(minBid > MIN_GAP
-                ? `Your bid must be at least $${minBid.toFixed(2)} to beat the current #1.`
-                : `Minimum bid is $${minBid.toFixed(2)}.`)
-              return
-            }
-            openPaymentModal({ id: '', amount: fee })
-          }}
-          className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card space-y-4"
-        >
-          <div>
-            <p className="text-sm font-bold text-text-primary">
-              Bid for #1: {category}{city ? `, ${city}` : ' (nationwide)'}
-            </p>
-            <p className="text-xs text-text-secondary mt-0.5">
-              {minBid > MIN_GAP
-                ? `Current #1 fee is $${(minBid - MIN_GAP).toFixed(2)} — you must bid at least $${minBid.toFixed(2)}.`
-                : `This spot is open — minimum bid is $${minBid.toFixed(2)}.`}
-              {' '}You&rsquo;ll pay with EcoCash right after this.
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
-              Your monthly fee (USD)
-            </label>
-            <input
-              type="number"
-              min={minBid.toFixed(2)}
-              step="0.05"
-              required
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              className="input-field"
-              placeholder={minBid.toFixed(2)}
-              autoFocus
-            />
-            <p className="text-[11px] text-text-secondary mt-1.5">
-              Must exceed the #1 fee by at least ${MIN_GAP.toFixed(2)} (50 cents). Bids equal to or below the current #1 are not allowed.
-            </p>
-          </div>
-          <button type="submit" className="btn-primary w-full py-3 text-sm font-semibold">
-            Bid &amp; pay with EcoCash
-          </button>
-        </form>
-      )}
-
-      {/* My bids with payment retry */}
-      {myPending.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-sm font-bold text-text-primary">My unpaid bids</p>
-          {myPending.map(b => (
-            <div key={b.id} className="bg-white border border-amber-200/70 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold bg-amber-100 text-amber-700">
-                  #1
-                </span>
-                <div>
-                  <p className="text-sm font-bold text-text-primary">${Number(b.amount).toFixed(2)}/month</p>
-                  <p className="text-[11px] text-text-secondary">Awaiting EcoCash payment · {b.period}</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">
+                  Your monthly fee (USD)
+                </label>
+                <input
+                  type="number"
+                  min={minBid.toFixed(2)}
+                  step="0.05"
+                  required
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  className="input-field"
+                  placeholder={minBid.toFixed(2)}
+                  autoFocus
+                />
+                <p className="text-[11px] text-text-secondary mt-1.5">
+                  Must exceed the #1 fee by at least ${MIN_GAP.toFixed(2)} (50 cents). Bids equal to or below the current #1 are not allowed.
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={() => openPaymentModal({ id: b.id, amount: Number(b.amount) })}
-                className="h-9 px-4 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-2xl"
-              >
-                Pay now
+              <button type="submit" className="btn-primary w-full py-3 text-sm font-semibold">
+                Bid &amp; pay with EcoCash
               </button>
-            </div>
-          ))}
+            </form>
+          )}
+
         </div>
-      )}
+        <div className="space-y-4">
+          {/* Live auction board */}
+          <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-text-primary">Live auction board</p>
+              <span className="text-[11px] text-text-secondary">
+                {category}{city ? ` · ${city}` : ' · Nationwide'}
+              </span>
+        </div>
+            {!loaded ? (
+              <p className="text-xs text-text-secondary py-3">Loading bids…</p>
+            ) : loadError ? (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{loadError}</p>
+            ) : competition.length === 0 ? (
+              <p className="text-xs text-text-secondary py-3">
+                No bids yet for this category{city ? ` in ${city}` : ''}: the first paid bid takes #1.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {competitionSorted.map((b, i) => (
+                  <div
+                    key={b.id}
+                    className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-2 ${
+                      b.mine
+                        ? 'bg-whatsapp-50 border-whatsapp-300'
+                        : 'bg-surface/60 border-gray-200/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-extrabold shrink-0 ${
+                        i === 0 ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <p className="text-sm font-semibold text-text-primary truncate">
+                        {b.mine ? 'Your business' : b.businessName}
+                      </p>
+                      {b.mine && (
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-whatsapp-700 shrink-0">You</span>
+                      )}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-bold text-text-primary">${b.amount.toFixed(2)}</p>
+                      <p className={`text-[10px] font-semibold capitalize ${
+                        b.status === 'approved' || b.status === 'paid'
+                          ? 'text-whatsapp-700'
+                          : b.status === 'outbid'
+                            ? 'text-gray-400'
+                            : 'text-amber-600'
+                      }`}>
+                        {b.status === 'pending' ? 'awaiting payment' : b.status}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[11px] text-text-secondary pt-1">
+                  {leader
+                    ? `${leader.mine ? 'You lead' : `${leader.businessName} leads`} with $${leader.amount.toFixed(2)}. Bid at least $${(leader.amount + MIN_GAP).toFixed(2)} to take the lead.`
+                    : ''}
+                </p>
+              </div>
+            )}
+      </div>
+
+          {/* My bids with payment retry */}
+          {myPending.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-bold text-text-primary">My unpaid bids</p>
+              {myPending.map(b => (
+                <div key={b.id} className="bg-white border border-amber-200/70 rounded-2xl p-4 shadow-card flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className="w-9 h-9 rounded-2xl flex items-center justify-center text-xs font-extrabold bg-amber-100 text-amber-700">
+                      #1
+                    </span>
+                    <div>
+                      <p className="text-sm font-bold text-text-primary">${Number(b.amount).toFixed(2)}/month</p>
+                      <p className="text-[11px] text-text-secondary">Awaiting EcoCash payment · {b.period}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openPaymentModal({ id: b.id, amount: Number(b.amount) })}
+                    className="h-9 px-4 bg-whatsapp-500 hover:bg-whatsapp-600 text-white text-xs font-semibold rounded-2xl"
+                  >
+                    Pay now
+                  </button>
+                </div>
+              ))}
+        </div>
+          )}
+
+        </div>
+      </div>
 
       {/* ===== Payment modal: card centered, background blurred ===== */}
       {payBid && (

@@ -28,7 +28,7 @@ export default function TipsList({ tips }: { tips: Tip[] }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="grid gap-3 sm:grid-cols-2">
       {tips.map((tip, i) => {
         if (dismissed.has(i)) return null
         const isDone = done.has(i)

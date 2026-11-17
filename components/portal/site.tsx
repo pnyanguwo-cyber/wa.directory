@@ -293,8 +293,15 @@ export default function PortalSite({
 
   const activeRegistryMeta = themeGallery?.find(m => m.id === theme.design) || null
 
+  // The preview route resolves a theme by id, so the pane has to carry the
+  // currently selected design or it renders nothing.
+  const previewParams = new URLSearchParams({ preview: '1' })
+  if (theme.design) previewParams.set('theme', theme.design)
+  if (theme.orientation) previewParams.set('orientation', theme.orientation)
+  const previewSrc = `/site/${businessSlug}?${previewParams.toString()}`
+
   return (
-    <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6 lg:items-start">
+    <div className="space-y-6 lg:space-y-0 lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6">
       <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold text-text-primary">Website</h2>
@@ -838,14 +845,14 @@ export default function PortalSite({
               </a>
             </div>
             <iframe
-              key={previewKey}
+              key={`${previewKey}-${previewSrc}`}
               title={`Live preview of the ${businessName} website`}
-              src={`/site-preview/${businessSlug}`}
+              src={previewSrc}
               className="w-full rounded-xl border border-gray-100 bg-white"
               style={{ height: 'min(78vh, 720px)' }}
               loading="lazy"
             />
-            <p className="mt-2 text-[11px] text-text-secondary">Preview shows your saved site. Press Save to refresh it.</p>
+            <p className="mt-2 text-[11px] text-text-secondary">Preview follows your saved content and the theme you select.</p>
           </div>
         </div>
       </aside>
@@ -873,12 +880,12 @@ export default function PortalSite({
               </button>
             </div>
             <iframe
-              key={previewKey}
+              key={`${previewKey}-${previewSrc}`}
               title={`Live preview of the ${businessName} website (mobile)`}
-              src={`/site-preview/${businessSlug}`}
+              src={previewSrc}
               className="w-full flex-1"
             />
-            <p className="px-4 py-2 text-[11px] text-text-secondary border-t border-gray-100 shrink-0">Preview shows your saved site. Press Save to refresh it.</p>
+            <p className="px-4 py-2 text-[11px] text-text-secondary border-t border-gray-100 shrink-0">Preview follows your saved content and the theme you select.</p>
           </div>
         </div>
       )}
