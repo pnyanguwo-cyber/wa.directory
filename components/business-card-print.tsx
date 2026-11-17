@@ -1433,6 +1433,16 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [downloading, setDownloading] = useState<string | null>(null)
+  // Card copy is editable; blank fields fall back to the listing.
+  const [copy, setCopy] = useState({
+    name: business.name || '',
+    tagline: business.bio || '',
+    phone: business.phone || '',
+    location: [business.area, business.city].filter(Boolean).join(', '),
+    link: '',
+  })
+  // Per-segment ink overrides. '' keeps the selected palette.
+  const [ink, setInk] = useState({ bg: '', accent: '', text: '', footer: '' })
 
   // Interactive 3D tilt state
   const [tilt, setTilt] = useState({ rotateX: 0, rotateY: 0, glareX: 50, glareY: 50, isHovered: false })
@@ -1470,26 +1480,37 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
     }
   }, [business.logo_url])
 
-  const initials = getInitials(business.name, 'WA')
+  const cardBusiness = { ...business, name: copy.name.trim() || business.name, bio: copy.tagline }
+  const initials = getInitials(cardBusiness.name, 'WA')
 
-  const locationText = [business.area, business.city, 'Zimbabwe'].filter(Boolean).join(', ')
-  const profileUrl = `wadirectory.co.zw/business/${business.slug || business.id}`
-  const phoneClean = (business.phone || '').replace(/[^0-9]/g, '')
+  const locationText = copy.location.trim()
+    || [cardBusiness.area, cardBusiness.city, 'Zimbabwe'].filter(Boolean).join(', ')
+  const profileUrl = copy.link.trim() || `wadirectory.co.zw/business/${cardBusiness.slug || cardBusiness.id}`
+  const phoneClean = (cardBusiness.phone || '').replace(/[^0-9]/g, '')
   // Voice-only listings (landline/hotline) have no WhatsApp chat — the card QR
   // becomes a one-tap dial link and the contact chip shows the voice number.
-  const voiceOnly = business.phone_type === 'voice'
+  const voiceOnly = cardBusiness.phone_type === 'voice'
   const qrValue = voiceOnly
-    ? `tel:${business.phone}`
+    ? `tel:${cardBusiness.phone}`
     : `https://wa.me/${phoneClean}?text=${encodeURIComponent(
-        `Hi ${business.name}, I found your official business card on WA Directory Zimbabwe and would like to inquire about your services.`
+        `Hi ${cardBusiness.name}, I found your official business card on WA Directory Zimbabwe and would like to inquire about your services.`
       )}`
-  const formattedPhone = formatPhone(business.phone)
+  const formattedPhone = formatPhone(cardBusiness.phone)
   const baseTheme = THEMES[currentTheme]
   // Paper designs always print on white; Signature keeps the full colour
   // finish. Lines and vinyls are independent of the chosen ink.
-  const theme: ThemeConfig = {
+  const paletteTheme: ThemeConfig = {
     ...baseTheme,
     ...(design === 'signature' ? {} : PAPER_THEME),
+  }
+  const theme: ThemeConfig = {
+    ...paletteTheme,
+    ...(ink.bg
+      ? { bgFrom: ink.bg, bgVia: ink.bg, bgTo: ink.bg, backBgFrom: ink.bg, backBgVia: ink.bg, backBgTo: ink.bg, qrBoxBg: ink.bg }
+      : {}),
+    ...(ink.accent ? { accentColor: ink.accent, accentGlow: `${ink.accent}55` } : {}),
+    ...(ink.text ? { primaryText: ink.text, secondaryText: ink.text } : {}),
+    ...(ink.footer ? { footerBg: ink.footer, headerBg: ink.footer } : {}),
     decor: { design, line: lineStyle, vinyl: vinylStyle, lineColor, vinylColor },
   }
 
@@ -1563,7 +1584,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       const canvas = await renderSvgToCanvas(svgEl, 3)
       const a = document.createElement('a')
       a.href = canvas.toDataURL('image/png')
-      a.download = `${business.slug || 'business'}-card-${side}-${currentTheme}-${orientation}.png`
+      a.download = `${cardBusiness.slug || 'business'}-card-${side}-${currentTheme}-${orientation}.png`
       a.click()
     } catch (e) {
       console.error('Export error:', e)
@@ -1608,7 +1629,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       ctx.fillStyle = '#FFFFFF'
       ctx.font = `bold ${30 * scale}px system-ui, -apple-system, sans-serif`
       ctx.textAlign = 'center'
-      ctx.fillText(`${business.name.toUpperCase()}: OFFICIAL BUSINESS CARD`, totalW / 2, 52 * scale)
+      ctx.fillText(`${cardBusiness.name.toUpperCase()}: OFFICIAL BUSINESS CARD`, totalW / 2, 52 * scale)
 
       ctx.fillStyle = '#25D366'
       ctx.font = `600 ${16 * scale}px system-ui, -apple-system, sans-serif`
@@ -1632,7 +1653,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
       const a = document.createElement('a')
       a.href = sheet.toDataURL('image/png')
-      a.download = `${business.slug || 'business'}-business-card-double-sided-kit.png`
+      a.download = `${cardBusiness.slug || 'business'}-business-card-double-sided-kit.png`
       a.click()
     } catch (e) {
       console.error('Export error:', e)
@@ -1653,26 +1674,26 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${business.slug || 'business'}-card-${side}-${currentTheme}-${orientation}.svg`
+    a.download = `${cardBusiness.slug || 'business'}-card-${side}-${currentTheme}-${orientation}.svg`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   // Download Digital vCard (.vcf)
   function downloadVCard() {
-    const voiceNum = voiceOnly ? business.phone : business.voice_phone
+    const voiceNum = voiceOnly ? cardBusiness.phone : cardBusiness.voice_phone
     const vCardData = [
       'BEGIN:VCARD',
       'VERSION:3.0',
-      `FN:${business.name}`,
-      `ORG:${business.name}`,
+      `FN:${cardBusiness.name}`,
+      `ORG:${cardBusiness.name}`,
       voiceOnly
-        ? `TEL;TYPE=WORK,VOICE,PREF:${business.phone}`
-        : `TEL;TYPE=CELL,VOICE,PREF:${formattedPhone || business.phone}`,
+        ? `TEL;TYPE=WORK,VOICE,PREF:${cardBusiness.phone}`
+        : `TEL;TYPE=CELL,VOICE,PREF:${formattedPhone || cardBusiness.phone}`,
       ...(voiceNum ? [`TEL;TYPE=WORK,VOICE:${voiceNum}`] : []),
-      `ADR;TYPE=WORK:;;${business.address || ''};${business.city || 'Harare'};;Zimbabwe`,
+      `ADR;TYPE=WORK:;;${cardBusiness.address || ''};${cardBusiness.city || 'Harare'};;Zimbabwe`,
       `URL:https://${profileUrl}`,
-      `NOTE:${voiceOnly ? 'Verified business' : 'Verified WhatsApp Business'} on WA Directory Zimbabwe. Category: ${dedupeCategories(business.category).join(', ') || 'Business'}`,
+      `NOTE:${voiceOnly ? 'Verified business' : 'Verified WhatsApp Business'} on WA Directory Zimbabwe. Category: ${dedupeCategories(cardBusiness.category).join(', ') || 'Business'}`,
       ...(voiceOnly ? [] : ['X-SOCIALPROFILE;TYPE=whatsapp:https://wa.me/' + phoneClean]),
       'END:VCARD',
     ].join('\r\n')
@@ -1681,7 +1702,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${business.slug || 'business'}-contact.vcf`
+    a.download = `${cardBusiness.slug || 'business'}-contact.vcf`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -1702,7 +1723,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       <!DOCTYPE html>
       <html>
       <head>
-        <title>${business.name} - Business Card Print Sheet (WA Directory)</title>
+        <title>${cardBusiness.name} - Business Card Print Sheet (WA Directory)</title>
         <style>
           @page {
             size: A4 portrait;
@@ -1789,7 +1810,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
       </head>
       <body>
         <div class="header">
-          <h1 class="title">${business.name}: Official Business Cards</h1>
+          <h1 class="title">${cardBusiness.name}: Official Business Cards</h1>
           <p class="subtitle">Standard ${orientation === 'landscape' ? '3.5" × 2.0"' : '2.0" × 3.5"'} Print Template • WA Directory Zimbabwe (wadirectory.co.zw)</p>
         </div>
 
@@ -1828,7 +1849,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
   // Copy Profile Link
   function copyCardLink() {
-    const fullUrl = `https://wadirectory.co.zw/business/${business.slug || business.id}`
+    const fullUrl = `https://wadirectory.co.zw/business/${cardBusiness.slug || cardBusiness.id}`
     navigator.clipboard.writeText(fullUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
@@ -1836,8 +1857,8 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
   // Share to WhatsApp
   function shareToWhatsApp() {
-    const fullUrl = `https://wadirectory.co.zw/business/${business.slug || business.id}`
-    const msg = `Check out *${business.name}*'s official digital business card on WA Directory Zimbabwe:\n\n${fullUrl}\n\nScan or tap to connect on WhatsApp directly!`
+    const fullUrl = `https://wadirectory.co.zw/business/${cardBusiness.slug || cardBusiness.id}`
+    const msg = `Check out *${cardBusiness.name}*'s official digital business card on WA Directory Zimbabwe:\n\n${fullUrl}\n\nScan or tap to connect on WhatsApp directly!`
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
@@ -2054,6 +2075,124 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             </div>
           </div>
         </div>
+
+        {/* Card text + segment inks */}
+        <div className="mt-4 grid gap-3 border-t border-gray-100 pt-3 lg:grid-cols-2">
+          <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Card text</span>
+              <button
+                type="button"
+                onClick={() => setCopy({ name: business.name || '', tagline: business.bio || '', phone: business.phone || '', location: [business.area, business.city].filter(Boolean).join(', '), link: '' })}
+                className="text-[10px] font-semibold text-whatsapp-700 hover:underline"
+              >
+                Reset to listing
+              </button>
+            </div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              <label className="sm:col-span-2">
+                <span className="text-[10px] font-semibold text-text-secondary">Business name</span>
+                <input
+                  type="text"
+                  value={copy.name}
+                  onChange={e => setCopy(c => ({ ...c, name: e.target.value }))}
+                  placeholder={business.name}
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-text-primary focus:border-whatsapp-400 focus:outline-none"
+                />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="text-[10px] font-semibold text-text-secondary">Tagline</span>
+                <textarea
+                  value={copy.tagline}
+                  onChange={e => setCopy(c => ({ ...c, tagline: e.target.value }))}
+                  rows={2}
+                  placeholder={business.bio || 'One line about what you do'}
+                  className="mt-0.5 w-full resize-none rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-text-primary focus:border-whatsapp-400 focus:outline-none"
+                />
+              </label>
+              <label>
+                <span className="text-[10px] font-semibold text-text-secondary">Phone</span>
+                <input
+                  type="tel"
+                  value={copy.phone}
+                  onChange={e => setCopy(c => ({ ...c, phone: e.target.value }))}
+                  placeholder={business.phone}
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-text-primary focus:border-whatsapp-400 focus:outline-none"
+                />
+              </label>
+              <label>
+                <span className="text-[10px] font-semibold text-text-secondary">Location</span>
+                <input
+                  type="text"
+                  value={copy.location}
+                  onChange={e => setCopy(c => ({ ...c, location: e.target.value }))}
+                  placeholder="Harare, Zimbabwe"
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-text-primary focus:border-whatsapp-400 focus:outline-none"
+                />
+              </label>
+              <label className="sm:col-span-2">
+                <span className="text-[10px] font-semibold text-text-secondary">Link printed on the back</span>
+                <input
+                  type="text"
+                  value={copy.link}
+                  onChange={e => setCopy(c => ({ ...c, link: e.target.value }))}
+                  placeholder={profileUrl}
+                  className="mt-0.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs text-text-primary focus:border-whatsapp-400 focus:outline-none"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Segment colours</span>
+              <button
+                type="button"
+                onClick={() => setInk({ bg: '', accent: '', text: '', footer: '' })}
+                className="text-[10px] font-semibold text-whatsapp-700 hover:underline"
+              >
+                Use palette
+              </button>
+            </div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+              {([
+                { key: 'bg' as const, label: 'Card stock', fallback: paletteTheme.bgFrom },
+                { key: 'accent' as const, label: 'Ink & icons', fallback: paletteTheme.accentColor },
+                { key: 'text' as const, label: 'Name & copy', fallback: paletteTheme.primaryText },
+                { key: 'footer' as const, label: 'Header & footer band', fallback: paletteTheme.footerBg },
+              ]).map(({ key, label, fallback }) => {
+                const active = ink[key]
+                return (
+                  <div key={key} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5">
+                    <input
+                      type="color"
+                      value={active || fallback}
+                      onChange={e => setInk(v => ({ ...v, [key]: e.target.value }))}
+                      aria-label={`${label} colour`}
+                      className="h-6 w-7 shrink-0 cursor-pointer rounded border border-gray-300 bg-white p-0.5"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[10.5px] font-semibold text-text-primary">{label}</p>
+                      <p className="text-[9px] uppercase text-text-secondary">{active || 'palette'}</p>
+                    </div>
+                    {active && (
+                      <button
+                        type="button"
+                        onClick={() => setInk(v => ({ ...v, [key]: '' }))}
+                        className="text-[9.5px] font-semibold text-text-secondary hover:text-text-primary"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            <p className="mt-2 text-[10px] leading-snug text-text-secondary">
+              Signature prints your ink straight on the stock. Paper designs stay on white stock, so the colours act as ink, rule and band tones.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* ---------------- CARD PREVIEW VIEWPORT ---------------- */}
@@ -2073,7 +2212,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             <div ref={frontRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10">
               {orientation === 'landscape' ? (
                 <FrontLandscapeSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2085,7 +2224,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 />
               ) : (
                 <FrontPortraitSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2112,7 +2251,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             <div ref={backRef} className="w-full rounded-2xl overflow-hidden shadow-2xl transition-all duration-300 ring-1 ring-black/10">
               {orientation === 'landscape' ? (
                 <BackLandscapeSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2122,7 +2261,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 />
               ) : (
                 <BackPortraitSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2142,7 +2281,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             <div ref={frontRef}>
               {orientation === 'landscape' ? (
                 <FrontLandscapeSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2154,7 +2293,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 />
               ) : (
                 <FrontPortraitSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2169,7 +2308,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
             <div ref={backRef}>
               {orientation === 'landscape' ? (
                 <BackLandscapeSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2179,7 +2318,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 />
               ) : (
                 <BackPortraitSvg
-                  business={business}
+                  business={cardBusiness}
                   theme={theme}
                   logoDataUrl={logoDataUrl}
                   initials={initials}
@@ -2213,7 +2352,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] ring-1 ring-black/10">
                 {orientation === 'landscape' ? (
                   <FrontLandscapeSvg
-                    business={business}
+                    business={cardBusiness}
                     theme={theme}
                     logoDataUrl={logoDataUrl}
                     initials={initials}
@@ -2225,7 +2364,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   />
                 ) : (
                   <FrontPortraitSvg
-                    business={business}
+                    business={cardBusiness}
                     theme={theme}
                     logoDataUrl={logoDataUrl}
                     initials={initials}
@@ -2261,7 +2400,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               <div className="absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-2xl [backface-visibility:hidden] [transform:rotateY(180deg)] ring-1 ring-black/10">
                 {orientation === 'landscape' ? (
                   <BackLandscapeSvg
-                    business={business}
+                    business={cardBusiness}
                     theme={theme}
                     logoDataUrl={logoDataUrl}
                     initials={initials}
@@ -2271,7 +2410,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                   />
                 ) : (
                   <BackPortraitSvg
-                    business={business}
+                    business={cardBusiness}
                     theme={theme}
                     logoDataUrl={logoDataUrl}
                     initials={initials}

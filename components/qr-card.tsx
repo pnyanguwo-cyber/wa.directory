@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { getInitials } from '@/lib/utils'
 
-export type QrColorTheme = 'emerald' | 'obsidian' | 'royal' | 'rose' | 'cyber' | 'classic' | 'transparent'
+export type QrColorTheme = 'emerald' | 'obsidian' | 'royal' | 'rose' | 'cyber' | 'classic' | 'linen' | 'clay' | 'cobalt' | 'blush' | 'transparent'
 export type FrameStyle = 'luxury-card' | 'minimal' | 'poster' | 'counter-stand' | 'raw-qr'
 export type NamePlacement = 'top' | 'bottom' | 'side' | 'none'
 export type FontStyle = 'sans' | 'serif' | 'mono'
@@ -165,6 +165,95 @@ export const QR_THEMES: Record<QrColorTheme, QrThemeConfig> = {
     badgeBg: '#0F172A',
     badgeText: '#FFFFFF',
     glowColor: 'rgba(15, 23, 42, 0.12)',
+  },
+  // Light stocks: printable, scannable and cheap to run on any office printer.
+  linen: {
+    id: 'linen',
+    name: 'Linen & Olive',
+    pillColor: '#8A7B5C',
+    isTransparent: false,
+    isDark: false,
+    cardBg: '#FBF8F0',
+    cardBorder: '#E2D9C3',
+    fgColor: '#57503C',
+    bgColor: '#FBF8F0',
+    accentColor: '#8A7B5C',
+    textColor: '#3F3A2C',
+    subtextColor: '#7A715C',
+    chipBg: '#F3EEDD',
+    chipText: '#4A4231',
+    chipBorder: '#E2D9C3',
+    qrBoxBg: '#FFFFFF',
+    qrBoxBorder: '#8A7B5C',
+    badgeBg: '#8A7B5C',
+    badgeText: '#FFFFFF',
+    glowColor: 'rgba(138, 123, 92, 0.18)',
+  },
+  clay: {
+    id: 'clay',
+    name: 'Terracotta Paper',
+    pillColor: '#C2410C',
+    isTransparent: false,
+    isDark: false,
+    cardBg: '#FDF4EE',
+    cardBorder: '#F3D6C4',
+    fgColor: '#9A3412',
+    bgColor: '#FDF4EE',
+    accentColor: '#C2410C',
+    textColor: '#7C2D12',
+    subtextColor: '#9A3412',
+    chipBg: '#FBE8DC',
+    chipText: '#7C2D12',
+    chipBorder: '#F3D6C4',
+    qrBoxBg: '#FFFFFF',
+    qrBoxBorder: '#C2410C',
+    badgeBg: '#C2410C',
+    badgeText: '#FFFFFF',
+    glowColor: 'rgba(194, 65, 12, 0.16)',
+  },
+  cobalt: {
+    id: 'cobalt',
+    name: 'Cobalt Sketch',
+    pillColor: '#2563EB',
+    isTransparent: false,
+    isDark: false,
+    cardBg: '#F6F9FF',
+    cardBorder: '#D5E2FB',
+    fgColor: '#1E3A8A',
+    bgColor: '#F6F9FF',
+    accentColor: '#2563EB',
+    textColor: '#1E3A8A',
+    subtextColor: '#3F5F9E',
+    chipBg: '#E8F0FE',
+    chipText: '#1E3A8A',
+    chipBorder: '#D5E2FB',
+    qrBoxBg: '#FFFFFF',
+    qrBoxBorder: '#2563EB',
+    badgeBg: '#2563EB',
+    badgeText: '#FFFFFF',
+    glowColor: 'rgba(37, 99, 235, 0.16)',
+  },
+  blush: {
+    id: 'blush',
+    name: 'Blush Studio',
+    pillColor: '#DB2777',
+    isTransparent: false,
+    isDark: false,
+    cardBg: '#FFF6F9',
+    cardBorder: '#F8D9E5',
+    fgColor: '#831843',
+    bgColor: '#FFF6F9',
+    accentColor: '#DB2777',
+    textColor: '#831843',
+    subtextColor: '#9D174D',
+    chipBg: '#FCE7F0',
+    chipText: '#831843',
+    chipBorder: '#F8D9E5',
+    qrBoxBg: '#FFFFFF',
+    qrBoxBorder: '#DB2777',
+    badgeBg: '#DB2777',
+    badgeText: '#FFFFFF',
+    glowColor: 'rgba(219, 39, 119, 0.16)',
   },
   transparent: {
     id: 'transparent',
@@ -1127,7 +1216,7 @@ export default function QrCard({
               <span className="text-[11px] font-bold text-text-secondary uppercase tracking-wider">
                 Theme: <span className="text-whatsapp-600 font-extrabold normal-case">{theme.name}</span>
               </span>
-              <span className="text-[10px] text-text-secondary font-medium">7 Finishes</span>
+              <span className="text-[10px] text-text-secondary font-medium">{Object.keys(QR_THEMES).length} finishes</span>
             </div>
             <div className="grid grid-cols-7 gap-1.5 w-full">
               {(Object.keys(QR_THEMES) as QrColorTheme[]).map(tId => {
@@ -1528,7 +1617,7 @@ export default function QrCard({
               <span>Theme:</span>
               <span className="text-whatsapp-600 font-extrabold normal-case">{theme.name}</span>
             </span>
-            <span className="text-[11px] text-text-secondary">7 Finishes</span>
+            <span className="text-[11px] text-text-secondary">{Object.keys(QR_THEMES).length} finishes</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
             {(Object.keys(QR_THEMES) as QrColorTheme[]).map(tId => {
