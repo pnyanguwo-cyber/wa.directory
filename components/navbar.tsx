@@ -135,9 +135,9 @@ export default function Navbar() {
             width={40}
             height={40}
             priority
-            className="w-10 h-10 object-contain rounded-xl group-hover:scale-105 group-active:scale-95 transition-transform duration-200"
+            className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-xl group-hover:scale-105 group-active:scale-95 transition-transform duration-200"
           />
-          <span className="text-lg font-extrabold tracking-tight leading-tight">
+          <span className="whitespace-nowrap text-base sm:text-lg font-extrabold tracking-tight leading-tight">
             <span className="bg-gradient-to-r from-whatsapp-500 to-whatsapp-600 bg-clip-text text-transparent">WA</span>
             <span className="group-hover:text-whatsapp-700 transition-colors" style={{ color: 'rgb(var(--text-primary))' }}> Directory</span>
           </span>
@@ -185,13 +185,12 @@ export default function Navbar() {
                 disabled={loggingOut}
                 title="Logout"
                 aria-busy={loggingOut}
-                className={`btn-secondary px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${loggingOut ? 'btn-loading' : ''}`}
+                className={`btn-secondary px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center gap-1.5 whitespace-nowrap ${loggingOut ? 'btn-loading' : ''}`}
               >
                 <svg className="w-4 h-4 shrink-0 text-text-secondary" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l3 3m0 0-3 3m3-3H2.25" />
                 </svg>
                 <span className="hidden sm:inline">Logout</span>
-                <span className="inline sm:hidden">Logout</span>
               </button>
             </>
           ) : (

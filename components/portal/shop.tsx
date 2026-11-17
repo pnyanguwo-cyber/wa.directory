@@ -453,7 +453,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
             Add product
           </h3>
         </div>
-          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-900/10 bg-gradient-to-r from-[#062f1b] to-[#0b4d2c] p-3 text-white">
+          <div className="mb-3 flex flex-col items-stretch gap-2.5 rounded-2xl border border-emerald-900/10 bg-gradient-to-r from-[#062f1b] to-[#0b4d2c] p-3 text-white sm:flex-row sm:items-center sm:gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
               <ScanLine className="h-4 w-4" aria-hidden="true" />
             </span>
@@ -464,7 +464,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
               </p>
             </div>
             <label
-              className={`inline-flex cursor-pointer select-none items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors ${
+              className={`inline-flex cursor-pointer select-none items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors sm:justify-start ${
                 analysing ? 'bg-white/10 text-emerald-50/60' : 'bg-white text-[#073a20] hover:bg-emerald-50'
               }`}
             >
@@ -658,7 +658,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
         ) : (
           <div className="space-y-3">
             {items.map(item => (
-              <div key={item.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-3 py-3 transition-colors sm:px-4 ${item.is_active ? 'border-gray-200 bg-white hover:border-whatsapp-300' : 'border-dashed border-gray-300 bg-surface/60'}`}>
+              <div key={item.id} className={`flex flex-col gap-2.5 rounded-2xl border px-3 py-3 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:px-4 ${item.is_active ? 'border-gray-200 bg-white hover:border-whatsapp-300' : 'border-dashed border-gray-300 bg-surface/60'}`}>
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {item.image_url ? (
                     <div className="w-11 h-11 rounded-xl border border-gray-200/80 overflow-hidden bg-surface shrink-0">
@@ -672,11 +672,11 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                     </div>
                   )}
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-text-primary truncate">{item.name}</p>
-                    <p className="text-xs text-text-secondary font-medium mt-0.5">{`$${Number(item.price || 0).toFixed(2)} USD`}</p>
+                    <p className="text-sm font-semibold leading-snug text-text-primary sm:truncate">{item.name}</p>
+                    <p className="text-xs text-text-secondary font-medium mt-0.5 whitespace-nowrap">{`$${Number(item.price || 0).toFixed(2)} USD`}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex w-full items-center justify-between gap-2 shrink-0 sm:w-auto sm:justify-end">
                   <button
                     type="button"
                     onClick={() => handleToggleActive(item)}
@@ -689,12 +689,12 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                     <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200 ${item.is_active ? 'translate-x-4' : ''}`} />
                   </button>
                   {editingId === item.id ? (
-                    <div className="flex items-center gap-2">
+                    <div className="flex w-full flex-wrap items-center gap-2">
                       <input
                         type="text"
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
-                        className="input-field w-40 !rounded-xl !px-2.5 !py-2 text-sm"
+                        className="input-field w-full !rounded-xl !px-2.5 !py-2 text-sm sm:w-40"
                         placeholder="Item name"
                       />
                       <input
@@ -703,7 +703,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                         step="0.01"
                         value={editPrice}
                         onChange={e => setEditPrice(e.target.value)}
-                        className="input-field w-24 !rounded-xl !px-2.5 !py-2 text-sm"
+                        className="input-field w-24 shrink-0 !rounded-xl !px-2.5 !py-2 text-sm"
                         placeholder="0.00"
                       />
                       <button type="button" onClick={() => handleUpdate(item.id)} disabled={saving} className="btn-primary px-3 py-2 rounded-xl text-xs font-semibold disabled:opacity-60">Save</button>

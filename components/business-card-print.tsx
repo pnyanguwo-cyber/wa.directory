@@ -2040,14 +2040,14 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
 
         {/* Row 2: Prominent Non-Scrolling Card Color Themes Grid */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-text-secondary uppercase tracking-wider flex items-center gap-2">
-              <span>Card Color & Theme:</span>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-bold text-text-secondary uppercase tracking-wider">
+              <span className="whitespace-nowrap">Card Color & Theme:</span>
               <span className="text-whatsapp-600 font-extrabold normal-case tracking-normal">
                 {THEMES[currentTheme].name}
               </span>
             </span>
-            <span className="text-[11px] text-text-secondary font-medium">6 Luxury Finishes</span>
+            <span className="hidden text-[11px] font-medium text-text-secondary sm:inline">6 Luxury Finishes</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 w-full">
@@ -2180,22 +2180,22 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 {logoChoice === 'none' ? 'No logo — name only' : logoChoice === 'custom' ? 'Your picture' : 'Listing logo'}
               </span>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <div className="mt-2 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap sm:items-center">
               <button
                 type="button"
                 onClick={() => { setLogoChoice('listing'); setLogoNotice('') }}
-                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'listing' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold text-center transition-colors ${logoChoice === 'listing' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
               >
                 Listing logo
               </button>
               <button
                 type="button"
                 onClick={() => { setLogoChoice(customLogo ? 'custom' : 'listing'); setLogoNotice(customLogo ? '' : 'Choose a picture first.') }}
-                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'custom' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold text-center transition-colors ${logoChoice === 'custom' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
               >
                 My picture
               </button>
-              <label className="cursor-pointer rounded-lg bg-white px-2.5 py-1.5 text-[10.5px] font-semibold text-text-secondary ring-1 ring-gray-200 transition-colors hover:text-text-primary">
+              <label className="cursor-pointer rounded-lg bg-white px-2.5 py-1.5 text-center text-[10.5px] font-semibold text-text-secondary ring-1 ring-gray-200 transition-colors hover:text-text-primary">
                 Upload
                 <input
                   type="file"
@@ -2211,7 +2211,7 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
               <button
                 type="button"
                 onClick={() => { setLogoChoice('none'); setLogoNotice('') }}
-                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold transition-colors ${logoChoice === 'none' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
+                className={`rounded-lg px-2.5 py-1.5 text-[10.5px] font-semibold text-center transition-colors ${logoChoice === 'none' ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}
               >
                 No logo
               </button>
