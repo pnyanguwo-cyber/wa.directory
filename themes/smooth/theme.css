@@ -1,0 +1,95 @@
+/* Smooth variant: everything is scoped under .mono-smooth and layers over
+   the Monolith stylesheet, so the base theme stays untouched. */
+
+.mono-smooth .mono-root {
+  --mono-hairline: rgba(148, 163, 184, 0.26);
+  --mono-hairline-bright: rgba(148, 163, 184, 0.42);
+}
+
+.mono-smooth .mono-header {
+  background: rgba(8, 12, 16, 0.55);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+.mono-smooth .mono-header--scrolled {
+  background: rgba(8, 12, 16, 0.78);
+  border-bottom-color: rgba(148, 163, 184, 0.28);
+  box-shadow: 0 18px 44px -24px rgba(0, 0, 0, 0.85);
+}
+
+.mono-smooth .mono-brand__logo,
+.mono-smooth .mono-brand__monogram,
+.mono-smooth .mono-hero__bare-monogram {
+  border-radius: 50% !important;
+  overflow: hidden;
+}
+
+.mono-smooth .mono-brand__name {
+  letter-spacing: -0.015em;
+  text-transform: none;
+}
+
+/* Pills instead of hard rectangles. */
+.mono-smooth .mono-btn,
+.mono-smooth .mono-hero__deck-btn,
+.mono-smooth .mono-hero__scroll-link,
+.mono-smooth .mono-hero__shelf-cta,
+.mono-smooth .mono-card__inspect-btn,
+.mono-smooth .mono-fab {
+  border-radius: 999px !important;
+}
+
+.mono-smooth .mono-categories,
+.mono-smooth .mono-hero__rating-bar {
+  border-radius: 999px !important;
+}
+
+/* Soft glass panels. */
+.mono-smooth .mono-card,
+.mono-smooth .mono-contact-card,
+.mono-smooth .mono-hero__shelf,
+.mono-smooth .mono-console,
+.mono-smooth .mono-gallery-frame,
+.mono-smooth .mono-faq-item,
+.mono-smooth .mono-hours-block {
+  border-radius: 1.5rem !important;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.12);
+  background-image: linear-gradient(160deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015));
+  backdrop-filter: blur(16px) saturate(135%);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
+}
+
+.mono-smooth .mono-card__media,
+.mono-smooth .mono-gallery-frame img {
+  border-radius: 1.25rem !important;
+}
+
+.mono-smooth .mono-hero__shelf {
+  border-radius: 1.75rem !important;
+}
+
+.mono-smooth .mono-ambient-grid {
+  opacity: 0.5;
+  mask-image: radial-gradient(circle at 50% 20%, #000 0%, transparent 75%);
+}
+
+.mono-smooth .mono-ambient-spotlight {
+  filter: blur(60px);
+  opacity: 0.85;
+}
+
+.mono-smooth .mono-rolling-seal__svg {
+  animation-duration: 42s;
+}
+
+.mono-smooth .mono-hero__title {
+  letter-spacing: -0.035em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mono-smooth .mono-rolling-seal__svg { animation: none; }
+}

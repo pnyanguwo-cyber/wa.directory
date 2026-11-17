@@ -143,6 +143,7 @@ export default async function ClassicSiteView({
     design?: string
     font?: string
     overlay?: string
+    headerStyle?: string
   }
 
   // Choosable template preset + font pair (portal "Design" panel writes these).
@@ -250,6 +251,7 @@ export default async function ClassicSiteView({
   >
     <div
       className="site-wrap min-h-screen bg-surface text-text-primary isolate selection:bg-whatsapp-100 selection:text-whatsapp-900"
+      data-preset={preset.key}
       style={{ fontFamily: fontPair.body, ['--site-head' as string]: fontPair.head }}
     >
       {/* Ambient drifting glow orbs — subtle full-page life behind all content.
@@ -282,6 +284,7 @@ export default async function ClassicSiteView({
         accent={accent}
         accentDark={accentDark}
         headerBg={headerBg}
+        headerStyle={theme.headerStyle}
         isHeaderDark={isHeaderDark}
         ctaTextColor={accentCtaText}
       />
@@ -306,6 +309,15 @@ export default async function ClassicSiteView({
               : undefined
         }
       >
+        {/* Liquid Glass preset: slow colour field behind the hero. */}
+        {preset.glass && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+            <span className="site-liquid site-liquid--a" style={{ backgroundColor: accent }} />
+            <span className="site-liquid site-liquid--b" style={{ backgroundColor: '#38bdf8' }} />
+            <span className="site-liquid site-liquid--c" style={{ backgroundColor: '#a78bfa' }} />
+          </div>
+        )}
+
         {/* Cover Photo with High-Contrast Multi-Layer Tint (WCAG AAA) */}
         {coverImage ? (
           <div

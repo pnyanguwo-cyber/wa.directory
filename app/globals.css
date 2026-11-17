@@ -468,3 +468,32 @@
 .site-wrap h1, .site-wrap h2, .site-wrap h3 {
   font-family: var(--site-head, inherit);
 }
+
+
+/* Liquid Glass preset: slow, blurred colour fields behind the hero. */
+.site-liquid {
+  position: absolute;
+  display: block;
+  width: 46vw;
+  height: 46vw;
+  min-width: 320px;
+  min-height: 320px;
+  border-radius: 999px;
+  filter: blur(80px);
+  opacity: 0.45;
+  will-change: transform;
+}
+.site-liquid--a { top: -12%; left: -8%; animation: siteLiquidA 18s ease-in-out infinite alternate; }
+.site-liquid--b { top: 18%; right: -12%; opacity: 0.3; animation: siteLiquidB 22s ease-in-out infinite alternate; }
+.site-liquid--c { bottom: -22%; left: 28%; opacity: 0.28; animation: siteLiquidA 26s ease-in-out infinite alternate-reverse; }
+@keyframes siteLiquidA {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(6vw, 4vh, 0) scale(1.15); }
+}
+@keyframes siteLiquidB {
+  from { transform: translate3d(0, 0, 0) scale(1.1); }
+  to { transform: translate3d(-5vw, 6vh, 0) scale(0.92); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-liquid { animation: none !important; }
+}

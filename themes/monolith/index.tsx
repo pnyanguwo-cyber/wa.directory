@@ -473,7 +473,18 @@ function GalleryLightbox({
 /* Rolling Circular Seal / Compass Emblem                             */
 /* ------------------------------------------------------------------ */
 
-function RollingSeal({ initials }: { initials: string }): ReactNode {
+function RollingSeal({
+  initials,
+  name,
+  detail,
+  logoUrl,
+}: {
+  initials: string
+  name: string
+  detail: string
+  logoUrl?: string
+}): ReactNode {
+  const ring = (name + " · " + detail + " · ").toUpperCase()
   return (
     <div className="mono-rolling-seal" aria-hidden="true">
       <svg className="mono-rolling-seal__svg" viewBox="0 0 160 160">
@@ -484,12 +495,17 @@ function RollingSeal({ initials }: { initials: string }): ReactNode {
         />
         <text fill="rgba(255, 255, 255, 0.75)" fontSize="9.5" fontFamily="ui-monospace, monospace" letterSpacing="2.8">
           <textPath href="#monoSealCircle" startOffset="0%">
-            ✦ SMALL BATCH COFFEE ROASTERY ✦ HARARE AVONDALE ✦
+            {ring}
           </textPath>
         </text>
       </svg>
       <div className="mono-rolling-seal__center">
-        <span>{initials}</span>
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="mono-rolling-seal__logo" src={logoUrl} alt="" />
+        ) : (
+          <span>{initials}</span>
+        )}
       </div>
     </div>
   );
@@ -503,7 +519,9 @@ export default function MonolithTheme({
   site,
   orientation = 'immersive',
   mode = 'preview',
-}: ThemeProps): ReactNode {
+  variant = 'monolith',
+}: ThemeProps & { variant?: string }): ReactNode {
+  const variantLabel = variant.toUpperCase();
   const orient = orientation === 'stacked' ? 'stacked' : 'immersive';
   const orderHref = whatsappOrderHref(site);
   const openStatus = getOpenStatus(site.hours);
@@ -696,7 +714,7 @@ export default function MonolithTheme({
       ref={rootRef}
       className="mono-root"
       id="top"
-      data-theme="monolith"
+      data-theme={variant}
       data-mode={mode}
       data-orient={orient}
       style={themeVars}
@@ -886,7 +904,12 @@ export default function MonolithTheme({
             </div>
 
             {/* Rolling Kinetic Circular Seal */}
-            <RollingSeal initials={site.initials} />
+            <RollingSeal
+              initials={site.initials}
+              name={site.name}
+              detail={[site.city, site.area].filter(Boolean).join(' · ')}
+              logoUrl={site.logoUrl}
+            />
           </div>
         </div>
 
@@ -929,7 +952,7 @@ export default function MonolithTheme({
             ) : null}
 
             <a href="#services" className="mono-hero__scroll-link" aria-label="Scroll to discover">
-              <span>EXPLORE MONOLITH</span>
+              <span>EXPLORE {variantLabel}</span>
               <span className="mono-hero__scroll-arrow">↓</span>
             </a>
           </div>
@@ -1424,7 +1447,7 @@ export default function MonolithTheme({
               <div>
                 <span className="mono-brand__name">{site.name}</span>
                 <p style={{ fontFamily: 'ui-monospace, monospace', fontSize: '0.74rem', color: 'var(--mono-ink-muted)', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                  {[site.category, site.city].filter(Boolean).join(' // ') || 'MONOLITH ARCHIVE'}
+                  {[site.category, site.city].filter(Boolean).join(' // ') || `${variantLabel} ARCHIVE`}
                 </p>
               </div>
             </div>
@@ -1440,7 +1463,7 @@ export default function MonolithTheme({
 
           <div className="mono-footer__legal">
             <span>© {new Date().getFullYear()} {site.name.toUpperCase()}. ALL ARCHIVAL RIGHTS RESERVED.</span>
-            <span>POWERED BY WA.DIRECTORY // MONOLITH CORE</span>
+            <span>POWERED BY WA.DIRECTORY // {variantLabel} CORE</span>
           </div>
         </div>
       </footer>

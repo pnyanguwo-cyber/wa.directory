@@ -1,4 +1,4 @@
-import { callGeminiJson, hasGeminiKey, type GeminiPart } from '@/lib/gemini'
+import { callGeminiJson, GEMINI_MODEL, hasGeminiKey, type GeminiPart } from '@/lib/gemini'
 import { getSupabase } from '@/lib/supabase-server'
 import { resolveProductCategory, normalizeCurrency, normalizeAvailability, PRODUCT_CURRENCIES } from '@/lib/products'
 import {
@@ -21,7 +21,7 @@ import {
  * publish.
  */
 
-export const AI_LISTING_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+export const AI_LISTING_MODEL = GEMINI_MODEL
 
 export interface SuggestedField {
   value: string

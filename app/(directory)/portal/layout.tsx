@@ -67,6 +67,7 @@ export default async function PortalLayout({ children, searchParams }: { childre
   return (
     <PortalShell
       brand={business.name}
+      logoUrl={business.logo_url}
       eyebrow={eyebrow}
       subtitle={isHq ? 'HQ workspace · every branch' : paid ? 'Premium workspace' : 'Free plan workspace'}
       nav={nav}

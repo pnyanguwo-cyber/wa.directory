@@ -6,6 +6,27 @@ import type { Business } from '@/types'
 import { getInitials, dedupeCategories } from '@/lib/utils'
 
 // International / US Standard Business Card dimensions (3.5" x 2.0" @ 300 DPI ratio = 7:4)
+const CARD_DESIGNS: { id: CardDesign; name: string; hint: string; line: CardLineStyle; vinyl: CardVinylStyle }[] = [
+  { id: 'signature' as CardDesign, name: 'Signature', hint: 'Full colour ink', line: 'none' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
+  { id: 'fineline' as CardDesign, name: 'Fine line', hint: 'Hairline frame', line: 'frame' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
+  { id: 'editorial' as CardDesign, name: 'Editorial', hint: 'Rules & space', line: 'rules' as CardLineStyle, vinyl: 'none' as CardVinylStyle },
+  { id: 'vinyl' as CardDesign, name: 'Vinyl', hint: 'Bold band', line: 'none' as CardLineStyle, vinyl: 'spine' as CardVinylStyle },
+]
+
+const CARD_LINES: { id: CardLineStyle; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'frame', label: 'Frame' },
+  { id: 'grid', label: 'Grid' },
+  { id: 'rules', label: 'Rules' },
+]
+
+const CARD_VINYLS: { id: CardVinylStyle; label: string }[] = [
+  { id: 'none', label: 'None' },
+  { id: 'spine', label: 'Spine' },
+  { id: 'sash', label: 'Sash' },
+  { id: 'block', label: 'Block' },
+]
+
 const CARD_W = 1050
 const CARD_H = 600
 
@@ -14,9 +35,21 @@ const PORTRAIT_W = 600
 const PORTRAIT_H = 1050
 
 export type CardTheme = 'emerald' | 'obsidian' | 'swiss' | 'royal' | 'rose' | 'cyber'
+export type CardDesign = 'signature' | 'fineline' | 'editorial' | 'vinyl'
+export type CardLineStyle = 'none' | 'frame' | 'grid' | 'rules'
+export type CardVinylStyle = 'none' | 'spine' | 'sash' | 'block'
+
+export interface CardDecor {
+  design: CardDesign
+  line: CardLineStyle
+  vinyl: CardVinylStyle
+  lineColor: string
+  vinylColor: string
+}
 export type CardOrientation = 'landscape' | 'portrait'
 
 export interface ThemeConfig {
+  decor?: CardDecor
   id: CardTheme
   name: string
   pillColor: string
@@ -46,6 +79,33 @@ export interface ThemeConfig {
   backBgFrom: string
   backBgVia: string
   backBgTo: string
+}
+
+// Real cards are printed on white stock; colour comes from ink. These
+// overrides turn any palette into that white card for the paper designs.
+const PAPER_THEME: Partial<ThemeConfig> = {
+  isDark: false,
+  bgFrom: '#FFFFFF',
+  bgVia: '#FFFFFF',
+  bgTo: '#FBFBF9',
+  backBgFrom: '#FFFFFF',
+  backBgVia: '#FBFBF8',
+  backBgTo: '#F4F4F1',
+  cardBorder: '#18181B',
+  primaryText: '#111111',
+  secondaryText: '#3F3F46',
+  mutedText: '#71717A',
+  chipBg: '#FFFFFF',
+  chipBorder: '#D4D4D8',
+  chipText: '#111111',
+  headerBg: '#FFFFFF',
+  footerBg: '#FFFFFF',
+  footerBorder: '#E4E4E7',
+  qrBoxBg: '#FFFFFF',
+  qrBoxBorder: '#18181B',
+  qrFgColor: '#111111',
+  qrBgColor: '#FFFFFF',
+  patternOpacity: 0.03,
 }
 
 export const THEMES: Record<CardTheme, ThemeConfig> = {
@@ -387,6 +447,47 @@ function GuillocheDefs({ themeId, opacity = 0.12 }: { themeId: string; opacity?:
   )
 }
 
+// Print finishes that sit under the type: fine-line borders/grids and a
+// vinyl band. Each finish owns its colour so lines and vinyls never fight.
+function CardDecorLayer({ theme, w, h }: { theme: ThemeConfig; w: number; h: number }) {
+  const d = theme.decor
+  if (!d || (d.line === 'none' && d.vinyl === 'none')) return null
+  const line = d.lineColor || theme.accentColor
+  const vinyl = d.vinylColor || theme.accentColor
+  const cols = Math.max(1, Math.ceil(w / 42))
+  const rows = Math.max(1, Math.ceil(h / 42))
+  return (
+    <g aria-hidden="true">
+      {d.vinyl === 'spine' ? <rect x={0} y={0} width={16} height={h} fill={vinyl} /> : null}
+      {d.vinyl === 'sash' ? <polygon points={`${w},${h - 96} ${w},${h} ${w - 280},${h}`} fill={vinyl} /> : null}
+      {d.vinyl === 'block' ? <rect x={0} y={h - 22} width={w} height={22} fill={vinyl} /> : null}
+      {d.line === 'frame' ? (
+        <>
+          <rect x={16} y={16} width={w - 32} height={h - 32} fill="none" stroke={line} strokeWidth={1.2} />
+          <rect x={22} y={22} width={w - 44} height={h - 44} fill="none" stroke={line} strokeWidth={0.5} opacity={0.55} />
+        </>
+      ) : null}
+      {d.line === 'grid' ? (
+        <g stroke={line} strokeWidth={0.5} opacity={0.32}>
+          {Array.from({ length: cols }, (_, i) => (
+            <line key={`v${i}`} x1={i * 42} y1={0} x2={i * 42} y2={h} />
+          ))}
+          {Array.from({ length: rows }, (_, i) => (
+            <line key={`h${i}`} x1={0} y1={i * 42} x2={w} y2={i * 42} />
+          ))}
+        </g>
+      ) : null}
+      {d.line === 'rules' ? (
+        <g stroke={line} strokeWidth={1} opacity={0.8}>
+          <line x1={40} y1={h * 0.16} x2={w - 40} y2={h * 0.16} />
+          <line x1={40} y1={h * 0.84} x2={w - 40} y2={h * 0.84} />
+          <line x1={w * 0.6} y1={h * 0.2} x2={w * 0.6} y2={h * 0.8} />
+        </g>
+      ) : null}
+    </g>
+  )
+}
+
 // -------------------------------------------------------------
 // 1. LANDSCAPE FRONT CARD SVG COMPONENT (Standard 3.5" x 2.0")
 // -------------------------------------------------------------
@@ -457,6 +558,7 @@ function FrontLandscapeSvg({
         <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#guilloche_${uid})`} />
         <rect x="0" y="0" width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#dotMatrix_${uid})`} />
       </g>
+      <CardDecorLayer theme={theme} w={CARD_W} h={CARD_H} />
 
       {/* Specular Radial Ambient Glow */}
       <circle cx={CARD_W - 80} cy="40" r="240" fill={theme.accentGlow} opacity={theme.isDark ? 0.35 : 0.15} />
@@ -742,6 +844,7 @@ function BackLandscapeSvg({
         <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#guilloche_${uid})`} />
         <rect width={CARD_W} height={CARD_H} rx="0" ry="0" fill={`url(#dotMatrix_${uid})`} />
       </g>
+      <CardDecorLayer theme={theme} w={CARD_W} h={CARD_H} />
 
       {/* Center Radial Glow behind QR */}
       <circle cx="245" cy="300" r="230" fill={theme.accentGlow} opacity={theme.isDark ? 0.35 : 0.15} />
@@ -957,6 +1060,7 @@ function FrontPortraitSvg({
         <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#guilloche_p_${uid})`} />
         <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#dotMatrix_p_${uid})`} />
       </g>
+      <CardDecorLayer theme={theme} w={PORTRAIT_W} h={PORTRAIT_H} />
 
       {/* Outer Border Stroke */}
       <rect x="2" y="2" width={PORTRAIT_W - 4} height={PORTRAIT_H - 4} rx="0" ry="0" fill="none" stroke={theme.cardBorder} strokeWidth="2.5" />
@@ -1194,6 +1298,7 @@ function BackPortraitSvg({
         <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#guilloche_p_back_${uid})`} />
         <rect width={PORTRAIT_W} height={PORTRAIT_H} rx="0" ry="0" fill={`url(#dotMatrix_p_back_${uid})`} />
       </g>
+      <CardDecorLayer theme={theme} w={PORTRAIT_W} h={PORTRAIT_H} />
 
       <circle cx="300" cy="380" r="240" fill={theme.accentGlow} opacity={theme.isDark ? 0.35 : 0.15} />
 
@@ -1316,7 +1421,12 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
   const cardContainerRef = useRef<HTMLDivElement>(null)
 
   const [mounted, setMounted] = useState(false)
-  const [currentTheme, setCurrentTheme] = useState<CardTheme>('swiss')
+    const [currentTheme, setCurrentTheme] = useState<CardTheme>('swiss')
+  const [design, setDesign] = useState<CardDesign>('fineline')
+  const [lineStyle, setLineStyle] = useState<CardLineStyle>('frame')
+  const [vinylStyle, setVinylStyle] = useState<CardVinylStyle>('none')
+  const [lineColor, setLineColor] = useState('#18181B')
+  const [vinylColor, setVinylColor] = useState('#0F766E')
   const [orientation, setOrientation] = useState<CardOrientation>('landscape')
   const [activeSide, setActiveSide] = useState<'front' | 'back' | 'both'>('front')
   const [isFlipped, setIsFlipped] = useState(false)
@@ -1374,7 +1484,14 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
         `Hi ${business.name}, I found your official business card on WA Directory Zimbabwe and would like to inquire about your services.`
       )}`
   const formattedPhone = formatPhone(business.phone)
-  const theme = THEMES[currentTheme]
+  const baseTheme = THEMES[currentTheme]
+  // Paper designs always print on white; Signature keeps the full colour
+  // finish. Lines and vinyls are independent of the chosen ink.
+  const theme: ThemeConfig = {
+    ...baseTheme,
+    ...(design === 'signature' ? {} : PAPER_THEME),
+    decor: { design, line: lineStyle, vinyl: vinylStyle, lineColor, vinylColor },
+  }
 
   // Mouse Move Tilt Handler
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -1861,6 +1978,80 @@ export default function BusinessCardPrint({ business }: { business: Business }) 
                 </button>
               )
             })}
+          </div>
+        </div>
+        {/* Paper designs, lines and vinyls */}
+        <div className="mt-4 space-y-3 border-t border-gray-100 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Card design</span>
+            <span className="text-[10.5px] font-medium text-text-secondary">White 350gsm stock · square corners</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {CARD_DESIGNS.map(d => {
+              const active = design === d.id
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => {
+                    setDesign(d.id)
+                    setLineStyle(d.line)
+                    setVinylStyle(d.vinyl)
+                  }}
+                  className={`rounded-xl border p-2.5 text-left transition-all ${
+                    active ? 'border-whatsapp-500 bg-whatsapp-50 ring-1 ring-whatsapp-400' : 'border-gray-200 bg-surface hover:border-gray-300'
+                  }`}
+                  aria-pressed={active}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-8 w-11 items-center justify-center overflow-hidden rounded-md border border-gray-300 bg-white">
+                      {d.id === 'vinyl' ? (
+                        <span className="flex h-full w-full items-center gap-0.5"><span className="h-full w-1.5" style={{ backgroundColor: vinylColor }} /><span className="h-1/2 w-full bg-gray-200" /></span>
+                      ) : d.id === 'editorial' ? (
+                        <span className="flex h-full w-full flex-col justify-between p-1"><span className="h-px w-full" style={{ backgroundColor: lineColor }} /><span className="h-px w-full" style={{ backgroundColor: lineColor }} /></span>
+                      ) : d.id === 'fineline' ? (
+                        <span className="h-full w-full border" style={{ borderColor: lineColor }} />
+                      ) : (
+                        <span className="h-full w-full bg-gradient-to-br from-whatsapp-500 via-emerald-700 to-slate-900" />
+                      )}
+                    </span>
+                    <span className="text-[11.5px] font-bold leading-tight text-text-primary">{d.name}</span>
+                  </span>
+                  <span className="mt-1 block text-[10px] text-text-secondary">{d.hint}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-text-primary">Lines</span>
+                <input type="color" value={lineColor} onChange={e => setLineColor(e.target.value)} aria-label="Line colour" className="h-6 w-8 cursor-pointer rounded border border-gray-300 bg-white p-0.5" />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {CARD_LINES.map(l => (
+                  <button key={l.id} type="button" onClick={() => setLineStyle(l.id)} aria-pressed={lineStyle === l.id}
+                    className={`rounded-md px-2 py-1 text-[10.5px] font-semibold transition-colors ${lineStyle === l.id ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}>
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-gray-200 bg-surface p-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-text-primary">Vinyl</span>
+                <input type="color" value={vinylColor} onChange={e => setVinylColor(e.target.value)} aria-label="Vinyl colour" className="h-6 w-8 cursor-pointer rounded border border-gray-300 bg-white p-0.5" />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {CARD_VINYLS.map(v => (
+                  <button key={v.id} type="button" onClick={() => setVinylStyle(v.id)} aria-pressed={vinylStyle === v.id}
+                    className={`rounded-md px-2 py-1 text-[10.5px] font-semibold transition-colors ${vinylStyle === v.id ? 'bg-text-primary text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200 hover:text-text-primary'}`}>
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -114,6 +114,7 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function PortalShell({
   brand,
+  logoUrl,
   eyebrow,
   subtitle,
   nav,
@@ -126,6 +127,7 @@ export default function PortalShell({
   flush,
 }: {
   brand: string
+  logoUrl?: string | null
   eyebrow: string
   subtitle?: string
   nav: ShellNavGroup[]
@@ -271,9 +273,14 @@ export default function PortalShell({
           {/* Desktop sidebar */}
           <aside className="hidden lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:overflow-hidden lg:rounded-2xl lg:border lg:border-white/80 lg:bg-white/95 lg:shadow-card">
             <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 py-3.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500 text-white shadow-soft-glow">
-                <MessageCircle className="h-5 w-5" aria-hidden="true" />
-              </div>
+<div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-whatsapp-500 text-white shadow-soft-glow">
+  {logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+  ) : (
+    <MessageCircle className="h-5 w-5" aria-hidden="true" />
+  )}
+</div>
               <div className="min-w-0">
                 <p className="truncate text-[9.5px] font-bold uppercase tracking-[0.12em] text-whatsapp-700">{eyebrow}</p>
                 <p className="truncate text-[13px] font-extrabold leading-tight text-text-primary">{brand}</p>
@@ -294,9 +301,14 @@ export default function PortalShell({
               />
               <div className="absolute inset-y-0 left-0 flex w-[82vw] max-w-[300px] flex-col bg-white shadow-2xl">
                 <div className="flex items-center gap-2.5 border-b border-gray-100 px-3.5 py-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-whatsapp-500 text-white">
-                    <MessageCircle className="h-5 w-5" aria-hidden="true" />
-                  </div>
+<div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-whatsapp-500 text-white ">
+  {logoUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+  ) : (
+    <MessageCircle className="h-5 w-5" aria-hidden="true" />
+  )}
+</div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[9.5px] font-bold uppercase tracking-[0.12em] text-whatsapp-700">{eyebrow}</p>
                     <p className="truncate text-[13px] font-extrabold leading-tight text-text-primary">{brand}</p>

@@ -65,6 +65,24 @@ export const WEBSITE_THEMES: Record<string, WebsiteThemeEntry> = {
       },
     },
   },
+  smooth: {
+    load: () => import('@/themes/smooth/index'),
+    meta: {
+      id: 'smooth',
+      name: 'Smooth',
+      version: '1.0.0',
+      family: 'monolith',
+      description: 'Monolith, softened: rounded glass panels, pill controls and a calmer seal, with the Atlas touch.',
+      orientations: ['immersive', 'stacked'],
+      defaultOrientation: 'immersive',
+      supports: { cart: false, voiceOnly: true, dark: true, reducedMotion: true },
+      preview: {
+        desktop: '/previews/smooth/desktop.png',
+        mobile: '/previews/smooth/mobile.png',
+        card: '/previews/smooth/card.webp',
+      },
+    },
+  },
   market: {
     load: () => import('@/themes/market/index'),
     meta: {

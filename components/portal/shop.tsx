@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Boxes, Loader2, PackageOpen, ScanLine, Sparkles, Store, Tag } from 'lucide-react'
 import { categories } from '@/data/categories'
 
 interface ShopItem {
@@ -83,7 +83,7 @@ function ItemImageField({ imageUrl, onSet, inputId }: { imageUrl: string; onSet:
 
   return (
     <div>
-      <label className="block text-sm font-medium text-text-primary mb-1.5">Photo</label>
+      <label className="block text-[12px] font-semibold text-text-primary mb-1.5">Photo</label>
       <div className="flex items-center gap-3">
         {imageUrl ? (
           <div className="w-14 h-14 rounded-xl border border-gray-200/80 overflow-hidden bg-surface shrink-0">
@@ -161,6 +161,8 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
 
   const categoryTrimmed = newCategory.trim()
   const categoryIsPending = isPendingProductCategory(categoryTrimmed)
+  const activeCount = items.filter(item => item.is_active).length
+  const stockValue = items.reduce((sum, item) => (item.price_type === 'on_request' ? sum : sum + Number(item.price || 0)), 0)
 
   async function loadItems() {
     setLoading(true)
@@ -410,74 +412,97 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-text-primary">Shop</h2>
-        <p className="text-xs text-text-secondary mt-0.5">List the items {businessName} offers. Customers search these items and see the price on your profile and website.</p>
+      <div className="relative overflow-hidden rounded-3xl border border-emerald-900/10 bg-gradient-to-br from-[#062f1b] via-[#084225] to-[#0b5630] p-4 sm:p-5 text-white shadow-card">
+        <div className="pointer-events-none absolute -right-10 -top-16 h-48 w-48 rounded-full bg-emerald-400/20 blur-3xl" aria-hidden="true" />
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/15">
+              <Store className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <div>
+              <h2 className="text-lg font-extrabold leading-tight">Shop</h2>
+              <p className="mt-0.5 max-w-xl text-[11.5px] leading-relaxed text-emerald-50/80">
+                List what {businessName} sells. Buyers see these items on your profile, website and WhatsApp catalogue.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { icon: Boxes, label: `${activeCount} live`, value: `${items.length} total` },
+              { icon: Tag, label: "Stock value", value: `$${stockValue.toFixed(2)}` },
+            ].map(stat => (
+              <div key={stat.label} className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/15 backdrop-blur-sm">
+                <p className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-[0.12em] text-emerald-100/70">
+                  <stat.icon className="h-3 w-3" aria-hidden="true" />
+                  {stat.label}
+                </p>
+                <p className="mt-0.5 text-sm font-extrabold tabular-nums">{stat.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Create form */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <h3 className="text-sm font-bold text-text-primary">Add product</h3>
-          <label
-            className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold cursor-pointer select-none border transition-colors ${
-              analysing
-                ? 'bg-gray-100 text-gray-500 border-gray-200'
-                : 'bg-whatsapp-50 text-whatsapp-800 border-whatsapp-200 hover:bg-whatsapp-100'
-            }`}
-          >
-            {analysing ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />}
-            {analysing ? 'Reading photo…' : 'Fill from a photo'}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="hidden"
-              disabled={analysing}
-              onChange={e => {
-                const file = e.target.files?.[0]
-                if (file) void analysePhoto(file)
-                e.target.value = ''
-              }}
-            />
-          </label>
+      <div className="rounded-3xl border border-gray-300/70 bg-white p-4 shadow-card sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="flex items-center gap-2 text-sm font-extrabold text-text-primary">
+            <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-whatsapp-50 text-whatsapp-700">
+              <PackageOpen className="h-3.5 w-3.5" aria-hidden="true" />
+            </span>
+            Add product
+          </h3>
         </div>
-
-        <p className="text-[11px] text-text-secondary mb-3 -mt-1">
-          Upload a product photo and we will fill in what we can read. Nothing is published until you press Publish.
-        </p>
-
-        {aiNote && (
-          <p className="text-xs text-whatsapp-800 bg-whatsapp-50 border border-whatsapp-200 rounded-xl px-4 py-2.5 mb-3">
-            {aiNote}
-          </p>
-        )}
-        {aiWarnings.length > 0 && (
-          <ul className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 mb-3 space-y-1 list-disc list-inside">
-            {aiWarnings.map((warning, index) => (
-              <li key={index}>{warning}</li>
-            ))}
-          </ul>
-        )}
+          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-900/10 bg-gradient-to-r from-[#062f1b] to-[#0b4d2c] p-3 text-white">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
+              <ScanLine className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-bold leading-tight">Fill the form from a photo</p>
+              <p className="mt-0.5 text-[10.5px] leading-snug text-emerald-50/75">
+                Snap the item and we read the name, category, brand and visible condition.
+              </p>
+            </div>
+            <label
+              className={`inline-flex cursor-pointer select-none items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-bold transition-colors ${
+                analysing ? 'bg-white/10 text-emerald-50/60' : 'bg-white text-[#073a20] hover:bg-emerald-50'
+              }`}
+            >
+              {analysing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />}
+              {analysing ? 'Reading photo…' : 'Choose photo'}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                disabled={analysing}
+                onChange={e => {
+                  const file = e.target.files?.[0]
+                  if (file) void analysePhoto(file)
+                  e.target.value = ''
+                }}
+              />
+            </label>
+          </div>
 
         <form onSubmit={handleCreate} className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Product name</label>
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">Product name</label>
               <input
                 type="text"
                 value={newName}
                 onChange={e => { setNewName(e.target.value); setNotice('') }}
                 placeholder="e.g. iPhone 15 Pro"
-                className="input-field w-full"
+                className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Price</label>
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">Price</label>
               <div className="flex gap-2">
                 <select
                   value={newCurrency}
                   onChange={e => setNewCurrency(e.target.value)}
-                  className="input-field w-24"
+                  className="input-field w-24 !rounded-xl !px-2.5 !py-2 text-sm"
                   aria-label="Currency"
                 >
                   <option value="USD">USD</option>
@@ -492,7 +517,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                   value={newPrice}
                   onChange={e => { setNewPrice(e.target.value); setNotice('') }}
                   placeholder="0.00"
-                  className="input-field w-full"
+                  className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
                   disabled={newPriceType === 'on_request'}
                   aria-label="Price amount"
                 />
@@ -509,7 +534,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">
+            <label className="block text-[12px] font-semibold text-text-primary mb-1.5">
               Description <span className="text-text-secondary font-normal">(optional)</span>
             </label>
             <textarea
@@ -518,20 +543,20 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
               rows={2}
               maxLength={2000}
               placeholder="What is it, and what condition is it in?"
-              className="input-field w-full resize-y"
+              className="input-field w-full resize-y !rounded-xl !px-3 !py-2 text-sm"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Category</label>
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">Category</label>
               <input
                 type="text"
                 list="product-category-options"
                 value={newCategory}
                 onChange={e => setNewCategory(e.target.value)}
                 placeholder="e.g. Electronics"
-                className="input-field w-full"
+                className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
               />
               <datalist id="product-category-options">
                 {categories.map(category => (
@@ -545,7 +570,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">
                 Brand <span className="text-text-secondary font-normal">(optional)</span>
               </label>
               <input
@@ -553,14 +578,14 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                 value={newBrand}
                 onChange={e => setNewBrand(e.target.value)}
                 placeholder="e.g. Samsung"
-                className="input-field w-full"
+                className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">
                 Condition <span className="text-text-secondary font-normal">(optional)</span>
               </label>
-              <select value={newCondition} onChange={e => setNewCondition(e.target.value)} className="input-field w-full">
+              <select value={newCondition} onChange={e => setNewCondition(e.target.value)} className="input-field w-full !rounded-xl !px-3 !py-2 text-sm">
                 <option value="">Not stated</option>
                 <option value="new">New</option>
                 <option value="used">Used</option>
@@ -571,11 +596,11 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">Availability</label>
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">Availability</label>
               <select
                 value={newAvailability}
                 onChange={e => setNewAvailability(e.target.value)}
-                className="input-field w-full"
+                className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
               >
                 <option value="in_stock">In stock</option>
                 <option value="available_on_order">Available on order</option>
@@ -584,7 +609,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">
+              <label className="block text-[12px] font-semibold text-text-primary mb-1.5">
                 Stock <span className="text-text-secondary font-normal">(optional)</span>
               </label>
               <input
@@ -594,7 +619,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                 value={newStock}
                 onChange={e => setNewStock(e.target.value)}
                 placeholder="e.g. 12"
-                className="input-field w-full"
+                className="input-field w-full !rounded-xl !px-3 !py-2 text-sm"
               />
             </div>
           </div>
@@ -615,16 +640,25 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
       </div>
 
       {/* Item list */}
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-5 shadow-card">
-        <h3 className="text-sm font-bold text-text-primary mb-3">Your items ({items.length})</h3>
+      <div className="rounded-3xl border border-gray-300/70 bg-white p-4 shadow-card sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-extrabold text-text-primary">Your items <span className="ml-1 rounded-full bg-surface px-2 py-0.5 text-[10.5px] font-bold text-text-secondary tabular-nums">{items.length}</span></h3>
+          <span className="text-[10.5px] font-semibold text-text-secondary tabular-nums">{activeCount} visible to buyers</span>
+        </div>
         {loading ? (
           <p className="text-sm text-text-secondary">Loading items…</p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-text-secondary">No items yet. Add your first item above.</p>
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-surface/60 px-4 py-8 text-center">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-whatsapp-600 shadow-sm">
+              <PackageOpen className="h-5 w-5" aria-hidden="true" />
+            </span>
+            <p className="text-sm font-bold text-text-primary">Your shelf is empty</p>
+            <p className="max-w-xs text-[11.5px] leading-relaxed text-text-secondary">Add your first item above, or drop in a photo and let AI fill the details.</p>
+          </div>
         ) : (
           <div className="space-y-3">
             {items.map(item => (
-              <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200/80 px-4 py-3">
+              <div key={item.id} className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-3 py-3 transition-colors sm:px-4 ${item.is_active ? 'border-gray-200 bg-white hover:border-whatsapp-300' : 'border-dashed border-gray-300 bg-surface/60'}`}>
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   {item.image_url ? (
                     <div className="w-11 h-11 rounded-xl border border-gray-200/80 overflow-hidden bg-surface shrink-0">
@@ -660,7 +694,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                         type="text"
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
-                        className="input-field w-40 text-sm"
+                        className="input-field w-40 !rounded-xl !px-2.5 !py-2 text-sm"
                         placeholder="Item name"
                       />
                       <input
@@ -669,7 +703,7 @@ export default function PortalShop({ businessId, businessName }: { businessId: s
                         step="0.01"
                         value={editPrice}
                         onChange={e => setEditPrice(e.target.value)}
-                        className="input-field w-24 text-sm"
+                        className="input-field w-24 !rounded-xl !px-2.5 !py-2 text-sm"
                         placeholder="0.00"
                       />
                       <button type="button" onClick={() => handleUpdate(item.id)} disabled={saving} className="btn-primary px-3 py-2 rounded-xl text-xs font-semibold disabled:opacity-60">Save</button>

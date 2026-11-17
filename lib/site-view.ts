@@ -38,6 +38,8 @@ export interface ThemeSelection {
   contact?: string
   // 0-100; 50 keeps the automatic wash. See withOverlay().
   overlay?: string
+  // Top bar treatment for classic-family templates.
+  headerStyle?: 'solid' | 'glass' | 'clear'
 }
 
 export type ThemeDisplayMode = 'live' | 'preview' | 'print'
@@ -162,6 +164,7 @@ export function parseThemeSelection(raw: unknown): ThemeSelection {
   const design = str('design') as SiteDesignKey
   const orientation = str('orientation') as ThemeOrientation
   const font = str('font') as SiteFontKey
+  const headerStyle = str('headerStyle')
   return {
     design: DESIGN_KEYS.includes(design) ? design : 'classic',
     orientation: (ORIENTATIONS as readonly string[]).includes(orientation) ? orientation : undefined,
@@ -174,6 +177,10 @@ export function parseThemeSelection(raw: unknown): ThemeSelection {
     overlay:
       str('overlay') !== '' && Number.isFinite(Number(str('overlay')))
         ? String(Math.max(0, Math.min(100, Number(str('overlay')))))
+        : undefined,
+    headerStyle:
+      headerStyle === 'solid' || headerStyle === 'glass' || headerStyle === 'clear'
+        ? headerStyle
         : undefined,
   }
 }

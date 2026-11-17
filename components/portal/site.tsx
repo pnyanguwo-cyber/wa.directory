@@ -5,11 +5,20 @@ import { ChevronDown } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { SOCIAL_KEYS, SOCIAL_META, SocialIcon, type SocialKey } from '@/components/social-icons'
 import { SITE_DESIGNS, SITE_FONTS } from '@/lib/site-design'
+import { Check, Droplets, Gem, LayoutTemplate, Layers, Palette, PanelTop, Sparkles, Zap, type LucideIcon } from 'lucide-react'
+
+const DESIGN_ICONS: Record<string, LucideIcon> = {
+  classic: LayoutTemplate,
+  maison: Gem,
+  bolt: Zap,
+  craft: Palette,
+  glass: Droplets,
+}
 import type { SiteHoursEntry, SiteFaqEntry, SiteContentBlocks } from '@/types'
 import type { WebsiteThemeMeta } from '@/registry/websites'
 
 type ThemeKey = 'header' | 'hero' | 'shop' | 'contact' | 'accent'
-type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string; orientation?: string; overlay?: string }
+type SiteTheme = Record<ThemeKey, string> & { design?: string; font?: string; orientation?: string; overlay?: string; headerStyle?: string }
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 const THEME_ROWS: { key: ThemeKey; label: string; hint: string }[] = [
@@ -126,6 +135,7 @@ export default function PortalSite({
     font: siteTheme?.font || '',
     orientation: siteTheme?.orientation || '',
     overlay: siteTheme?.overlay || '',
+    headerStyle: siteTheme?.headerStyle || '',
   })
   const [prevDesign, setPrevDesign] = useState('')
   const [socials, setSocials] = useState<Record<SocialKey, string>>({
@@ -345,13 +355,14 @@ export default function PortalSite({
             disabled={busy}
             className="rounded-full px-4 py-2 text-xs font-bold text-white bg-text-primary hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap"
           >
-            {generating ? 'Thinking…' : '✨ Let AI decide'}
+            {generating ? 'Thinking…' : (<><Sparkles className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />Let AI decide</>)}
           </button>
           }
         >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {SITE_DESIGNS.map(d => {
             const active = (theme.design || 'classic') === d.key
+            const DesignIcon = DESIGN_ICONS[d.key] || LayoutTemplate
             return (
               <button
                 key={d.key}
@@ -363,9 +374,14 @@ export default function PortalSite({
                     : 'border-gray-200/80 bg-surface hover:border-whatsapp-300'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-bold text-text-primary">{d.label}</span>
-                  {active && <span aria-hidden="true">✓</span>}
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                    <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${active ? 'bg-whatsapp-500 text-white' : 'bg-white text-text-secondary ring-1 ring-gray-200'}`}>
+                      <DesignIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                    {d.label}
+                  </span>
+                  {active && <Check className="h-4 w-4 text-whatsapp-600" aria-hidden="true" />}
                 </div>
                 <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{d.desc}</p>
               </button>
@@ -392,7 +408,7 @@ export default function PortalSite({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-text-primary">{meta.name}</span>
-                      {active && <span aria-hidden="true">✓</span>}
+                      {active && <Check className="h-4 w-4 text-whatsapp-600" aria-hidden="true" />}
                     </div>
                     {(meta.preview?.card || meta.preview?.desktop) && (
                       /* eslint-disable-next-line @next/next/no-img-element */
@@ -589,6 +605,40 @@ export default function PortalSite({
             <span>Solid</span>
           </div>
         </div>
+        <div className="rounded-2xl border border-gray-200/80 p-3.5 mt-4">
+          <div className="flex items-start gap-2.5">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface text-text-secondary">
+              <PanelTop className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-text-primary">Top bar</p>
+              <p className="text-[11px] text-text-secondary mt-0.5">How the navigation sits over your cover photo. Applies to Classic-family themes.</p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-1.5 rounded-xl bg-surface p-1">
+            {[
+              { key: 'solid', label: 'Solid', Icon: PanelTop },
+              { key: 'glass', label: 'Glass', Icon: Layers },
+              { key: 'clear', label: 'Clear', Icon: Droplets },
+            ].map(({ key, label, Icon }) => {
+              const active = (theme.headerStyle || 'glass') === key
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { setTheme(prev => ({ ...prev, headerStyle: key })); setNotice('') }}
+                  className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-bold transition-colors ${
+                    active ? 'bg-white text-text-primary shadow-sm ring-1 ring-gray-200' : 'text-text-secondary hover:text-text-primary'
+                  }`}
+                  aria-pressed={active}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
         </Section>
 
         <Section
@@ -601,7 +651,7 @@ export default function PortalSite({
             disabled={busy || generating}
             className="rounded-full border border-whatsapp-300 bg-whatsapp-50 px-4 py-2 text-xs font-bold text-whatsapp-800 hover:bg-whatsapp-100 transition-colors disabled:opacity-60 shrink-0"
           >
-            {generating ? 'Generating…' : '✨ Generate with AI'}
+            {generating ? 'Generating…' : (<><Sparkles className="mr-1.5 inline h-3.5 w-3.5" aria-hidden="true" />Generate with AI</>)}
           </button>
           }
         >

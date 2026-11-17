@@ -8,8 +8,23 @@ import {
   type AiGatewayResult,
 } from './ai-gateway'
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash'
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`
+// Primary model, then fallbacks for the two failures seen in production:
+// a model retired for new keys (404) and a model at capacity (503).
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+const MODEL_CANDIDATES: string[] = Array.from(
+  new Set(
+    [
+      GEMINI_MODEL,
+      'gemini-3.8-flash',
+      'gemini-3.6-flash',
+      'gemini-3.5-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-3-flash-preview',
+    ].filter(Boolean)
+  )
+)
+const buildGeminiUrl = (model: string) => 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + process.env.GEMINI_API_KEY
+const RETRIABLE_STATUS = new Set([404, 429, 503])
 
 // Single Gemini entry point: posts one prompt, returns the trimmed first
 // candidate text — or null when the call fails or the response is empty.
@@ -25,7 +40,11 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gemini-1.5-pro': { input: 1.25, output: 5.00 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
-  'gemini-3.8-flash': { input: 0.075, output: 0.30 }, // fallback alias
+  'gemini-3.8-flash': { input: 0.075, output: 0.30 },
+  'gemini-3.6-flash': { input: 0.075, output: 0.30 },
+  'gemini-3.5-flash': { input: 0.075, output: 0.30 },
+  'gemini-3.1-flash-lite': { input: 0.075, output: 0.30 },
+  'gemini-3-flash-preview': { input: 0.075, output: 0.30 },
 }
 
 export type AiFeature =
@@ -145,60 +164,71 @@ async function fetchGemini(
   }
 ): Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
   const start = Date.now()
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  const deadline = start + timeoutMs * 2
   let status = '200'
   let errorMessage = ''
   let responseText: string | null = null
   let inputTokens = logParams?.tokensInput || 0
   let outputTokens = 0
+  let usedModel = GEMINI_MODEL
 
   try {
-    // Estimate input tokens from request body if not provided
     if (!logParams?.tokensInput) {
-      const bodyStr = JSON.stringify(body)
-      inputTokens = estimateTokens(bodyStr)
+      inputTokens = estimateTokens(JSON.stringify(body))
     }
 
-    const res = await fetch(GEMINI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    })
+    for (const model of MODEL_CANDIDATES) {
+      usedModel = model
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) break
 
-    const data = await res.json()
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), Math.min(timeoutMs, remaining))
+      try {
+        const res = await fetch(buildGeminiUrl(model), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: ctrl.signal,
+        })
 
-    if (!res.ok) {
-      status = String(res.status)
-      errorMessage = data?.error?.message || 'API error'
-      return { text: null }
+        const data = await res.json()
+
+        if (!res.ok) {
+          status = String(res.status)
+          errorMessage = data?.error?.message || 'API error'
+          // Retired model or capacity spike: try the next one.
+          if (RETRIABLE_STATUS.has(res.status) && model !== MODEL_CANDIDATES[MODEL_CANDIDATES.length - 1]) continue
+          return { text: null }
+        }
+
+        responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
+
+        if (data?.usageMetadata) {
+          inputTokens = data.usageMetadata.promptTokenCount || inputTokens
+          outputTokens = data.usageMetadata.candidatesTokenCount || estimateResponseTokens(responseText)
+        } else {
+          outputTokens = estimateResponseTokens(responseText)
+        }
+
+        return { text: responseText, usage: { inputTokens, outputTokens } }
+      } catch (err) {
+        status = 'error'
+        errorMessage = err instanceof Error ? err.message : 'Unknown error'
+        if (ctrl.signal.aborted && Date.now() >= deadline) break
+      } finally {
+        clearTimeout(timer)
+      }
     }
 
-    responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
-
-    // Try to get actual token counts from response if available
-    if (data?.usageMetadata) {
-      inputTokens = data.usageMetadata.promptTokenCount || inputTokens
-      outputTokens = data.usageMetadata.candidatesTokenCount || estimateResponseTokens(responseText)
-    } else {
-      outputTokens = estimateResponseTokens(responseText)
-    }
-
-    return { text: responseText, usage: { inputTokens, outputTokens } }
-  } catch (err) {
-    status = 'error'
-    errorMessage = err instanceof Error ? err.message : 'Unknown error'
     return { text: null }
   } finally {
-    clearTimeout(timer)
     const latencyMs = Date.now() - start
 
-    // Log usage if params provided
     if (logParams) {
       await logAiUsage({
         feature: logParams.feature,
-        model: GEMINI_MODEL,
+        model: usedModel,
         inputTokens,
         outputTokens,
         latencyMs,

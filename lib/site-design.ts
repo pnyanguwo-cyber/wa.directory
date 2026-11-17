@@ -12,6 +12,7 @@ export interface DesignPreset {
   radiusCard: string
   radiusTile: string
   heroVariant: 'wash' | 'editorial' | 'bold' | 'warm'
+  glass?: boolean
   centeredHero: boolean
   sectionRule: string
 }
@@ -54,6 +55,19 @@ export const SITE_DESIGNS: DesignPreset[] = [
     heroVariant: 'bold',
     centeredHero: false,
     sectionRule: '',
+  },
+  {
+    key: 'glass',
+    label: 'Liquid Glass',
+    desc: 'Frosted floating panels. Liquid colour, soft light, deep blur.',
+    defaultFont: 'grotesk',
+    radiusPill: 'rounded-full',
+    radiusCard: 'rounded-[1.75rem]',
+    radiusTile: 'rounded-[1.5rem]',
+    heroVariant: 'wash',
+    centeredHero: false,
+    sectionRule: '',
+    glass: true,
   },
   {
     key: 'craft',

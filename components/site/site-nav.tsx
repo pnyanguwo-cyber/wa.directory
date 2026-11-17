@@ -19,6 +19,7 @@ interface SiteNavProps {
   accent: string
   accentDark: boolean
   headerBg?: string
+  headerStyle?: string
   isHeaderDark: boolean
   ctaTextColor: string
 }
@@ -33,6 +34,7 @@ export default function SiteNav({
   accent,
   accentDark,
   headerBg,
+  headerStyle,
   isHeaderDark,
   ctaTextColor,
 }: SiteNavProps) {
@@ -81,24 +83,36 @@ export default function SiteNav({
   }, [])
 
   // Header background & text colors
-  const defaultBg = isScrolled
-    ? 'bg-white/85 supports-[backdrop-filter]:bg-white/75 border-black/[0.08] shadow-sm'
-    : 'bg-white/60 supports-[backdrop-filter]:bg-white/50 border-black/[0.05]'
+  const mode = headerStyle === 'solid' || headerStyle === 'clear' ? headerStyle : 'glass'
+  const defaultBg =
+    mode === 'clear'
+      ? isScrolled
+        ? 'bg-white/85 supports-[backdrop-filter]:bg-white/75 border-black/[0.08] shadow-sm backdrop-blur-xl'
+        : 'bg-gradient-to-b from-black/45 via-black/15 to-transparent border-transparent'
+      : mode === 'solid'
+        ? 'bg-white border-black/[0.08] shadow-sm'
+        : isScrolled
+          ? 'bg-white/85 supports-[backdrop-filter]:bg-white/75 border-black/[0.08] shadow-sm'
+          : 'bg-white/60 supports-[backdrop-filter]:bg-white/50 border-black/[0.05]'
 
   const customBgStyle = headerBg
     ? {
-        backgroundColor: isScrolled
-          ? `color-mix(in srgb, ${headerBg} 92%, transparent)`
-          : `color-mix(in srgb, ${headerBg} 75%, transparent)`,
+        backgroundColor:
+          mode === 'clear' && !isScrolled
+            ? 'transparent'
+            : isScrolled || mode === 'solid'
+              ? `color-mix(in srgb, ${headerBg} ${mode === 'solid' ? 100 : 92}%, transparent)`
+              : `color-mix(in srgb, ${headerBg} 75%, transparent)`,
         borderColor: isHeaderDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)',
       }
     : undefined
 
-  const textColorClass = isHeaderDark ? 'text-white' : 'text-text-primary'
+  const textColorClass =
+    mode === 'clear' && !isScrolled ? 'text-white' : isHeaderDark ? 'text-white' : 'text-text-primary'
 
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-40 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] backdrop-blur-xl border-b ${
+      className={`fixed top-0 inset-x-0 z-40 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border-b ${mode === 'clear' && !isScrolled ? '' : 'backdrop-blur-xl'} ${
         isVisible ? 'translate-y-0' : '-translate-y-full'
       } ${!headerBg ? defaultBg : ''}`}
       style={customBgStyle}
