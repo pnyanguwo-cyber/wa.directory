@@ -294,8 +294,36 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card overflow-x-auto">
+      <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-card">
         <p className="text-sm font-bold text-text-primary mb-3">Daily table</p>
+        <div className="space-y-2 sm:hidden">
+          {[...visible].reverse().map(d => {
+            const active = EVENT_TYPES.filter(t => (d.values[t] || 0) > 0)
+            return (
+              <div key={d.date} className="rounded-xl border border-gray-100 bg-surface/70 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-text-primary">{d.date}</span>
+                  <span className="text-[11px] font-bold text-whatsapp-700">{d.total} total</span>
+                </div>
+                {active.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                    {active.map(t => (
+                      <span key={t} className="text-[10.5px] text-text-secondary">
+                        {getEventLabel(t)}: <b className="text-text-primary">{d.values[t]}</b>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-0.5 text-[10.5px] text-text-secondary">No activity</p>
+                )}
+              </div>
+            )
+          })}
+          {visible.length === 0 && (
+            <p className="py-4 text-center text-xs text-text-secondary">No data for this period.</p>
+          )}
+        </div>
+        <div className="hidden overflow-x-auto sm:block">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left text-text-secondary border-b border-gray-200">
@@ -321,6 +349,7 @@ export default function PortalOverview({ businessId, businessName, businessSlug,
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
