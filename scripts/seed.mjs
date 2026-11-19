@@ -536,6 +536,9 @@ for (const [i, b] of businesses.entries()) {
     business_id: uniqueBusinessId(),
     username: uniqueUsername(b.name, i),
     listing_activated_at: new Date().toISOString(),
+    // Lets the admin panel find and remove demo rows without touching real
+    // businesses (see scripts/mark-seeded.mjs and the Seeded filter).
+    is_seed: true,
   }
 
   const { data: inserted, error } = await supabase

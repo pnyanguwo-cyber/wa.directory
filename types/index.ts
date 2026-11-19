@@ -15,6 +15,10 @@ export interface Business {
   phone_type?: 'whatsapp' | 'voice'
   // Secondary landline/hotline shown alongside WhatsApp for both-types listings.
   voice_phone?: string | null
+  // true for rows created by scripts/seed.mjs — removable in bulk from admin.
+  is_seed?: boolean
+  // The owner's own words for the category, kept for admin confirmation.
+  requested_category?: string | null
   whatsapp_username?: string
   whatsapp_link?: string
   verified: boolean

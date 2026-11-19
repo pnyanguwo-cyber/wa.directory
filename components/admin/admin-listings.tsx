@@ -10,6 +10,8 @@ import LogoImage from '@/components/logo-image'
 import { ConfirmDialog, adminFetch, AdminSectionHeader } from './shared'
 
 const PAGE_SIZE = 15
+/** Most listings one bulk action may touch when picked one by one. */
+const MAX_BULK = 10
 
 type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'rating-desc' | 'reviews-desc'
 type SubscriptionFilter = 'all' | 'premium' | 'basic'
@@ -62,6 +64,8 @@ export default function AdminListings() {
   const [filterPay, setFilterPay] = useState<'all' | 'active' | 'pending' | 'expired' | 'unpaid'>('all')
   const [sortBy, setSortBy] = useState<SortOption>('newest')
   const [filterSubscription, setFilterSubscription] = useState<SubscriptionFilter>('all')
+  const [filterSeed, setFilterSeed] = useState<'all' | 'seeded' | 'live'>('all')
+  const [selectWarning, setSelectWarning] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
   const [filterCity, setFilterCity] = useState('')
   const [showFilters, setShowFilters] = useState(false)
@@ -79,6 +83,7 @@ export default function AdminListings() {
   const [addForm, setAddForm] = useState({
     name: '', categories: [] as string[], phone: '', whatsapp_username: '', city: '', areas: [] as string[],
     bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '',
+    owner_phone: '', voice_phone: '',
   })
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState('')
@@ -114,6 +119,13 @@ export default function AdminListings() {
   }
 
   function toggleSelect(id: string) {
+    // Anything an action can do at once is capped; "all on page" is the
+    // deliberate way past it so a stray click cannot sweep a whole page.
+    if (!selectedIds.has(id) && selectedIds.size >= MAX_BULK) {
+      setSelectWarning(`Up to ${MAX_BULK} at a time. Use "Select all on page" for more.`)
+      return
+    }
+    setSelectWarning('')
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -154,6 +166,8 @@ export default function AdminListings() {
     let list = businesses
     if (filterStatus === 'verified') list = list.filter(b => b.verified)
     if (filterStatus === 'pending') list = list.filter(b => !b.verified)
+    if (filterSeed === 'seeded') list = list.filter(b => b.is_seed === true)
+    if (filterSeed === 'live') list = list.filter(b => b.is_seed !== true)
     if (filterSubscription === 'premium') list = list.filter(b => subscriptionIds.has(b.id))
     if (filterSubscription === 'basic') list = list.filter(b => !subscriptionIds.has(b.id))
     if (filterPay !== 'all') {
@@ -186,21 +200,7 @@ export default function AdminListings() {
       }
     })
     return list
-  }, [businesses, search, filterStatus, filterPay, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds])
-
-  const allFilteredSelected = filtered.length > 0 && filtered.every(b => selectedIds.has(b.id))
-
-  function toggleSelectAllFiltered() {
-    if (allFilteredSelected) {
-      setSelectedIds(prev => {
-        const next = new Set(prev)
-        filtered.forEach(b => next.delete(b.id))
-        return next
-      })
-    } else {
-      setSelectedIds(new Set(filtered.map(b => b.id)))
-    }
-  }
+  }, [businesses, search, filterStatus, filterPay, sortBy, filterSubscription, filterCategory, filterCity, subscriptionIds, filterSeed])
 
   const uniqueCategories = useMemo(() => {
     const cats = new Set<string>()
@@ -214,12 +214,13 @@ export default function AdminListings() {
     return [...cities].sort()
   }, [businesses])
 
-  const hasActiveFilters = filterStatus !== 'all' || filterPay !== 'all' || filterSubscription !== 'all' || filterCategory || filterCity || sortBy !== 'newest'
+  const hasActiveFilters = filterStatus !== 'all' || filterPay !== 'all' || filterSubscription !== 'all' || filterSeed !== 'all' || filterCategory || filterCity || sortBy !== 'newest'
 
   function clearFilters() {
     setFilterStatus('all')
     setFilterPay('all')
     setFilterSubscription('all')
+    setFilterSeed('all')
     setFilterCategory('')
     setFilterCity('')
     setSortBy('newest')
@@ -227,6 +228,26 @@ export default function AdminListings() {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const pageIds = paginated.map(b => b.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.has(id))
+
+  function toggleSelectPage() {
+    setSelectWarning('')
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (allPageSelected) pageIds.forEach(id => next.delete(id))
+      else pageIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  function selectAllSeeded() {
+    const ids = businesses.filter(b => b.is_seed === true).map(b => b.id)
+    setSelectWarning('')
+    setSelectedIds(new Set(ids))
+    setFilterSeed('seeded')
+  }
 
   useEffect(() => {
     setPage(1)
@@ -305,7 +326,7 @@ export default function AdminListings() {
     setAdding(false)
     if (res.ok) {
       setShowAddModal(false)
-      setAddForm({ name: '', categories: [], phone: '', whatsapp_username: '', city: '', areas: [], bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '' })
+      setAddForm({ name: '', categories: [], phone: '', whatsapp_username: '', city: '', areas: [], bio: '', price_range: '', whatsapp_link: '', catalog_link: '', logo_url: '', owner_phone: '', voice_phone: '' })
       refresh()
     } else if (res.status === 401) {
       router.push('/admin-login')
@@ -380,6 +401,7 @@ export default function AdminListings() {
         <div className="fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-40 animate-slide-up">
           <div className="flex items-center gap-3 bg-gray-900 text-white rounded-full shadow-2xl px-5 py-3">
             <span className="text-xs font-bold whitespace-nowrap">{selectedIds.size} selected</span>
+            {selectWarning && <span className="text-[10px] text-amber-300 whitespace-nowrap">{selectWarning}</span>}
             <button
               onClick={() => setConfirmBulkDelete(true)}
               disabled={bulkDeleting}
@@ -417,6 +439,17 @@ export default function AdminListings() {
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Phone *</label>
                   <input type="text" required value={addForm.phone} onChange={e => setAddForm(f => ({ ...f, phone: e.target.value }))} className="input-field text-sm" placeholder="+263 77 123 4567" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Number for calls</label>
+                  <input type="text" value={addForm.voice_phone} onChange={e => setAddForm(f => ({ ...f, voice_phone: e.target.value }))} className="input-field text-sm" placeholder="Optional — a landline or hotline customers can call" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Owner's WhatsApp number</label>
+                  <input type="text" value={addForm.owner_phone} onChange={e => setAddForm(f => ({ ...f, owner_phone: e.target.value }))} className="input-field text-sm" placeholder="Optional — the number that will own this listing" />
+                  <p className="text-[11px] text-text-secondary mt-1">
+                    Adding this for someone else? Enter their number. It becomes the listing's phone, and we send them the setup links so they complete registration and receive the cart and order replies — not you.
+                  </p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">WhatsApp Username *</label>
@@ -700,6 +733,14 @@ export default function AdminListings() {
               </select>
             </div>
             <div>
+              <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Data</label>
+              <select value={filterSeed} onChange={e => setFilterSeed(e.target.value as typeof filterSeed)} className="input-field text-xs py-2 w-full">
+                <option value="all">All listings</option>
+                <option value="live">Real only</option>
+                <option value="seeded">Demo / seeded only</option>
+              </select>
+            </div>
+            <div>
               <label className="text-[11px] font-semibold text-text-secondary uppercase tracking-wide mb-1 block">Category</label>
               <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="input-field text-xs py-2 w-full">
                 <option value="">All categories</option>
@@ -740,15 +781,23 @@ export default function AdminListings() {
             <p className="text-xs font-medium text-text-secondary">
               Showing {(page - 1) * PAGE_SIZE + 1}&ndash;{Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} listings
             </p>
-            <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={allFilteredSelected}
-                onChange={toggleSelectAllFiltered}
-                className="w-4 h-4 accent-whatsapp-600 cursor-pointer"
-                aria-label="Select all filtered listings"
-              />
-              Select all ({filtered.length})
+            <label className="flex items-center gap-2 text-xs font-semibold text-text-secondary cursor-pointer select-none">                  <input
+                    type="checkbox"
+                    checked={allPageSelected}
+                    onChange={toggleSelectPage}
+                    className="w-4 h-4 accent-whatsapp-600 cursor-pointer"
+                    aria-label="Select all listings on this page"
+                  />
+                  Select all on page ({pageIds.length})
+                  {businesses.some(b => b.is_seed) && (
+                    <button
+                      type="button"
+                      onClick={selectAllSeeded}
+                      className="ml-2 text-whatsapp-700 hover:underline"
+                    >
+                      Select demo data
+                    </button>
+                  )}
             </label>
           </div>
 
@@ -774,6 +823,11 @@ export default function AdminListings() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <h3 className="font-bold text-text-primary text-sm truncate">{b.name}</h3>
+                      {b.is_seed && (
+                        <span className="shrink-0 rounded-full bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600" title="Created by the demo seed script">
+                          Demo
+                        </span>
+                      )}
                       {b.verified && (
                         <span className="badge-verified shrink-0">
                           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -786,6 +840,11 @@ export default function AdminListings() {
                     <p className="text-xs text-text-secondary truncate mt-0.5">
                       {[b.category?.slice(0, 2).join(', '), b.city || b.location].filter(Boolean).join(' · ')}
                     </p>
+                    {b.requested_category && (
+                      <p className="text-[10px] text-amber-700 truncate mt-0.5" title="What the owner typed — confirm or make it its own category">
+                        Owner said: {b.requested_category}
+                      </p>
+                    )}
                   </div>
                 </div>
 
