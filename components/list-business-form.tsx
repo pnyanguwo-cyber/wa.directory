@@ -577,7 +577,7 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
             // Remote-only businesses may pick the cities they serve — they
             // travel in the same `areas` field.
             areas,
-            voice_phone: phoneVoice && phoneWhatsapp ? normalizeVoicePhone(voicePhone) : null,
+            voice_phone: phoneWhatsapp && voicePhone.trim() ? normalizeVoicePhone(voicePhone) : null,
             catalog_link: form.catalog_link.trim(),
             logo_url: logoUrl,
             price_range: form.price_range,
@@ -1475,9 +1475,12 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms = 30000): Pro
                   <p className="text-xs text-danger mt-1.5">Select at least one option above.</p>
                 )}
               </fieldset>
-              {phoneVoice && phoneWhatsapp && (
+              {phoneWhatsapp && (
                 <div className="mt-2">
-                  <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">Landline / hotline number <span className="text-text-secondary font-normal">(optional)</span></label>
+                  <label className="block text-sm font-medium text-text-primary mb-1.5 min-h-[2.5rem]">
+                    {phoneVoice ? 'Landline / hotline number' : 'Is there a number for calls?'}{' '}
+                    <span className="text-text-secondary font-normal">(optional)</span>
+                  </label>
                   <input
                     type="tel"
                     value={voicePhone}
