@@ -5,6 +5,7 @@
 // and the business flips to payment_status 'active' + verified, so it shows
 // in search instantly.
 
+import { revalidatePath } from 'next/cache'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { sendCategoryEducationalImage } from '@/lib/category-education'
 import { SITE_URL } from '@/lib/site-url'
@@ -72,6 +73,14 @@ export async function activateListingSubscription(
     .eq('id', sub.business_id)
 
   if (bizError) return { ok: false, error: bizError.message }
+
+  // A newly active listing belongs in the homepage carousel right away instead
+  // of waiting out the ISR window.
+  try {
+    revalidatePath('/')
+  } catch {
+    // Outside a request scope (scripts, cold jobs) there is nothing to purge.
+  }
 
   // Owner onboarding notification — fires for auto-confirmed payments AND
   // admin manual confirmations alike: the moment money lands or the admin

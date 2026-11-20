@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { sendWhatsAppMessage, sendWhatsAppTemplate } from '@/lib/whatsapp'
 import { SITE_URL } from '@/lib/site-url'
@@ -151,6 +152,13 @@ export async function activateListingForDays(
     })
     .eq('id', businessId)
   if (bizError) return { ok: false, error: bizError.message }
+
+  // Admin approval makes the listing live — refresh the homepage carousel now.
+  try {
+    revalidatePath('/')
+  } catch {
+    // Outside a request scope (scripts, cold jobs) there is nothing to purge.
+  }
 
   return { ok: true, expiresAt: expiresAt.toISOString() }
 }

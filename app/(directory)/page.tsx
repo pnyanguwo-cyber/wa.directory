@@ -17,7 +17,10 @@ import type { Metadata } from 'next'
 import { SITE_URL } from '@/lib/site-url'
 import { FAQ_ITEMS } from '@/data/faq'
 
-export const revalidate = 300
+// "Recently added" must reflect a listing the moment it is paid for: activation
+// calls revalidatePath('/') and this short window is the fallback for changes
+// made straight to the database (bot grants, admin edits, expiry).
+export const revalidate = 30
 
 export const metadata: Metadata = {
   title: 'WA Directory | Find Any Business in Zimbabwe on WhatsApp',
