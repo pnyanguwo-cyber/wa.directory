@@ -198,40 +198,59 @@ export async function notifyBusinessLive(biz: {
     editToken: biz.editToken ?? null,
   })
 
-  // Serverless freezes the function the instant the last awaited task ends,
-  // killing any send still in flight — so every send here is awaited. Each is
-  // wrapped so one failure never blocks the next.
-  try {
-    await sendWhatsAppTemplate(
-      to,
-      process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
-      [biz.name, `${SITE_URL}/business/${slug}`]
-    )
-  } catch (e) {
-    console.error('[admin-verify] you_are_live template failed:', e)
-  }
-
-  const links = [
+  const details = [
+    '🎉 *You are live on WA Directory!*',
+    '',
+    `${biz.name} is approved${biz.username ? ` (@${biz.username})` : ''} — customers can find you and your products in search now.`,
+    '',
     `🏢 Profile: ${SITE_URL}/business/${slug}`,
     `🌐 Website: ${SITE_URL}/site/${slug}`,
     ...portalLines,
-    '📸 Send a product photo, then reply *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
-  ]
-  try {
-    await sendWhatsAppMessage(
-      to,
-      [
-        '🎉 *You are live on WA Directory!*',
-        '',
-        `${biz.name} is approved${biz.username ? ` (@${biz.username})` : ''} — customers can find you in search now.`,
-        '',
-        ...links,
-        '',
-        'Reply *help* anytime.',
-      ].join('\n')
-    )
-  } catch (e) {
-    console.error('[admin-verify] go-live links message failed:', e)
+    '',
+    '*How to add products to your online shop*',
+    '📸 Send a product photo, then reply or caption it with *name price* (e.g. *bread $2*) — it lands on your website shop shelf.',
+    '',
+    'Reply *help* anytime.',
+  ].join('\n')
+
+  // Free-form first: it carries every detail and works while the owner's 24h
+  // window is open (they just registered and searched while waiting). A
+  // missing or renamed Meta template used to swallow the whole go-live
+  // message; now the template is only the out-of-window fallback.
+  //
+  // Serverless freezes the function the instant the last awaited task ends,
+  // killing any send still in flight — so every send here is awaited.
+  const sent = await sendWhatsAppMessage(to, details)
+  if (!sent) {
+    let templateOk = false
+    try {
+      templateOk = await sendWhatsAppTemplate(
+        to,
+        process.env.WHATSAPP_TEMPLATE_APPROVED || 'you_are_live',
+        [biz.name, `${SITE_URL}/business/${slug}`]
+      )
+    } catch (e) {
+      console.error('[admin-verify] go-live template failed:', e)
+    }
+    if (!templateOk) {
+      const admin = (process.env.ADMIN_WHATSAPP || '').replace(/\D/g, '')
+      if (admin) {
+        try {
+          await sendWhatsAppMessage(
+            '+' + admin,
+            [
+              `⚠️ Go-live message could not reach *${biz.name}* (+${digitsOnly(biz.phone)}).`,
+              'Meta blocked free-form text (24h window closed) and the approved template is not configured.',
+              'Ask them to send *hi* to the bot, then run *welcome ' + biz.name + '* to resend these details:',
+              '',
+              details,
+            ].join('\n')
+          )
+        } catch (e) {
+          console.error('[admin-verify] admin delivery alert failed:', e)
+        }
+      }
+    }
   }
 
   const chOverride = await getBotSetting('channel_link')

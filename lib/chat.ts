@@ -192,6 +192,19 @@ function parseTranscriptMarkers(
   }
   if (kind === 'image' || kind === 'sticker' || kind === 'video') {
     const trimmed = text.trim()
+    // Inbound photos are stored as Meta media ids ("wa-media:<id>") because
+    // their URLs expire; the admin media route streams the bytes back.
+    const storedMedia = trimmed.match(/wa-media:([A-Za-z0-9_-]+)/)
+    if (storedMedia) {
+      return {
+        text: kind === 'image' ? 'Photo' : kind === 'sticker' ? 'Sticker' : 'Video',
+        preview: {
+          kind: 'media',
+          title: kind === 'image' ? 'Photo' : kind === 'sticker' ? 'Sticker' : 'Video',
+          imageUrl: `/api/admin/media/${storedMedia[1]}`,
+        },
+      }
+    }
     if (trimmed && URL_RE.test(trimmed)) {
       return {
         text: 'Photo',
