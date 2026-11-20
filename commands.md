@@ -82,6 +82,7 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 | `listings` | Newest 10 businesses with verify + payment state and date |
 | `pending` | Numbered list of unverified businesses |
 | `verify 2` / `unverify 2` | Number from `pending`. `verify` grants **30 days by default**: creates an active listing subscription (cron reminders + expiry take over automatically), then sends the owner the you_are_live template + links (profile · auto-website · portal) + channel pitch. `verify 2 90` sets a custom day-grant |
+| `welcome Diamond tradings` | Re-send the go-live details (profile link, website, portal setup, shop how-to) to the owner. Use it when Meta blocked the first delivery: ask them to send *hi* first so the 24h window is open |
 | `trial Diamond tradings` | Starts the full **90-day free trial** immediately (admin override, even if the owner never asked). Writes the trial clock, so the 7-day/3-day reminders and expiry run. Same action as the 🆓 button on a notice |
 | `verify Diamond tradings` / `verify Diamond tradings 30` / `unverify Diamond tradings` | Fuzzy business-name match — typo-friendly. One strong match acts immediately; several close matches return a numbered suggestion list to pick from. Day count sits in the same line; default 30 days |
 | `requests` (also `reqs`) | Pending category / city / area requests, numbered with the business that asked. Cities and areas are what the web form files as location requests; categories appear here too because a listing is never renamed silently |
