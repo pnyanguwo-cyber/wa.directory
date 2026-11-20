@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase-server'
 import { adminGuard } from '@/lib/admin-auth'
+import { getAiBudgetStatus } from '@/lib/ai-budget'
 
 export async function GET(request: Request) {
   const denied = adminGuard()
@@ -28,7 +29,11 @@ export async function GET(request: Request) {
   // An empty range comes back with NULL jsonb aggregates. Send empty objects
   // instead so the dashboard can render its zero state rather than crash.
   const row = (data?.[0] || {}) as Record<string, unknown>
+  // The cap is enforced in code, not by Google, so the one place an admin
+  // looks at spend must also show how close today is to stopping.
+  const budget = await getAiBudgetStatus()
   return NextResponse.json({
+    budget,
     total_requests: Number(row.total_requests || 0),
     total_input_tokens: Number(row.total_input_tokens || 0),
     total_output_tokens: Number(row.total_output_tokens || 0),

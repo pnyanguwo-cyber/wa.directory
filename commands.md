@@ -83,6 +83,10 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 | `pending` | Numbered list of unverified businesses |
 | `verify 2` / `unverify 2` | Number from `pending`. `verify` grants **30 days by default**: creates an active listing subscription (cron reminders + expiry take over automatically), then sends the owner the you_are_live template + links (profile · auto-website · portal) + channel pitch. `verify 2 90` sets a custom day-grant |
 | `verify Diamond tradings 30` / `unverify Diamond tradings` | Fuzzy business-name match — typo-friendly. One strong match acts immediately; several close matches return a numbered suggestion list to pick from. Day count sits in the same line; default 30 days |
+| `requests` (also `reqs`) | Pending category / city / area requests, numbered with the business that asked. Cities and areas are what the web form files as location requests; categories appear here too because a listing is never renamed silently |
+| `approve req 3` | Approve request 3 as written: adds the category/city/area to the approved lists, rewrites the business, and tells the owner |
+| `approve req 3 Scaffolding` | Approve under a corrected name — the owner's wording stays visible, the list gets the spelling you choose |
+| `reject req 3` | Reject: removes the value from the listing and tells the owner why |
 | `switch` | Show the priority supplier switch |
 | `switch on` / `switch off` / `switch price $3/month` | Flip or reprice the push-template switch |
 
@@ -125,4 +129,5 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 - CSV exports never include expired listings; expired rows live on the Subscriptions tab.
 - **Approvals expire** — approving (bot or dashboard) grants 30 days by default; a typed day count (`verify <name> 90`) overrides. When the grant lapses, the existing cron hides the listing and pings the owner to renew.
 - **Registration fields** (living form, N/10): name, category, city, phone, area, description, prices (cheapest item → most expensive), website, catalog (`wa.me/c/…`), address. Photos/voice notes sent mid-registration are read into the form; a photo doubles as the queued logo.
+- **Categories are only applied when the match is certain**: the same name, a one-letter typo, or the same words minus filler ("plumbing services" → *Plumber*). Anything looser keeps the owner's own words and raises a category request — the listing shows the wording and says the team will confirm. Admin clears it with `requests` → `approve req <n>` from WhatsApp, or on the web Admin panel. Locations (city/area) work the same way and are approved automatically when the business is verified.
 - **After go-live**, an owner can send a product photo and reply `name price` (e.g. `bread $2`) — the bot stocks it on the auto-website's shop shelf (`business_items`), no portal needed.

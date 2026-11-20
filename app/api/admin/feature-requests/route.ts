@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       // Remove the rejected name from the business's array
       const { data: biz } = await supabase
         .from('businesses')
-        .select('category, areas, city, phone, slug')
+        .select('category, areas, city, phone, slug, requested_category')
         .eq('id', req.business_id)
         .single()
 
@@ -67,9 +67,14 @@ export async function POST(request: Request) {
         } else {
           const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
           const next = arr.filter((n: string) => n !== req.name && n !== finalName)
+          // A rejected category request must also release the placeholder that
+          // was waiting on it, or the listing keeps a pending label forever.
+          const provisional = (biz.requested_category || '').trim().toLowerCase()
+          const clearsPlaceholder =
+            req.type === 'category' && !!provisional && provisional === req.name.toLowerCase()
           await supabase
             .from('businesses')
-            .update({ [arrCol]: next })
+            .update(clearsPlaceholder ? { [arrCol]: next, requested_category: '' } : { [arrCol]: next })
             .eq('id', req.business_id)
         }
 

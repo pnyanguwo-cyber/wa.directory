@@ -9,6 +9,14 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts'
 
+interface AiBudget {
+  limit: number
+  spent: number
+  allowed: boolean
+  resets_at: string
+  quota_until: string
+}
+
 interface AiUsageSummary {
   total_requests: number
   total_input_tokens: number
@@ -57,6 +65,7 @@ interface AiUsageSummary {
     total_tokens: number
     estimated_cost_usd: number
   }>
+  budget?: AiBudget
 }
 
 interface AiUsageLog {
@@ -223,6 +232,49 @@ export default function AdminAiUsage() {
         title="AI Usage Dashboard"
         subtitle="Gemini API usage, costs, and performance across all features and channels"
       />
+
+      {/* Daily cap: the spend that actually stops AI, not the historical total */}
+      {summary?.budget && summary.budget.limit > 0 && (
+        <div className="neo-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-text-secondary">Today's AI cap (Harare day)</p>
+              <p className="text-2xl font-extrabold mt-1">
+                ${summary.budget.spent.toFixed(3)} <span className="text-sm font-medium text-text-secondary">of ${summary.budget.limit.toFixed(2)}</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <span
+                className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${
+                  summary.budget.allowed
+                    ? summary.budget.spent / summary.budget.limit > 0.75
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'bg-green-100 text-green-800'
+                    : 'bg-red-100 text-red-800'
+                }`}
+              >
+                {summary.budget.allowed ? 'AI running' : summary.budget.quota_until ? 'Provider quota reached' : 'Daily cap reached'}
+              </span>
+              <p className="text-[10px] text-text-secondary mt-1">
+                {summary.budget.allowed
+                  ? `Resets ${formatHarareDateTime(summary.budget.resets_at)}`
+                  : summary.budget.quota_until
+                    ? `Google quota returns ${formatHarareDateTime(summary.budget.quota_until)}`
+                    : `Blocked until ${formatHarareDateTime(summary.budget.resets_at)}`}
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+            <div
+              className={`h-full ${summary.budget.allowed ? 'bg-green-600' : 'bg-red-600'}`}
+              style={{ width: `${Math.min(100, (summary.budget.spent / summary.budget.limit) * 100).toFixed(1)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-[10px] text-text-secondary">
+            At the cap, AI stops and every feature uses its non-AI fallback until midnight Harare. Change it with the AI_DAILY_BUDGET_USD env var.
+          </p>
+        </div>
+      )}
 
       {/* Date Range & Filters */}
       <div className="neo-card p-4">

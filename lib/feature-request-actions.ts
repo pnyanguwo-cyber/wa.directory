@@ -30,7 +30,7 @@ export async function approveFeatureRequest(
   if (req.business_id) {
     const { data: biz } = await supabase
       .from('businesses')
-      .select('category, areas, city')
+      .select('category, areas, city, requested_category')
       .eq('id', req.business_id)
       .single()
 
@@ -40,8 +40,20 @@ export async function approveFeatureRequest(
       } else {
         const arrCol = req.type === 'category' ? 'category' : 'areas'
         const arr: string[] = req.type === 'category' ? (biz.category || []) : (biz.areas || [])
-        const next = arr.map((n: string) => (n === req.name ? finalName : n))
-        await supabase.from('businesses').update({ [arrCol]: next }).eq('id', req.business_id)
+        let next = arr.map((n: string) => (n === req.name ? finalName : n))
+        // The listing was held as 'Other' until this decision; approval is the
+        // decision, so replace the placeholder with the approved name.
+        const provisional = (biz.requested_category || '').trim().toLowerCase()
+        const replacesPlaceholder =
+          req.type === 'category' && !!provisional && provisional === req.name.toLowerCase()
+        if (replacesPlaceholder) {
+          next = next.filter((n: string) => n !== 'Other')
+          if (!next.includes(finalName)) next = [finalName, ...next]
+        }
+        await supabase
+          .from('businesses')
+          .update(replacesPlaceholder ? { [arrCol]: next, requested_category: '' } : { [arrCol]: next })
+          .eq('id', req.business_id)
       }
     }
   }

@@ -1,4 +1,5 @@
 import { getCached, getCachedEntry, setCached } from './ai-cache'
+import { checkAiBudget, markAiQuotaExhausted, shouldLogBudgetBlock } from './ai-budget'
 import { getSupabase } from './supabase-server'
 import {
   checkAiGlobalPause,
@@ -182,6 +183,29 @@ async function fetchGemini(
 ): Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number }; model: string }> {
   const chain = opts?.preferLite ? COPY_MODEL_CANDIDATES : VISION_MODEL_CANDIDATES
   const start = Date.now()
+
+  // Spend ceiling: past the day's limit no request reaches Google at all.
+  // Callers already have non-AI fallbacks for a null result.
+  const budget = await checkAiBudget()
+  if (!budget.allowed) {
+    if (logParams && shouldLogBudgetBlock()) {
+      await logAiUsage({
+        feature: logParams.feature,
+        model: chain[0],
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: Date.now() - start,
+        status: 'blocked_daily_budget',
+        errorMessage: `Daily AI budget reached ($${budget.spent.toFixed(2)} of $${budget.limit})`,
+        businessId: logParams.businessId,
+        orgId: logParams.orgId,
+        channel: logParams.channel,
+        metadata: { spentUsd: budget.spent, limitUsd: budget.limit },
+      })
+    }
+    return { text: null, model: chain[0] }
+  }
+
   const deadline = start + timeoutMs * 2
   let status = '200'
   let errorMessage = ''
@@ -217,6 +241,9 @@ async function fetchGemini(
           errorMessage = data?.error?.message || 'API error'
           // Retired model or capacity spike: try the next one.
           if (RETRIABLE_STATUS.has(res.status) && model !== chain[chain.length - 1]) continue
+          // The whole chain is out of quota: remember when Google's day rolls
+          // over so the bot can quote customers an exact time.
+          if (res.status === 429) await markAiQuotaExhausted()
           return { text: null, model: usedModel }
         }
 
@@ -308,7 +335,33 @@ export async function executeAiRequest<T>(
     }
   }
 
-  // 2. Execute the actual request
+  // 2. Spend ceiling, checked before the call rather than after: a blocked
+  // request returns a block reason so callers fall back and nothing is billed.
+  const budget = await checkAiBudget()
+  if (!budget.allowed) {
+    if (shouldLogBudgetBlock()) {
+      await logAiUsage({
+        feature,
+        model: GEMINI_MODEL,
+        inputTokens: 0,
+        outputTokens: 0,
+        latencyMs: Date.now() - start,
+        status: 'blocked_daily_budget',
+        errorMessage: `Daily AI budget reached ($${budget.spent.toFixed(2)} of $${budget.limit})`,
+        businessId: businessId || null,
+        channel,
+        metadata: { spentUsd: budget.spent, limitUsd: budget.limit },
+      })
+    }
+    return {
+      success: false,
+      blocked: true,
+      blockReason: 'daily_budget',
+      error: 'Daily AI budget reached',
+    }
+  }
+
+  // 3. Execute the actual request
   let response: { text: string | null; usage?: { inputTokens: number; outputTokens: number }; model?: string }
   let latencyMs = 0
 
