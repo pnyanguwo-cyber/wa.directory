@@ -57,7 +57,17 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   if (cleanQ) {
     exactConditions.push(`name.ilike.%${cleanQ}%`, `bio.ilike.%${cleanQ}%`)
     const matchedCat = matchCategory(cleanQ)
-    if (matchedCat !== 'Other') exactConditions.push(`category.cs.{${matchedCat}}`)
+    // Only an actual category name counts as an exact hit — a keyword-guessed
+    // category (fertilizer → Farming & Agriculture) is a widening, so counting
+    // it here would hide the "showing results for fertiliser" correction.
+    if (matchedCat !== 'Other' && matchedCat.toLowerCase() === cleanQ.toLowerCase()) {
+      exactConditions.push(`category.cs.{${matchedCat}}`)
+    }
+    // The keyword-guessed category still widens the results — it just must not
+    // be counted as an exact-spelling hit.
+    if (matchedCat !== 'Other' && matchedCat.toLowerCase() !== cleanQ.toLowerCase()) {
+      conditions.push(`category.cs.{${matchedCat}}`)
+    }
     conditions.push(...exactConditions)
 
     for (const variant of variants) {
