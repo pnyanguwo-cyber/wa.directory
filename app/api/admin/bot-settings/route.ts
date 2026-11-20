@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { revalidatePath } from 'next/cache'
-import { adminGuard } from '@/lib/admin-auth'
+import { adminGuard, verifyAdminPassword } from '@/lib/admin-auth'
 import { prioritySwitchState, setPrioritySwitch } from '@/lib/needs'
 import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
 import { digitsOnly } from '@/lib/phone'
-import { getLaunchAt, setLaunchAt } from '@/lib/launch'
+import { getLaunchAt, getCountAt, setLaunchAt, setCountAt } from '@/lib/launch'
 
 const MAX_ADMINS = 20
 
@@ -90,6 +90,7 @@ export async function GET() {
     enabled: state.enabled,
     price: state.price,
     launchAt: await getLaunchAt(),
+    countAt: await getCountAt(),
     adminWhatsAppSet: !!process.env.ADMIN_WHATSAPP,
     root: root ? `+${root}` : '',
     allowlist: await readAllowlist(),
@@ -177,6 +178,21 @@ export async function POST(request: Request) {
       if (!ok) return NextResponse.json({ error: 'save failed' }, { status: 500 })
       revalidatePath('/admin')
       return NextResponse.json({ ok: true, launchAt: null })
+    }
+
+    // Counter reset: total/verified businesses, accounts and the category and
+    // city charts start from now. The directory itself is untouched. Guarded
+    // by the admin password because zeroing live inventory numbers is easy to
+    // confuse with a data wipe.
+    if (action === 'launch_counts_reset' || action === 'launch_counts_clear') {
+      if (!verifyAdminPassword(body?.password)) {
+        return NextResponse.json({ error: 'wrong password' }, { status: 401 })
+      }
+      const at = action === 'launch_counts_reset' ? new Date().toISOString() : null
+      const ok = await setCountAt(at)
+      if (!ok) return NextResponse.json({ error: 'save failed' }, { status: 500 })
+      revalidatePath('/admin')
+      return NextResponse.json({ ok: true, countAt: at })
     }
 
     // Default: the priority supplier switch (legacy shape without action).

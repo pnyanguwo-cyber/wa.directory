@@ -16,7 +16,7 @@ import {
   getRevenueSummary,
   type PaymentSource,
 } from '@/lib/financial-reporting'
-import { getLaunchAt, laterOf, laterDayOf } from '@/lib/launch'
+import { getLaunchAt, getCountAt, laterOf, laterDayOf } from '@/lib/launch'
 
 export async function GET(request: Request) {
   const denied = adminGuard()
@@ -37,6 +37,12 @@ export async function GET(request: Request) {
   // Admin "start fresh" cutoff: pre-launch rows stay in the DB but out of the
   // numbers shown here.
   const launchAt = await getLaunchAt()
+  // Counter cutoff: total/verified businesses, accounts and the category/city
+  // charts start from here when the admin resets counts for launch. Unlike the
+  // money cutoff this is cleared separately, and it changes nothing in the
+  // public directory.
+  const countAt = await getCountAt()
+  const countFloor = countAt || '1970-01-01T00:00:00.000Z'
 
   if (businessId) {
     const [businessRes, statsRes] = await Promise.all([
@@ -120,12 +126,12 @@ export async function GET(request: Request) {
       .select('business_id, count')
       .eq('type', 'profile_view')
       .gte('date', laterDayOf(thirtyDaysAgo.slice(0, 10), launchAt)),
-    supabase.from('business_accounts').select('id', { count: 'exact', head: true }),
-    supabase.from('businesses').select('id', { count: 'exact', head: true }).eq('verified', true),
-    supabase.from('businesses').select('id', { count: 'exact', head: true }),
+    supabase.from('business_accounts').select('id', { count: 'exact', head: true }).gte('created_at', countFloor),
+    supabase.from('businesses').select('id', { count: 'exact', head: true }).eq('verified', true).gte('created_at', countFloor),
+    supabase.from('businesses').select('id', { count: 'exact', head: true }).gte('created_at', countFloor),
     supabase.from('businesses').select('created_at').gte('created_at', laterOf(ninetyDaysAgo, launchAt)).order('created_at', { ascending: true }),
-    supabase.from('businesses').select('category').eq('verified', true),
-    supabase.from('businesses').select('city').eq('verified', true),
+    supabase.from('businesses').select('category').eq('verified', true).gte('created_at', countFloor),
+    supabase.from('businesses').select('city').eq('verified', true).gte('created_at', countFloor),
     supabase.from('daily_stats').select('date, type, count').gte('date', laterDayOf(thirtyDaysAgo.slice(0, 10), launchAt)).order('date', { ascending: true }),
     supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
   ])
@@ -306,6 +312,7 @@ export async function GET(request: Request) {
       },
                   registrations,
       launch_at: launchAt,
+      counts_at: countAt,
       premium_members: premiumCount.count || 0,
       payment_performance: paymentStats,
       recent_payments: recentPaymentsData,

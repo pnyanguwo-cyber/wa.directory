@@ -8,16 +8,33 @@ import { getBotSetting, setBotSetting } from './bot-settings'
 // the full history.
 
 const KEY = 'dashboard_launch_at'
+const COUNT_KEY = 'dashboard_counts_at'
 
-export async function getLaunchAt(): Promise<string | null> {
-  const raw = (await getBotSetting(KEY)).trim()
-  if (!raw) return null
+function parseIso(raw: string): string | null {
   const d = new Date(raw)
   return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
+export async function getLaunchAt(): Promise<string | null> {
+  const raw = (await getBotSetting(KEY)).trim()
+  return raw ? parseIso(raw) : null
+}
+
 export async function setLaunchAt(iso: string | null): Promise<boolean> {
   return setBotSetting(KEY, iso || '')
+}
+
+// Separate cutoff for the inventory counters (total businesses, verified,
+// accounts, category/city charts). It is kept apart from the money cutoff so
+// the two can be cleared independently, and it never hides a listing from the
+// live directory - only from the numbers the admin dashboard shows.
+export async function getCountAt(): Promise<string | null> {
+  const raw = (await getBotSetting(COUNT_KEY)).trim()
+  return raw ? parseIso(raw) : null
+}
+
+export async function setCountAt(iso: string | null): Promise<boolean> {
+  return setBotSetting(COUNT_KEY, iso || '')
 }
 
 /** Later of a period start and the launch cutoff (both ISO). */

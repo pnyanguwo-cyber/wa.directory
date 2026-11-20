@@ -18,6 +18,11 @@ export default function AdminSettings() {
   const [launchAt, setLaunchAt] = useState<string | null>(null)
   const [launchMsg, setLaunchMsg] = useState('')
   const [launchConfirm, setLaunchConfirm] = useState(false)
+  const [countAt, setCountAt] = useState<string | null>(null)
+  const [countMsg, setCountMsg] = useState('')
+  const [countConfirm, setCountConfirm] = useState(false)
+  const [countPassword, setCountPassword] = useState('')
+  const [countMode, setCountMode] = useState<'reset' | 'clear'>('reset')
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState('')
 
@@ -32,6 +37,7 @@ export default function AdminSettings() {
     setChOverride(data?.channelLink?.override || '')
     setChEnv(data?.channelLink?.env || '')
     setLaunchAt(data?.launchAt || null)
+    setCountAt(data?.countAt || null)
     setLoading(false)
   }, [])
 
@@ -99,6 +105,30 @@ export default function AdminSettings() {
     load()
   }
 
+  async function countAction(action: 'launch_counts_reset' | 'launch_counts_clear') {
+    setCountMsg('')
+    const { ok, data } = await adminFetch('/api/admin/bot-settings', {
+      method: 'POST',
+      body: JSON.stringify({ action, password: countPassword }),
+    })
+    if (!ok) {
+      setCountMsg(
+        data?.error === 'wrong password'
+          ? 'Wrong password — counts were not changed.'
+          : `Failed: ${data?.error || 'unknown'}`
+      )
+      return
+    }
+    setCountConfirm(false)
+    setCountPassword('')
+    setCountMsg(
+      action === 'launch_counts_reset'
+        ? 'Done — business counts now start from right now. The directory was not touched.'
+        : 'Count reset cleared — totals include every business again.'
+    )
+    load()
+  }
+
   const activeLink = chOverride || chEnv
   const chSource = activeLink ? (chOverride ? 'dashboard override' : 'Vercel env CHANNEL_LINK') : ''
 
@@ -141,6 +171,78 @@ export default function AdminSettings() {
             </div>
           )}
           {launchMsg && <p className="text-xs font-semibold text-whatsapp-700">{launchMsg}</p>}
+        </div>
+      )}
+
+      {!loading && (
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">🔢 Reset business counts</h3>
+            <p className="text-xs text-text-secondary mt-1">
+              {countAt
+                ? `Total businesses, verified, accounts and the category/city charts count only businesses registered since ${new Date(countAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}. The live directory still shows everyone.`
+                : 'Zero the inventory counters on the dashboard for launch day: total businesses, verified, accounts and the category/city charts start from the moment you reset. Nothing is deleted and the public directory keeps every listing. Needs your admin password.'}
+            </p>
+          </div>
+          {countConfirm ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-text-secondary">
+                Enter your admin password to confirm.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="password"
+                  value={countPassword}
+                  onChange={e => setCountPassword(e.target.value)}
+                  placeholder="Admin password"
+                  autoComplete="current-password"
+                  className="h-9 px-3 rounded-xl border border-gray-200 text-xs w-48"
+                />
+                <button
+                  onClick={() => countAction(countMode === 'clear' ? 'launch_counts_clear' : 'launch_counts_reset')}
+                  disabled={!countPassword}
+                  className="h-9 px-4 rounded-xl bg-whatsapp-500 text-white text-xs font-bold disabled:opacity-50"
+                >
+                  {countMode === 'clear' ? 'Show all businesses' : 'Reset counts'}
+                </button>
+                <button
+                  onClick={() => {
+                    setCountConfirm(false)
+                    setCountPassword('')
+                  }}
+                  className="btn-secondary h-9 px-4 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  setCountMode('reset')
+                  setCountConfirm(true)
+                  setCountMsg('')
+                }}
+                className="btn-secondary h-9 px-4 text-xs font-semibold"
+              >
+                {countAt ? 'Reset counts again from now' : 'Reset counts for launch'}
+              </button>
+              {countAt && (
+                <button
+                  onClick={() => {
+                    setCountMode('clear')
+                    setCountConfirm(true)
+                    setCountMsg('')
+                  }}
+                  className="h-9 px-4 rounded-xl border border-gray-200 text-xs font-semibold text-text-secondary"
+                >
+                  Show all businesses again
+                </button>
+              )}
+            </div>
+          )}
+          {countMsg && <p className="text-xs font-semibold text-whatsapp-700">{countMsg}</p>}
         </div>
       )}
 
