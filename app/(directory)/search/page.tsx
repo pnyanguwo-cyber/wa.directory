@@ -13,6 +13,7 @@ import ProductResults from '@/components/product-results'
 import ProductSearchByImage from '@/components/product-search-by-image'
 import { matchCategory } from '@/data/categories'
 import { expandSearchQuery } from '@/lib/gemini'
+import { searchVariants, preferredVariant } from '@wa-directory/shared'
 import { orderSearchResults } from '@/lib/ranking'
 import { zimbabweCities } from '@/data/zimbabwe-locations'
 import type { BusinessItem } from '@/types'
@@ -45,19 +46,41 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   const supabase = getSupabase()
   const conditions: string[] = []
   const relatedCats = new Set<string>()
+  // Spelling variants (fertiliser/fertilizer, tyre/tire…) plus AI-suggested
+  // synonyms widen the match. The exact-spelling hit count is kept so the
+  // page can tell a corrected search apart from a normal one.
+  const cleanQ = (q || '').replace(/[,(){}%]/g, ' ').trim()
+  const variants = cleanQ ? searchVariants(cleanQ) : []
+  const exactConditions: string[] = []
+  let exactCount: number | null = null
 
-  if (q) {
-    conditions.push(`name.ilike.%${q}%`, `bio.ilike.%${q}%`)
-    const matchedCat = matchCategory(q)
-    if (matchedCat !== 'Other') conditions.push(`category.cs.{${matchedCat}}`)
+  if (cleanQ) {
+    exactConditions.push(`name.ilike.%${cleanQ}%`, `bio.ilike.%${cleanQ}%`)
+    const matchedCat = matchCategory(cleanQ)
+    if (matchedCat !== 'Other') exactConditions.push(`category.cs.{${matchedCat}}`)
+    conditions.push(...exactConditions)
 
-    const related = await expandSearchQuery(q)
+    for (const variant of variants) {
+      conditions.push(`name.ilike.%${variant}%`, `bio.ilike.%${variant}%`)
+      const variantCat = matchCategory(variant)
+      if (variantCat !== 'Other' && variantCat !== matchedCat) {
+        conditions.push(`category.cs.{${variantCat}}`)
+      }
+    }
+
+    const related = await expandSearchQuery(cleanQ)
     for (const term of related) {
       const cat = matchCategory(term)
       if (cat !== 'Other') relatedCats.add(cat)
     }
     Array.from(relatedCats).forEach(cat => {
       conditions.push(`category.cs.{${cat}}`)
+    })
+    // Synonyms the model suggested also match names/descriptions, not just
+    // their categories — that is the "Google intelligence" widening.
+    related.slice(0, 3).forEach(term => {
+      const t = term.toLowerCase().replace(/[,(){}%]/g, ' ').trim()
+      if (t.length >= 3 && t !== cleanQ) conditions.push(`name.ilike.%${t}%`)
     })
   }
 
@@ -89,12 +112,28 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
         .select('id, business_id, name, slug, price, image_url, is_active, businesses!inner(name, slug, city)')
         .eq('is_active', true)
         .eq('businesses.payment_status', 'active')
-        .ilike('name', `%${q.trim()}%`)
+        .or([cleanQ, ...variants].map(v => `name.ilike.%${v}%`).join(','))
         .limit(20)
     : null
 
-  const [{ data: rawBusinesses }, { count }, itemsRes] = await Promise.all([dataQuery, countQuery, itemsQuery])
+  // Exact-spelling count: only needed when variants exist, and only to
+  // decide whether to show "No results for X. Showing results for Y."
+  const exactQuery = cleanQ && variants.length > 0
+    ? supabase
+        .from('businesses')
+        .select('id', { count: 'exact', head: true })
+        .eq('payment_status', 'active')
+        .or(exactConditions.join(','))
+    : null
+
+  const [{ data: rawBusinesses }, { count }, itemsRes, exactRes] = await Promise.all([
+    dataQuery,
+    countQuery,
+    itemsQuery,
+    exactQuery,
+  ])
   const items = ((itemsRes?.data || []) as unknown as BusinessItem[]) || []
+  exactCount = exactRes ? exactRes.count ?? 0 : null
 
   const total = count ?? rawBusinesses?.length ?? 0
   const matchedCategory = matchCategory(q)
@@ -102,6 +141,11 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   const businesses = rawBusinesses
     ? await orderSearchResults(rawBusinesses, matchedCategory !== 'Other' ? matchedCategory : (q || 'browse'), city, q || (sort || 'default'))
     : []
+
+  // Which spelling we actually searched, when the typed one found nothing.
+  const correctedTo = cleanQ && total > 0 && exactCount === 0
+    ? preferredVariant(cleanQ, businesses.map(b => b.name)) || variants[0] || null
+    : null
 
   // Match-type filter: tag each result with how it matched the query
   // (mirrors the .or() conditions above) and narrow the ranked list.
@@ -121,6 +165,18 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
   return (
     <>
       <FilterBar total={displayTotal} query={q} />
+      {correctedTo && (
+        <div className="mb-5 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-text-primary">
+          No results for <strong>&ldquo;{cleanQ}&rdquo;</strong> in that spelling — showing results for{' '}
+          <Link
+            href={`/search?q=${encodeURIComponent(correctedTo)}`}
+            className="font-semibold text-whatsapp-700 hover:underline"
+          >
+            &ldquo;{correctedTo}&rdquo;
+          </Link>
+          .
+        </div>
+      )}
       {displayTotal === 0 ? (
         <div className="text-center py-16">
           <div className="bg-surface w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -134,6 +190,20 @@ async function SearchResults({ q, verified, sort, match }: { q: string; verified
               ? 'No businesses matched that match type — try “All matches”.'
               : <>Try &ldquo;hardware near me&rdquo; or check your spelling</>}
           </p>
+          {!matchFiltered && variants.length > 0 && (
+            <p className="text-text-secondary text-sm mt-3">
+              Did you mean{' '}
+              {variants.slice(0, 3).map((v, i) => (
+                <span key={v}>
+                  {i > 0 && (i === variants.slice(0, 3).length - 1 ? ' or ' : ', ')}
+                  <Link href={`/search?q=${encodeURIComponent(v)}`} className="font-semibold text-whatsapp-700 hover:underline">
+                    “{v}”
+                  </Link>
+                </span>
+              ))}
+              ?
+            </p>
+          )}
         </div>
       ) : (
         <>
