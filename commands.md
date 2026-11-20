@@ -87,6 +87,7 @@ The owner number comes from the `ADMIN_WHATSAPP` production env; extra admins li
 | `approve req 3` | Approve request 3 as written: adds the category/city/area to the approved lists, rewrites the business, and tells the owner |
 | `approve req 3 Scaffolding` | Approve under a corrected name — the owner's wording stays visible, the list gets the spelling you choose |
 | `reject req 3` | Reject: removes the value from the listing and tells the owner why |
+| Any admin notice (new business, category/location request) | Arrives with **three buttons** — WhatsApp allows no more — that run the same commands as typing them: `✅ Verify 30 days`, `🕵️ Pending list`, `🗂 Requests`. Everything else stays a typed command. A verify grant is free time: it is recorded as a trial, never as a paid subscription, and does not use up the owner's 90-day trial. |
 | `switch` | Show the priority supplier switch |
 | `switch on` / `switch off` / `switch price $3/month` | Flip or reprice the push-template switch |
 

@@ -16,6 +16,7 @@ import {
   getRevenueSummary,
   type PaymentSource,
 } from '@/lib/financial-reporting'
+import { getLaunchAt, laterOf, laterDayOf } from '@/lib/launch'
 
 export async function GET(request: Request) {
   const denied = adminGuard()
@@ -33,6 +34,9 @@ export async function GET(request: Request) {
   const thisMonthStart = getHarareStartOfCurrentMonth()
   const thisWeekStart = getHarareStartOfCurrentWeek()
   const thisYearStart = getHarareStartOfCurrentYear()
+  // Admin "start fresh" cutoff: pre-launch rows stay in the DB but out of the
+  // numbers shown here.
+  const launchAt = await getLaunchAt()
 
   if (businessId) {
     const [businessRes, statsRes] = await Promise.all([
@@ -106,29 +110,34 @@ export async function GET(request: Request) {
     supabase
       .from('stats_events')
       .select('type')
-      .gte('created_at', todayStart),
+      .gte('created_at', laterOf(todayStart, launchAt)),
     supabase
       .from('daily_stats')
       .select('type, count')
-      .gte('date', sevenDaysAgo.slice(0, 10)),
+      .gte('date', laterDayOf(sevenDaysAgo.slice(0, 10), launchAt)),
     supabase
       .from('daily_stats')
       .select('business_id, count')
       .eq('type', 'profile_view')
-      .gte('date', thirtyDaysAgo.slice(0, 10)),
+      .gte('date', laterDayOf(thirtyDaysAgo.slice(0, 10), launchAt)),
     supabase.from('business_accounts').select('id', { count: 'exact', head: true }),
     supabase.from('businesses').select('id', { count: 'exact', head: true }).eq('verified', true),
     supabase.from('businesses').select('id', { count: 'exact', head: true }),
-    supabase.from('businesses').select('created_at').gte('created_at', ninetyDaysAgo).order('created_at', { ascending: true }),
+    supabase.from('businesses').select('created_at').gte('created_at', laterOf(ninetyDaysAgo, launchAt)).order('created_at', { ascending: true }),
     supabase.from('businesses').select('category').eq('verified', true),
     supabase.from('businesses').select('city').eq('verified', true),
-    supabase.from('daily_stats').select('date, type, count').gte('date', thirtyDaysAgo.slice(0, 10)).order('date', { ascending: true }),
+    supabase.from('daily_stats').select('date, type, count').gte('date', laterDayOf(thirtyDaysAgo.slice(0, 10), launchAt)).order('date', { ascending: true }),
     supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
   ])
 
   // Use unified financial reporting
-  const financialSummary = await getRevenueSummary({ period: 'monthly', businessId: undefined, includeGrowth: true })
-  const paymentsData = await getConfirmedPayments({ from: thisMonthStart, to: new Date().toISOString(), limit: 50 })
+  const financialSummary = await getRevenueSummary({
+    period: 'monthly',
+    businessId: undefined,
+    includeGrowth: true,
+    from: laterOf(thisMonthStart, launchAt),
+  })
+  const paymentsData = await getConfirmedPayments({ from: laterOf(thisMonthStart, launchAt), to: new Date().toISOString(), limit: 50 })
 
   // Group payments by source
   const revenueBySource: Record<string, number> = {
@@ -144,7 +153,7 @@ export async function GET(request: Request) {
   }
 
   // Get revenue from the last 7 days, 30 days, and year
-  const recentPayments = await getConfirmedPayments({ from: ninetyDaysAgo, limit: 500 })
+  const recentPayments = await getConfirmedPayments({ from: laterOf(ninetyDaysAgo, launchAt), limit: 500 })
 
   // Calculate revenue for this month
   const revenueThisMonth = revenueBySource.premium_subscription + revenueBySource.listing_payment +
@@ -153,11 +162,11 @@ export async function GET(request: Request) {
 
   // Weekly revenue (last 7 days)
   const sevenDaysAgoDate = getHarareStartOfDaysAgo(7)
-  const weeklyPayments = await getConfirmedPayments({ from: sevenDaysAgoDate, limit: 500 })
+  const weeklyPayments = await getConfirmedPayments({ from: laterOf(sevenDaysAgoDate, launchAt), limit: 500 })
   const revenueThisWeek = weeklyPayments.reduce((sum, p) => sum + p.amount, 0)
 
   // Yearly revenue
-  const yearlyPayments = await getConfirmedPayments({ from: thisYearStart, limit: 1000 })
+  const yearlyPayments = await getConfirmedPayments({ from: laterOf(thisYearStart, launchAt), limit: 1000 })
   const revenueThisYear = yearlyPayments.reduce((sum, p) => sum + p.amount, 0)
 
   const byType = new Map<string, number>()
@@ -228,7 +237,7 @@ export async function GET(request: Request) {
 
   // Average weekly revenue (based on last 12 weeks)
   const twelveWeeksAgo = getHarareStartOfDaysAgo(84)
-  const recentSubsSummary = await getRevenueSummary({ from: twelveWeeksAgo, period: 'monthly' })
+  const recentSubsSummary = await getRevenueSummary({ from: laterOf(twelveWeeksAgo, launchAt), period: 'monthly' })
 
   // revenueThisMonth already calculated from revenueBySource
   // revenueThisWeek and revenueThisYear already calculated above
@@ -296,6 +305,7 @@ export async function GET(request: Request) {
                     avg_transaction_value: financialSummary.avgTransactionValue,
       },
                   registrations,
+      launch_at: launchAt,
       premium_members: premiumCount.count || 0,
       payment_performance: paymentStats,
       recent_payments: recentPaymentsData,

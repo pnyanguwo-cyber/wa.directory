@@ -8,6 +8,7 @@ import { startTrialForBusiness } from '@/lib/trial-helpers'
 import { adminGuard } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { fetchBusinessesByIds } from '@/lib/business-select'
+import { getLaunchAt } from '@/lib/launch'
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date)
@@ -20,13 +21,15 @@ export async function GET() {
   if (denied) return denied
 
   const supabase = getSupabase()
+  // After a launch reset, only rows created from that moment are shown.
+  const launchAt = await getLaunchAt()
 
   // Premium subscriptions
-  const { data: subs } = await supabase
+  let subsQuery = supabase
     .from('subscriptions')
     .select('id, business_id, status, amount, started_at, expires_at, admin_note, created_at')
-    .order('created_at', { ascending: false })
-    .limit(300)
+  if (launchAt) subsQuery = subsQuery.gte('created_at', launchAt)
+  const { data: subs } = await subsQuery.order('created_at', { ascending: false }).limit(300)
 
   const ids = [...new Set((subs || []).map(s => s.business_id))]
   const businesses = await fetchBusinessesByIds(supabase, ids, 'id, name, slug, phone')
@@ -37,11 +40,11 @@ export async function GET() {
   // so the dashboard can show auto-confirmed vs manual at a glance.
   // Also include trial fields: trial_eligible, trial_activated_at, trial_expires_at,
   // trial_reminder_sent_7d, trial_reminder_sent_3d
-  const { data: listingSubs } = await supabase
+  let listingQuery = supabase
     .from('listing_subscriptions')
     .select('id, business_id, status, amount, payer_phone, started_at, expires_at, renewal_notified_at, created_at, plan, pro_assistance, paynow_reference, paynow_paid_at, auto_confirmed_at, trial_eligible, trial_status, is_trial, trial_requested_at, trial_activated_at, trial_expires_at, trial_reminder_sent_7d, trial_reminder_sent_3d')
-    .order('created_at', { ascending: false })
-    .limit(300)
+  if (launchAt) listingQuery = listingQuery.gte('created_at', launchAt)
+  const { data: listingSubs } = await listingQuery.order('created_at', { ascending: false }).limit(300)
 
   const listingIds = [...new Set((listingSubs || []).map(s => s.business_id))]
   const listingBusinesses = await fetchBusinessesByIds(supabase, listingIds, 'id, name, slug, phone, business_id, username, city, payment_status')
@@ -49,11 +52,11 @@ export async function GET() {
   const listingBizById = new Map((listingBusinesses || []).map(b => [b.id, b]))
 
   // Support subscriptions
-  const { data: supportSubs } = await supabase
+  let supportQuery = supabase
     .from('support_subscriptions')
     .select('id, biz_id, tier, price_usd, status, current_period_start, current_period_end, external_subscription_id, created_at, updated_at')
-    .order('created_at', { ascending: false })
-    .limit(300)
+  if (launchAt) supportQuery = supportQuery.gte('created_at', launchAt)
+  const { data: supportSubs } = await supportQuery.order('created_at', { ascending: false }).limit(300)
 
   const supportIds = [...new Set((supportSubs || []).map(s => s.biz_id))]
   const supportBusinesses = await fetchBusinessesByIds(supabase, supportIds, 'id, name, slug, phone, business_id, username, city, payment_status')
@@ -61,6 +64,7 @@ export async function GET() {
   const supportBizById = new Map((supportBusinesses || []).map(b => [b.id, b]))
 
   return NextResponse.json({
+    launch_at: launchAt,
     subscriptions: (subs || []).map(s => ({ ...s, business: bizById.get(s.business_id) || null })),
     listingSubscriptions: (listingSubs || []).map(s => ({
       ...s,

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { adminGuard } from '@/lib/admin-auth'
 import { prioritySwitchState, setPrioritySwitch } from '@/lib/needs'
 import { getBotSetting, setBotSetting } from '@/lib/bot-settings'
 import { digitsOnly } from '@/lib/phone'
+import { getLaunchAt, setLaunchAt } from '@/lib/launch'
 
 const MAX_ADMINS = 20
 
@@ -87,6 +89,7 @@ export async function GET() {
   return NextResponse.json({
     enabled: state.enabled,
     price: state.price,
+    launchAt: await getLaunchAt(),
     adminWhatsAppSet: !!process.env.ADMIN_WHATSAPP,
     root: root ? `+${root}` : '',
     allowlist: await readAllowlist(),
@@ -157,6 +160,23 @@ export async function POST(request: Request) {
     if (action === 'channel_clear') {
       await setBotSetting('channel_link', '')
       return NextResponse.json({ ok: true })
+    }
+
+    // Launch reset: dashboards count from now on. Nothing is deleted — the
+    // cutoff only hides older payments, subscriptions and activity.
+    if (action === 'launch_reset') {
+      const at = new Date().toISOString()
+      const ok = await setLaunchAt(at)
+      if (!ok) return NextResponse.json({ error: 'save failed' }, { status: 500 })
+      revalidatePath('/admin')
+      return NextResponse.json({ ok: true, launchAt: at })
+    }
+
+    if (action === 'launch_clear') {
+      const ok = await setLaunchAt(null)
+      if (!ok) return NextResponse.json({ error: 'save failed' }, { status: 500 })
+      revalidatePath('/admin')
+      return NextResponse.json({ ok: true, launchAt: null })
     }
 
     // Default: the priority supplier switch (legacy shape without action).

@@ -15,6 +15,9 @@ export default function AdminSettings() {
   const [chEnv, setChEnv] = useState('')
   const [chInput, setChInput] = useState('')
   const [chMsg, setChMsg] = useState('')
+  const [launchAt, setLaunchAt] = useState<string | null>(null)
+  const [launchMsg, setLaunchMsg] = useState('')
+  const [launchConfirm, setLaunchConfirm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [msg, setMsg] = useState('')
 
@@ -28,6 +31,7 @@ export default function AdminSettings() {
     setAllowlist(Array.isArray(data?.allowlist) ? data.allowlist : [])
     setChOverride(data?.channelLink?.override || '')
     setChEnv(data?.channelLink?.env || '')
+    setLaunchAt(data?.launchAt || null)
     setLoading(false)
   }, [])
 
@@ -76,6 +80,25 @@ export default function AdminSettings() {
     load()
   }
 
+  async function launchAction(action: 'launch_reset' | 'launch_clear') {
+    setLaunchMsg('')
+    const { ok, data } = await adminFetch('/api/admin/bot-settings', {
+      method: 'POST',
+      body: JSON.stringify({ action }),
+    })
+    if (!ok) {
+      setLaunchMsg(`Failed: ${data?.error || 'unknown'}`)
+      return
+    }
+    setLaunchConfirm(false)
+    setLaunchMsg(
+      action === 'launch_reset'
+        ? 'Done — the dashboard now counts from right now. Nothing was deleted.'
+        : 'Reset cleared — the dashboard shows the full history again.'
+    )
+    load()
+  }
+
   const activeLink = chOverride || chEnv
   const chSource = activeLink ? (chOverride ? 'dashboard override' : 'Vercel env CHANNEL_LINK') : ''
 
@@ -84,6 +107,42 @@ export default function AdminSettings() {
       <AdminSectionHeader title="Bot Settings" subtitle="Feature switches live here; dormant ones stay off until you flip them" />
 
       {loading && <p className="text-sm text-text-secondary">Loading…</p>}
+
+      {!loading && (
+        <div className="rounded-2xl border border-gray-200/80 bg-white p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-bold text-text-primary">🚀 Launch reset</h3>
+            <p className="text-xs text-text-secondary mt-1">
+              {launchAt
+                ? `The dashboard counts only what happened since ${new Date(launchAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}. Earlier payments, subscriptions and activity are hidden, not deleted.`
+                : 'The dashboard currently counts everything, including pre-launch tests. Start fresh so launch day is Day 1 — payments, subscriptions and activity before then drop out of the numbers while staying in the database.'}
+            </p>
+          </div>
+          {launchConfirm ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-text-secondary">Start the dashboard from now?</span>
+              <button onClick={() => launchAction('launch_reset')} className="h-9 px-4 rounded-xl bg-whatsapp-500 text-white text-xs font-bold">
+                Yes, start fresh
+              </button>
+              <button onClick={() => setLaunchConfirm(false)} className="btn-secondary h-9 px-4 text-xs font-semibold">
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={() => setLaunchConfirm(true)} className="btn-secondary h-9 px-4 text-xs font-semibold">
+                {launchAt ? 'Move launch date to now' : 'Start fresh for launch'}
+              </button>
+              {launchAt && (
+                <button onClick={() => launchAction('launch_clear')} className="h-9 px-4 rounded-xl border border-gray-200 text-xs font-semibold text-text-secondary">
+                  Show full history again
+                </button>
+              )}
+            </div>
+          )}
+          {launchMsg && <p className="text-xs font-semibold text-whatsapp-700">{launchMsg}</p>}
+        </div>
+      )}
 
       {!loading && (
         <div className="rounded-2xl border border-gray-200/80 bg-white p-4 space-y-3">
