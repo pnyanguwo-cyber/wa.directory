@@ -295,11 +295,10 @@ export default function AdminAiControls() {
               disabled={saving === 'ai_model_config'}
               className="input-field text-sm w-full"
             >
-              <option value="gemini-1.5-flash">gemini-1.5-flash (Recommended)</option>
-              <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b (Cheaper)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro (Higher quality)</option>
-              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Photos, voice)</option>
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Page copy, cheaper)</option>
+              <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
             </select>
           </div>
           <div>
@@ -310,11 +309,10 @@ export default function AdminAiControls() {
               disabled={saving === 'ai_model_config'}
               className="input-field text-sm w-full"
             >
-              <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-              <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
+              <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+              <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
             </select>
           </div>
           <div>
@@ -328,7 +326,7 @@ export default function AdminAiControls() {
               })}
               disabled={saving === 'ai_model_config'}
               className="input-field text-sm w-full"
-              placeholder="gemini-1.5-flash, gemini-1.5-pro"
+              placeholder="gemini-3.8-flash, gemini-3.5-flash-lite"
             />
           </div>
         </div>

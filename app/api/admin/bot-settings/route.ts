@@ -25,9 +25,9 @@ const DEFAULT_USAGE_LIMITS = {
 
 // Default model config
 const DEFAULT_MODEL_CONFIG = {
-  default_model: 'gemini-1.5-flash',
-  fallback_model: 'gemini-1.5-flash-8b',
-  allowed_models: ['gemini-1.5-flash', 'gemini-1.5-flash-8b', 'gemini-1.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'],
+  default_model: 'gemini-3.8-flash',
+  fallback_model: 'gemini-3.5-flash-lite',
+  allowed_models: ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'],
 }
 
 // Default quota alerts

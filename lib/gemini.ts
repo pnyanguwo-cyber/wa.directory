@@ -1,4 +1,4 @@
-import { getCached, setCached } from './ai-cache'
+import { getCached, getCachedEntry, setCached } from './ai-cache'
 import { getSupabase } from './supabase-server'
 import {
   checkAiGlobalPause,
@@ -11,7 +11,13 @@ import {
 // Primary model, then fallbacks for the two failures seen in production:
 // a model retired for new keys (404) and a model at capacity (503).
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'
-const MODEL_CANDIDATES: string[] = Array.from(
+
+// Photos and voice notes need the strongest reader. Page copy does not: SEO
+// blurbs are the highest-volume AI path (one per category x town page), so they
+// use the lite tier and only climb to a full model when lite is unavailable.
+export const GEMINI_COPY_MODEL = process.env.GEMINI_COPY_MODEL || 'gemini-3.5-flash-lite'
+
+const VISION_MODEL_CANDIDATES: string[] = Array.from(
   new Set(
     [
       GEMINI_MODEL,
@@ -20,6 +26,16 @@ const MODEL_CANDIDATES: string[] = Array.from(
       'gemini-3.5-flash',
       'gemini-3.1-flash-lite',
       'gemini-3-flash-preview',
+    ].filter(Boolean)
+  )
+)
+const COPY_MODEL_CANDIDATES: string[] = Array.from(
+  new Set(
+    [
+      GEMINI_COPY_MODEL,
+      'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      ...VISION_MODEL_CANDIDATES,
     ].filter(Boolean)
   )
 )
@@ -35,17 +51,17 @@ const GEMINI_VISION_TIMEOUT = 25_000
 // Token pricing per 1M tokens (USD) - update when Google changes pricing
 // https://ai.google.dev/pricing
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-1.5-flash': { input: 0.075, output: 0.30 },
-  'gemini-1.5-flash-8b': { input: 0.0375, output: 0.15 },
-  'gemini-1.5-pro': { input: 1.25, output: 5.00 },
-  'gemini-2.0-flash': { input: 0.10, output: 0.40 },
-  'gemini-2.0-flash-lite': { input: 0.075, output: 0.30 },
-  'gemini-3.8-flash': { input: 0.075, output: 0.30 },
-  'gemini-3.6-flash': { input: 0.075, output: 0.30 },
-  'gemini-3.5-flash': { input: 0.075, output: 0.30 },
-  'gemini-3.1-flash-lite': { input: 0.075, output: 0.30 },
-  'gemini-3-flash-preview': { input: 0.075, output: 0.30 },
+  'gemini-3.8-flash': { input: 0.75, output: 3.75 },
+  'gemini-3.6-flash': { input: 0.75, output: 3.75 },
+  'gemini-3.5-flash': { input: 0.75, output: 3.75 },
+  'gemini-3-flash-preview': { input: 0.75, output: 3.75 },
+  'gemini-3.5-flash-lite': { input: 0.30, output: 2.50 },
+  'gemini-flash-lite-latest': { input: 0.30, output: 2.50 },
+  'gemini-3.1-flash-lite': { input: 0.25, output: 1.50 },
 }
+// Unknown models are billed at the dearest known rate so the admin dashboard
+// can overstate cost but never quietly understate it.
+const DEFAULT_PRICING = { input: 0.75, output: 3.75 }
 
 export type AiFeature =
   | 'registration_draft'
@@ -71,7 +87,7 @@ interface UsageLogParams {
 
 export async function logAiUsage(params: UsageLogParams): Promise<void> {
   try {
-    const pricing = MODEL_PRICING[params.model] || MODEL_PRICING['gemini-1.5-flash']
+    const pricing = MODEL_PRICING[params.model] || DEFAULT_PRICING
     const inputCost = (params.inputTokens / 1_000_000) * pricing.input
     const outputCost = (params.outputTokens / 1_000_000) * pricing.output
     const estimatedCost = inputCost + outputCost
@@ -161,8 +177,10 @@ async function fetchGemini(
     metadata?: Record<string, unknown>
     tokensInput?: number
     tokensOutput?: number
-  }
-): Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number } }> {
+  },
+  opts?: { preferLite?: boolean }
+): Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number }; model: string }> {
+  const chain = opts?.preferLite ? COPY_MODEL_CANDIDATES : VISION_MODEL_CANDIDATES
   const start = Date.now()
   const deadline = start + timeoutMs * 2
   let status = '200'
@@ -170,14 +188,14 @@ async function fetchGemini(
   let responseText: string | null = null
   let inputTokens = logParams?.tokensInput || 0
   let outputTokens = 0
-  let usedModel = GEMINI_MODEL
+  let usedModel = chain[0]
 
   try {
     if (!logParams?.tokensInput) {
       inputTokens = estimateTokens(JSON.stringify(body))
     }
 
-    for (const model of MODEL_CANDIDATES) {
+    for (const model of chain) {
       usedModel = model
       const remaining = deadline - Date.now()
       if (remaining <= 0) break
@@ -198,8 +216,8 @@ async function fetchGemini(
           status = String(res.status)
           errorMessage = data?.error?.message || 'API error'
           // Retired model or capacity spike: try the next one.
-          if (RETRIABLE_STATUS.has(res.status) && model !== MODEL_CANDIDATES[MODEL_CANDIDATES.length - 1]) continue
-          return { text: null }
+          if (RETRIABLE_STATUS.has(res.status) && model !== chain[chain.length - 1]) continue
+          return { text: null, model: usedModel }
         }
 
         responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || null
@@ -211,7 +229,7 @@ async function fetchGemini(
           outputTokens = estimateResponseTokens(responseText)
         }
 
-        return { text: responseText, usage: { inputTokens, outputTokens } }
+        return { text: responseText, usage: { inputTokens, outputTokens }, model: usedModel }
       } catch (err) {
         status = 'error'
         errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -221,7 +239,7 @@ async function fetchGemini(
       }
     }
 
-    return { text: null }
+    return { text: null, model: usedModel }
   } finally {
     const latencyMs = Date.now() - start
 
@@ -260,7 +278,7 @@ async function fetchGemini(
  */
 export async function executeAiRequest<T>(
   feature: AiFeature,
-  requestFn: () => Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number } }>,
+  requestFn: () => Promise<{ text: string | null; usage?: { inputTokens: number; outputTokens: number }; model?: string }>,
   businessId?: string | null,
   channel: string = 'web'
 ): Promise<AiGatewayResult<T>> {
@@ -291,7 +309,7 @@ export async function executeAiRequest<T>(
   }
 
   // 2. Execute the actual request
-  let response: { text: string | null; usage?: { inputTokens: number; outputTokens: number } }
+  let response: { text: string | null; usage?: { inputTokens: number; outputTokens: number }; model?: string }
   let latencyMs = 0
 
   try {
@@ -305,7 +323,7 @@ export async function executeAiRequest<T>(
 
     await logAiUsage({
       feature,
-      model: GEMINI_MODEL,
+      model: response.model || GEMINI_MODEL,
       inputTokens,
       outputTokens,
       latencyMs,
@@ -376,7 +394,8 @@ export async function executeAiRequest<T>(
  */
 export async function callGeminiControlled(
   prompt: string,
-  logParams?: { feature: AiFeature; businessId?: string | null; orgId?: string | null; channel?: string; metadata?: Record<string, unknown> }
+  logParams?: { feature: AiFeature; businessId?: string | null; orgId?: string | null; channel?: string; metadata?: Record<string, unknown> },
+  opts?: { preferLite?: boolean }
 ): Promise<string | null> {
   const result = await executeAiRequest<string>(
     logParams?.feature || 'seo_blurb',
@@ -384,7 +403,8 @@ export async function callGeminiControlled(
       return (await fetchGemini(
         { contents: [{ parts: [{ text: prompt }] }] },
         GEMINI_TIMEOUT,
-        logParams
+        logParams,
+        opts
       ))
     },
     logParams?.businessId || null,
@@ -398,11 +418,16 @@ export async function callGeminiControlled(
  * DEPRECATED: Use callGeminiControlled or executeAiRequest instead.
  * This function does NOT enforce AI controls.
  */
-export async function callGemini(prompt: string, logParams?: { feature: AiFeature; businessId?: string | null; orgId?: string | null; channel?: string; metadata?: Record<string, unknown> }): Promise<string | null> {
+export async function callGemini(
+  prompt: string,
+  logParams?: { feature: AiFeature; businessId?: string | null; orgId?: string | null; channel?: string; metadata?: Record<string, unknown> },
+  opts?: { preferLite?: boolean }
+): Promise<string | null> {
   const result = await fetchGemini(
     { contents: [{ parts: [{ text: prompt }] }] },
     GEMINI_TIMEOUT,
-    logParams
+    logParams,
+    opts
   )
   return result.text
 }
@@ -547,6 +572,22 @@ export function hasGeminiKey(): boolean {
 const SEO_BLURB_FALLBACK = (category: string, location: string) =>
   `Find the best ${category} services in ${location}, Zimbabwe. WA Directory connects you with trusted local businesses via WhatsApp.`
 
+// Gemini was unavailable when this page was last rendered, so the blurb is the
+// plain template. Hold it briefly: retrying per page after a quota comes back
+// is worth it, retrying thousands of pages a day is not.
+const SEO_BLURB_FALLBACK_TTL_MS = 6 * 60 * 60 * 1000
+
+const isFallbackBlurb = (value: string, category: string, location: string) =>
+  value.trim().toLowerCase() === SEO_BLURB_FALLBACK(category, location).trim().toLowerCase()
+
+async function getCachedBlurb(cacheKey: string, category: string, location: string): Promise<string | null> {
+  const cached = await getCached<string>(cacheKey)
+  if (!cached) return null
+  if (!isFallbackBlurb(cached, category, location)) return cached
+  const entry = await getCachedEntry<string>(cacheKey)
+  return entry && entry.ageMs < SEO_BLURB_FALLBACK_TTL_MS ? entry.value : null
+}
+
 const SEO_BLURB_NO_KEY = (category: string, location: string) =>
   `Find the best ${category} services in ${location}, Zimbabwe. Browse verified businesses, check ratings, read reviews, and start a WhatsApp conversation instantly. WA Directory connects you with trusted local businesses for all your ${category.toLowerCase()} needs.`
 
@@ -556,12 +597,13 @@ export async function generateSEOBlurb(category: string, location: string): Prom
   }
 
   const cacheKey = `seo_blurb:${category.toLowerCase()}:${location.toLowerCase()}`
-  const cached = await getCached<string>(cacheKey)
+  const cached = await getCachedBlurb(cacheKey, category, location)
   if (cached) return cached
 
   const text = await callGemini(
     `Write a 200-word SEO paragraph about the best ${category} businesses in ${location}, Zimbabwe. Structure it as a helpful guide for customers looking for ${category.toLowerCase()} services on WhatsApp. Include: benefits of using local providers, what to look for in a quality service, and how WA Directory helps customers connect with verified businesses. Write naturally, no fluff, no title. Just the paragraph. Do not use em-dashes (—), use commas or colons instead.`,
-    { feature: 'seo_blurb', channel: 'web' }
+    { feature: 'seo_blurb', channel: 'web' },
+    { preferLite: true }
   )
   const result = text || SEO_BLURB_FALLBACK(category, location)
   await setCached(cacheKey, result)
@@ -577,12 +619,13 @@ export async function generateSEOBlurbControlled(category: string, location: str
   }
 
   const cacheKey = `seo_blurb:${category.toLowerCase()}:${location.toLowerCase()}`
-  const cached = await getCached<string>(cacheKey)
+  const cached = await getCachedBlurb(cacheKey, category, location)
   if (cached) return cached
 
   const text = await callGeminiControlled(
     `Write a 200-word SEO paragraph about the best ${category} businesses in ${location}, Zimbabwe. Structure it as a helpful guide for customers looking for ${category.toLowerCase()} services on WhatsApp. Include: benefits of using local providers, what to look for in a quality service, and how WA Directory helps customers connect with verified businesses. Write naturally, no fluff, no title. Just the paragraph. Do not use em-dashes (—), use commas or colons instead.`,
-    { feature: 'seo_blurb', businessId, channel: 'web' }
+    { feature: 'seo_blurb', businessId, channel: 'web' },
+    { preferLite: true }
   )
   const result = text || SEO_BLURB_FALLBACK(category, location)
   await setCached(cacheKey, result)

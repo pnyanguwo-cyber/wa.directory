@@ -17,7 +17,8 @@ export async function POST(request: Request) {
       process.env.GEMINI_API_KEY
         ? (await callGemini(
             `Write a 1-2 sentence professional bio for a business that does: ${description}. Be concise, direct, no fluff. Just the bio, no introduction. Do not use em-dashes (—), use commas or colons instead.`,
-            { feature: 'seo_blurb', channel: 'web' }
+            { feature: 'seo_blurb', channel: 'web' },
+            { preferLite: true }
           )) || `Professional ${description} services. Contact us today.`
         : `Professional ${description} services. Contact us today for reliable and affordable service.`
 

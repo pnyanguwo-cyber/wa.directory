@@ -27,7 +27,8 @@ export async function generateSiteContent(input: {
 
   const text = await callGemini(
     `Write website copy for a local business called "${input.businessName}"${input.city ? ` in ${input.city}` : ''}. Category: ${input.category || 'services'}. Bio: ${input.bio || ''}. Return ONLY a JSON object with two string keys: "hero" (a short friendly headline + intro, max 2 sentences) and "services" (a short services overview, max 3 sentences). No markdown, no keys other than hero/services, no explanation.`,
-    { feature: 'seo_blurb', channel: 'web' }
+    { feature: 'seo_blurb', channel: 'web' },
+    { preferLite: true }
   ) || ''
 
   const match = text.match(/\{[\s\S]*?\}/)

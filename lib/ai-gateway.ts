@@ -223,7 +223,7 @@ export async function executeAiRequest<T>(
     // Log the blocked request
     await logAiUsage({
       feature,
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       inputTokens: estimatedInputTokens,
       outputTokens: 0,
       latencyMs: Date.now() - start,
@@ -246,7 +246,7 @@ export async function executeAiRequest<T>(
   if (!featureControl.enabled && !isEssentialOperation(feature)) {
     await logAiUsage({
       feature,
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       inputTokens: estimatedInputTokens,
       outputTokens: 0,
       latencyMs: Date.now() - start,
@@ -279,7 +279,7 @@ export async function executeAiRequest<T>(
 
     await logAiUsage({
       feature,
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       inputTokens: actualTokensIn,
       outputTokens: actualTokensOut,
       latencyMs,
@@ -316,7 +316,7 @@ export async function executeAiRequest<T>(
 
     await logAiUsage({
       feature,
-      model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
+      model: process.env.GEMINI_MODEL || 'gemini-3.8-flash',
       inputTokens: estimatedInputTokens,
       outputTokens: 0,
       latencyMs,
