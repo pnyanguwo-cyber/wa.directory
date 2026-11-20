@@ -66,6 +66,70 @@ export async function approveFeatureRequest(
   return finalName
 }
 
+/**
+ * "Connect to": the requested category is another name for one we already
+ * have. Files the business under the existing category, records the wording as
+ * a learned alias (so future listings using it match automatically instead of
+ * raising another request), and closes the request without creating a
+ * near-duplicate category.
+ */
+export async function connectCategoryRequest(
+  supabase: ReturnType<typeof getSupabase>,
+  req: FeatureRequestRow,
+  targetName: string
+): Promise<{ ok: boolean; error?: string; name?: string }> {
+  if (req.type !== 'category') {
+    return { ok: false, error: 'Only category requests can be connected to an existing category.' }
+  }
+  const target = (targetName || '').trim()
+  if (!target) return { ok: false, error: 'Pick the existing category to connect to.' }
+
+  const { data: target_row } = await supabase
+    .from('categories')
+    .select('name')
+    .ilike('name', target)
+    .maybeSingle()
+  if (!target_row) {
+    return { ok: false, error: `"${target}" is not an existing category. Approve it as new instead.` }
+  }
+  const canonical = String(target_row.name)
+
+  if (req.business_id) {
+    const { data: biz } = await supabase
+      .from('businesses')
+      .select('category, requested_category')
+      .eq('id', req.business_id)
+      .maybeSingle()
+    if (biz) {
+      const current: string[] = biz.category || []
+      let next = current.map(n => (n === req.name ? canonical : n))
+      const provisional = (biz.requested_category || '').trim().toLowerCase()
+      const replacesPlaceholder = !!provisional && provisional === req.name.toLowerCase()
+      if (replacesPlaceholder || current.length === 0) {
+        next = next.filter(n => n !== 'Other')
+      }
+      if (!next.some(n => n.toLowerCase() === canonical.toLowerCase())) next = [canonical, ...next]
+      await supabase
+        .from('businesses')
+        .update(replacesPlaceholder ? { category: next, requested_category: '' } : { category: next })
+        .eq('id', req.business_id)
+    }
+  }
+
+  // Learn the alias for every future listing (best effort: the decision still
+  // stands if the mapping table is unavailable).
+  await supabase
+    .rpc('record_learned', { p_kind: 'category', p_raw: req.name, p_canonical: canonical })
+    .then(() => undefined, () => undefined)
+
+  await supabase
+    .from('feature_requests')
+    .update({ status: 'approved', corrected_name: canonical })
+    .eq('id', req.id)
+
+  return { ok: true, name: canonical }
+}
+
 /** Verifying a business verifies its location too: approve every pending
  * city/area request linked to it so the location lands in the approved
  * lists for future users. Categories stay manual. */

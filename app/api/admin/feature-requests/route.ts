@@ -4,7 +4,7 @@ import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { adminGuard } from '@/lib/admin-auth'
 import { SITE_URL } from '@/lib/site-url'
 import { digitsOnly } from '@/lib/phone'
-import { approveFeatureRequest, type FeatureRequestRow } from '@/lib/feature-request-actions'
+import { approveFeatureRequest, connectCategoryRequest, type FeatureRequestRow } from '@/lib/feature-request-actions'
 
 export async function GET() {
   const denied = adminGuard()
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     const { id, action, corrected_name } = await request.json()
 
-    if (!id || !['approve', 'reject'].includes(action)) {
+    if (!id || !['approve', 'reject', 'connect'].includes(action)) {
       return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
     }
 
@@ -96,6 +96,29 @@ export async function POST(request: Request) {
 
       await supabase.from('feature_requests').update({ status: 'rejected' }).eq('id', id)
       return NextResponse.json({ success: true })
+    }
+
+    // Connect to an existing category: no new category, just the alias and the
+    // listing filed where it belongs.
+    if (action === 'connect') {
+      const result = await connectCategoryRequest(supabase, req as FeatureRequestRow, corrected_name || '')
+      if (!result.ok) return NextResponse.json({ error: result.error || 'Could not connect' }, { status: 400 })
+
+      if (req.business_id) {
+        const { data: biz } = await supabase
+          .from('businesses')
+          .select('phone, slug')
+          .eq('id', req.business_id)
+          .maybeSingle()
+        if (biz?.phone) {
+          const profileUrl = biz.slug ? `${SITE_URL}/business/${biz.slug}` : SITE_URL
+          sendWhatsAppMessage(
+            '+' + digitsOnly(biz.phone),
+            `✅ Thanks! We've filed *${req.name}* under the existing *${result.name}* category, so buyers searching either word will find you.\n\nYour listing: ${profileUrl}`
+          ).catch(err => console.error('[feature-request] connect notify failed:', err))
+        }
+      }
+      return NextResponse.json({ success: true, name: result.name })
     }
 
     // Approve

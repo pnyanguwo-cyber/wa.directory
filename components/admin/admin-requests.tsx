@@ -27,9 +27,18 @@ export default function AdminRequests() {
   const [approving, setApproving] = useState<RequestRow | null>(null)
   const [correction, setCorrection] = useState('')
   const [confirmReject, setConfirmReject] = useState<RequestRow | null>(null)
+  const [connecting, setConnecting] = useState<RequestRow | null>(null)
+  const [connectTarget, setConnectTarget] = useState('')
+  const [categoryNames, setCategoryNames] = useState<string[]>([])
 
   useEffect(() => {
     load()
+    adminFetch('/api/admin/categories').then(({ data }) => {
+      const names = Array.isArray(data?.categories)
+        ? (data.categories as { name?: string }[]).map(c => String(c.name || '')).filter(Boolean)
+        : []
+      setCategoryNames(names)
+    })
   }, [])
 
   async function load() {
@@ -42,7 +51,7 @@ export default function AdminRequests() {
     setLoading(false)
   }
 
-  async function act(id: string, action: 'approve' | 'reject', corrected_name = '') {
+  async function act(id: string, action: 'approve' | 'reject' | 'connect', corrected_name = '') {
     setBusyId(id)
     setMessage('')
     const { ok, data } = await adminFetch('/api/admin/feature-requests', {
@@ -56,7 +65,15 @@ export default function AdminRequests() {
     }
     setApproving(null)
     setConfirmReject(null)
-    setMessage(action === 'approve' ? 'Approved. It is now live across the site.' : 'Rejected and removed from the business profile.')
+    setConnecting(null)
+    setConnectTarget('')
+    setMessage(
+      action === 'approve'
+        ? 'Approved. It is now live across the site.'
+        : action === 'connect'
+        ? `Connected. Future listings using that wording will be filed under "${corrected_name}".`
+        : 'Rejected and removed from the business profile.'
+    )
     load()
   }
 
@@ -92,6 +109,46 @@ export default function AdminRequests() {
         </div>
       )}
 
+      {connecting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
+            <h2 className="text-lg font-bold text-text-primary">Connect &quot;{connecting.name}&quot;</h2>
+            <p className="text-xs text-text-secondary">
+              Is this just another name for a category we already have? Pick it below: the business moves to that
+              category and the wording is remembered, so future listings using it are filed automatically.
+            </p>
+            <input
+              value={connectTarget}
+              onChange={e => setConnectTarget(e.target.value)}
+              className="input-field text-sm"
+              placeholder="Start typing a category, e.g. Hardware"
+              list="connect-category-options"
+              autoFocus
+            />
+            <datalist id="connect-category-options">
+              {categoryNames.map(name => <option key={name} value={name} />)}
+            </datalist>
+            {categoryNames.length > 0 && (
+              <p className="text-[10px] text-text-secondary">
+                {categoryNames.length} approved categories available.
+              </p>
+            )}
+            <div className="flex gap-2.5 justify-end pt-2">
+              <button onClick={() => { setConnecting(null); setConnectTarget('') }} className="btn-secondary h-10 px-4 text-xs font-semibold">
+                Cancel
+              </button>
+              <button
+                onClick={() => act(connecting.id, 'connect', connectTarget.trim())}
+                disabled={busyId === connecting.id || !connectTarget.trim()}
+                className="btn-primary h-10 px-5 text-xs font-semibold disabled:opacity-50"
+              >
+                {busyId === connecting.id ? 'Connecting...' : 'Connect'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmReject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-slide-up border border-white">
@@ -115,7 +172,7 @@ export default function AdminRequests() {
 
       <AdminSectionHeader
         title="Category & Area Requests"
-        subtitle="Businesses requested these while listing. Approve to make them live, or reject (owner is notified to review)."
+        subtitle="Businesses requested these while listing. Approve to make them live, reject, or connect a category to one that already exists."
         action={
           <div className="flex gap-1.5">
             {(['pending', 'all'] as const).map(f => (
@@ -182,6 +239,15 @@ export default function AdminRequests() {
                   >
                     Approve
                   </button>
+                  {r.type === 'category' && (
+                    <button
+                      onClick={() => { setConnecting(r); setConnectTarget('') }}
+                      disabled={busyId === r.id}
+                      className="h-9 px-4 text-xs font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-xl transition-all disabled:opacity-50"
+                    >
+                      🔗 Connect
+                    </button>
+                  )}
                   <button
                     onClick={() => setConfirmReject(r)}
                     disabled={busyId === r.id}
