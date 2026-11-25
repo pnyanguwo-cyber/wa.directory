@@ -34,6 +34,7 @@ interface EditForm {
   address: string
   show_location: boolean
   featured_eligible: boolean
+  requested_category: string
 }
 
 function SkeletonRow() {
@@ -354,6 +355,7 @@ export default function AdminListings() {
       address: b.address || '',
       show_location: b.show_location !== false,
       featured_eligible: b.featured_eligible !== false,
+      requested_category: (b as { requested_category?: string | null }).requested_category || '',
     })
     setEditingId(b.id)
   }
@@ -556,6 +558,13 @@ export default function AdminListings() {
                     primary
                     placeholder="Select areas"
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-medium text-text-secondary mb-1 block">Suggested category (as typed by owner)</label>
+                  <input type="text" value={editForm.requested_category} onChange={e => setEditForm(f => ({ ...f!, requested_category: e.target.value }))} className="input-field text-sm" placeholder="e.g. Electrcity meters" />
+                  <p className="text-[11px] text-text-secondary mt-0.5">
+                    The owner&apos;s own wording when they asked for a new category. Correct the spelling here and the pending request is renamed to match.
+                  </p>
                 </div>
                 <div className="sm:col-span-2">
                   <label className="text-xs font-medium text-text-secondary mb-1 block">Bio</label>

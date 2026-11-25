@@ -330,6 +330,16 @@
   }
 }
 
+/* Chat transcript backdrop: soft paper with a faint dot grid so the
+   conversation reads as a chat instead of a spreadsheet. */
+.chat-wallpaper {
+  background-color: #eef2ef;
+  background-image:
+    radial-gradient(rgba(18, 140, 126, 0.09) 1px, transparent 1.2px),
+    radial-gradient(1100px 420px at 50% -10%, rgba(37, 211, 102, 0.12), transparent 70%);
+  background-size: 18px 18px, 100% 100%;
+}
+
 /* Hide scrollbar on category chips mobile scroll */
 .scrollbar-none {
   -ms-overflow-style: none;

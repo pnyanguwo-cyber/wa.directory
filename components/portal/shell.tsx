@@ -142,6 +142,10 @@ export default function PortalShell({
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const contentRef = useRef<HTMLElement | null>(null)
+  // The chat workspace owns its own internal scrolling (inbox + transcript on
+  // one screen), so it must not sit inside a scrolling column. Other full-bleed
+  // tabs still scroll normally.
+  const fullHeight = activeId === 'chats' || pathname.includes('/conversations')
 
   useEffect(() => {
     setOpen(false)
@@ -330,7 +334,7 @@ export default function PortalShell({
             </div>
           )}
 
-          <section ref={contentRef} className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:pb-4 lg:pr-1" aria-label="Portal content">
+          <section ref={contentRef} className={`min-w-0 lg:h-full lg:min-h-0 lg:pb-4 lg:pr-1 ${fullHeight ? 'lg:flex lg:flex-col lg:overflow-hidden' : 'lg:overflow-y-auto lg:overscroll-contain'}`} aria-label="Portal content">
             {(subtitle || actions) && (
               <div className="mb-3 hidden items-center justify-between gap-3 lg:flex">
                 <div className="min-w-0">
@@ -342,13 +346,15 @@ export default function PortalShell({
             )}
             <div
               className={
-                flush === undefined
-                  ? pathname.includes('/conversations') || pathname.includes('/analytics')
-                    ? ''
-                    : 'rounded-2xl border border-white/80 bg-white/75 p-3 shadow-card sm:p-4'
-                  : flush
-                    ? ''
-                    : 'rounded-2xl border border-white/80 bg-white/75 p-3 shadow-card sm:p-4'
+                fullHeight
+                  ? 'flex min-h-0 flex-1 flex-col'
+                  : flush === undefined
+                    ? pathname.includes('/conversations') || pathname.includes('/analytics')
+                      ? ''
+                      : 'rounded-2xl border border-white/80 bg-white/75 p-3 shadow-card sm:p-4'
+                    : flush
+                      ? ''
+                      : 'rounded-2xl border border-white/80 bg-white/75 p-3 shadow-card sm:p-4'
               }
             >
               {children}

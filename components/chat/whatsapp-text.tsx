@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 
 const TOKEN =
-  /```([\s\S]*?)```|(https?:\/\/[^\s<]+|www\.[^\s<]+|mailto:[^\s<]+|[\w.+-]+@[\w-]+\.[\w.-]+)|\*([^*\n]+)\*|_([^_\n]+)_|~([^~\n]+)~/g
+  /```([\s\S]*?)```|(https?:\/\/[^\s<]+|www\.[^\s<]+|mailto:[^\s<]+|[\w.+-]+@[\w-]+\.[\w.-]+)|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|~([^~\n]+)~/g
 
 // WhatsApp clients linkify bare domains and emails; transcripts carry plenty of
 // both, so make them tappable instead of dead text.
@@ -68,16 +68,22 @@ export default function WhatsAppText({ text, className = '' }: { text: string; c
       nodes.push(...withLinks(match[2], `u${key}`))
     } else if (match[3] !== undefined) {
       nodes.push(
-        <strong key={`b${key}`} className="font-semibold">
-          {withLinks(match[3], `b${key}`)}
+        <strong key={`b2${key}`} className="font-bold">
+          {withLinks(match[3], `b2${key}`)}
         </strong>,
       )
     } else if (match[4] !== undefined) {
-      nodes.push(<em key={`i${key}`}>{match[4]}</em>)
+      nodes.push(
+        <strong key={`b${key}`} className="font-semibold">
+          {withLinks(match[4], `b${key}`)}
+        </strong>,
+      )
     } else if (match[5] !== undefined) {
+      nodes.push(<em key={`i${key}`}>{match[5]}</em>)
+    } else if (match[6] !== undefined) {
       nodes.push(
         <del key={`s${key}`} className="opacity-80">
-          {match[5]}
+          {match[6]}
         </del>,
       )
     }

@@ -34,6 +34,8 @@ export interface ChatMessage {
   text: string
   at: string | null
   preview?: ChatPreview
+  /** Set only for a locally-rendered send that the transcript has not echoed yet. */
+  pending?: boolean
 }
 
 export interface ChatThread {

@@ -43,6 +43,24 @@ function chatMessageKey(message: ChatMessage): string {
   return `${message.id}|${message.at || ''}|${message.direction}`
 }
 
+/** The transcript can lag a few seconds behind a send. Keep handoff bubbles on
+ * screen until the server copy shows up, instead of letting them blink away
+ * and reappear on the next poll. */
+function withPendingSends(detail: ChatDetail, pending: ChatMessage[]): ChatDetail {
+  if (!pending.length) return detail
+  const unmatched = pending.filter(
+    sent =>
+      !detail.messages.some(
+        message =>
+          message.direction === 'out' &&
+          message.text === sent.text &&
+          Math.abs(new Date(message.at || 0).getTime() - new Date(sent.at || 0).getTime()) < 120_000
+      )
+  )
+  if (!unmatched.length) return detail
+  return { ...detail, messages: [...detail.messages, ...unmatched] }
+}
+
 type Filter = 'all' | 'unread' | 'active' | 'archived'
 type Action =
   | 'read'
@@ -107,6 +125,7 @@ export default function ChatWorkspace({
   const messagesRef = useRef<HTMLDivElement | null>(null)
   const seenRef = useRef<Map<string, string>>(new Map())
   const primedRef = useRef(false)
+  const pendingOutRef = useRef<ChatMessage[]>([])
 
   const withBranch = useCallback(
     (url: string) => {
@@ -179,22 +198,36 @@ export default function ChatWorkspace({
         if (!res.ok) throw new Error(data?.error || 'Could not load this conversation')
         const next = data.detail as ChatDetail
         setDetail(prev => {
-          if (!prev || prev.thread.phone !== next.thread.phone) return next
-          if (before) {
+          let merged: ChatDetail = next
+          if (!prev || prev.thread.phone !== next.thread.phone) {
+            merged = next
+          } else if (before) {
             const seen = new Set(next.messages.map(chatMessageKey))
             const newer = prev.messages.filter(message => !seen.has(chatMessageKey(message)))
-            return { ...next, messages: [...newer, ...next.messages] }
-          }
-          if (quiet && prev.messages.length > next.messages.length) {
+            merged = { ...next, messages: [...newer, ...next.messages] }
+          } else if (quiet && prev.messages.length > next.messages.length) {
             const newestAt = next.messages[0]?.at || ''
             const older = prev.messages.filter(
               message => (message.at || '') < newestAt && !next.messages.some(item => chatMessageKey(item) === chatMessageKey(message))
             )
             if (older.length) {
-              return { ...next, messages: [...older, ...next.messages], hasMore: prev.hasMore, nextBefore: prev.nextBefore }
+              merged = { ...next, messages: [...older, ...next.messages], hasMore: prev.hasMore, nextBefore: prev.nextBefore }
             }
           }
-          return next
+          if (before) return merged
+          // The server now has these sends: stop re-attaching them.
+          if (pendingOutRef.current.length) {
+            pendingOutRef.current = pendingOutRef.current.filter(
+              sent =>
+                !merged.messages.some(
+                  message =>
+                    message.direction === 'out' &&
+                    message.text === sent.text &&
+                    Math.abs(new Date(message.at || 0).getTime() - new Date(sent.at || 0).getTime()) < 120_000
+                )
+            )
+          }
+          return withPendingSends(merged, pendingOutRef.current)
         })
         setThreads(prev => prev.map(thread => (thread.phone === phone ? next.thread : thread)))
         return next
@@ -287,6 +320,7 @@ export default function ChatWorkspace({
   }
 
   async function selectThread(phone: string) {
+    pendingOutRef.current = []
     setSelectedPhone(phone)
     setReply('')
     setMoreOpen(false)
@@ -306,6 +340,20 @@ export default function ChatWorkspace({
     if (!selectedPhone || sending) return
     const message = reply.trim()
     if (!message) return
+    const optimisticId = `optimistic-${Date.now()}`
+    const optimistic: ChatMessage = {
+      id: optimisticId,
+      direction: 'out',
+      kind: 'text',
+      text: message,
+      at: new Date().toISOString(),
+      pending: true,
+    }
+    // Show the message as sent immediately, before the server confirms, so the
+    // agent sees their handoff leave the screen without waiting for a round trip.
+    pendingOutRef.current.push(optimistic)
+    setDetail(prev => (prev ? { ...prev, messages: [...prev.messages, optimistic] } : prev))
+    setReply('')
     setSending(true)
     try {
       const res = await fetch(withBranch(endpoint), {
@@ -315,11 +363,24 @@ export default function ChatWorkspace({
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data?.error || 'Could not send the reply')
-      setReply('')
-      setToast('Reply sent')
+      setDetail(prev =>
+        prev
+          ? {
+              ...prev,
+              messages: prev.messages.map(m => (m.id === optimisticId ? { ...m, pending: false } : m)),
+            }
+          : prev
+      )
+      setToast('Message sent')
       await loadDetail(selectedPhone, true)
       loadThreads(true)
     } catch (err) {
+      // Roll back the optimistic bubble so a failed send is not mistaken for sent.
+      pendingOutRef.current = pendingOutRef.current.filter(sent => sent.id !== optimisticId)
+      setDetail(prev =>
+        prev ? { ...prev, messages: prev.messages.filter(m => m.id !== optimisticId) } : prev
+      )
+      setReply(message)
       setToast(err instanceof Error ? err.message : 'Could not send the reply')
     } finally {
       setSending(false)
@@ -624,11 +685,11 @@ export default function ChatWorkspace({
   )
 
   return (
-    <div className="space-y-2.5">
+    <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-base font-extrabold tracking-tight text-text-primary">Chats</h2>
-          <p className="text-[11px] text-text-secondary">
+          <h2 className="text-lg font-extrabold tracking-tight text-text-primary">Chats</h2>
+          <p className="max-w-2xl text-[12.5px] leading-snug text-text-secondary">
             {subtitle || 'Customer conversations attributed to the WhatsApp bot. Private WhatsApp chats stay private.'}
           </p>
         </div>
@@ -673,16 +734,16 @@ export default function ChatWorkspace({
         </div>
       )}
 
-      <div className="relative flex h-[calc(100dvh-11rem)] min-h-[540px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-card lg:grid lg:h-[calc(100vh-8rem)] lg:grid-cols-[minmax(240px,30fr)_minmax(0,70fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(228px,27fr)_minmax(0,50fr)_minmax(238px,23fr)]">
+      <div className="relative flex max-lg:h-[calc(100dvh-12rem)] max-lg:min-h-[460px] flex-1 overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-[0_10px_36px_-12px_rgba(11,20,26,0.18)] ring-1 ring-black/[0.02] lg:min-h-0 lg:grid lg:grid-cols-[minmax(250px,30fr)_minmax(0,70fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(240px,27fr)_minmax(0,50fr)_minmax(244px,23fr)]">
         {/* Left: inbox */}
         <aside
-          className={`${selectedPhone ? 'hidden lg:flex' : 'flex'} w-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-gray-100 lg:w-auto`}
+          className={`${selectedPhone ? 'hidden lg:flex' : 'flex'} w-full min-h-0 min-w-0 flex-col overflow-hidden border-r border-gray-200/70 bg-[#f8faf9] lg:w-auto`}
           aria-label="Chat inbox"
         >
-          <div className="border-b border-gray-100 px-3 py-2.5">
+          <div className="border-b border-gray-200/70 bg-white px-3 py-3">
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-[12.5px] font-extrabold text-text-primary">Inbox</p>
-              <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
+              <p className="text-[14px] font-extrabold tracking-tight text-text-primary">Inbox</p>
+              <span className="rounded-full bg-whatsapp-50 px-2 py-0.5 text-[11px] font-bold text-whatsapp-800">
                 {counts.all} chat{counts.all === 1 ? '' : 's'}
               </span>
             </div>
@@ -693,7 +754,7 @@ export default function ChatWorkspace({
                 onChange={event => setQuery(event.target.value)}
                 placeholder="Search chats"
                 aria-label="Search chats"
-                className="h-8 w-full rounded-lg border border-gray-200 bg-surface/60 pl-8 pr-2.5 text-[11.5px] outline-none transition-colors focus:border-whatsapp-400 focus:bg-white"
+                className="h-9 w-full rounded-xl border border-gray-200 bg-white pl-8 pr-2.5 text-[12.5px] outline-none transition-all placeholder:text-gray-400 focus:border-whatsapp-400 focus:ring-2 focus:ring-whatsapp-500/15"
               />
             </div>
             <div className="mt-2 flex items-center gap-1" role="tablist" aria-label="Chat filters">
@@ -711,10 +772,10 @@ export default function ChatWorkspace({
                   role="tab"
                   aria-selected={filter === key}
                   onClick={() => setFilter(key)}
-                  className={`rounded-md px-2 py-1 text-[10.5px] font-semibold transition-colors ${
+                  className={`rounded-lg px-2 py-1 text-[11.5px] font-semibold transition-colors ${
                     filter === key
-                      ? 'bg-whatsapp-50 text-whatsapp-800'
-                      : 'text-text-secondary hover:bg-surface'
+                      ? 'bg-whatsapp-100 text-whatsapp-900 shadow-sm'
+                      : 'text-text-secondary hover:bg-whatsapp-50/70'
                   }`}
                 >
                   {label}
@@ -768,13 +829,17 @@ export default function ChatWorkspace({
                     type="button"
                     onClick={() => selectThread(thread.phone)}
                     aria-current={active ? 'true' : undefined}
-                    className={`flex w-full items-start gap-2.5 border-b border-gray-50 px-3 py-2.5 text-left transition-colors ${
-                      active ? 'bg-whatsapp-50/70' : 'hover:bg-surface/70'
+                    className={`relative flex w-full items-start gap-2.5 border-b border-gray-200/50 px-3 py-3 text-left transition-colors ${
+                      active
+                        ? 'bg-white shadow-[inset_3px_0_0_0_#128c7e]'
+                        : 'hover:bg-white/80'
                     }`}
                   >
                     <div
-                      className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10.5px] font-extrabold ${
-                        active ? 'bg-whatsapp-500 text-white' : 'bg-whatsapp-50 text-whatsapp-800'
+                      className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold ${
+                        active
+                          ? 'bg-gradient-to-br from-whatsapp-500 to-whatsapp-700 text-white shadow-sm'
+                          : 'bg-whatsapp-50 text-whatsapp-800 ring-1 ring-whatsapp-200/60'
                       }`}
                     >
                       {initials(thread.phone)}
@@ -786,16 +851,16 @@ export default function ChatWorkspace({
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <p className={`truncate text-[12px] ${thread.unread ? 'font-extrabold' : 'font-bold'} text-text-primary`}>
+                        <p className={`truncate text-[13px] ${thread.unread ? 'font-extrabold' : 'font-bold'} text-text-primary`}>
                           {thread.name || formatPhone(thread.phone)}
                         </p>
-                        <span className="ml-auto shrink-0 text-[9.5px] font-medium text-gray-400">
+                        <span className="ml-auto shrink-0 text-[10.5px] font-medium text-gray-400">
                           {relativeTime(thread.lastAt)}
                         </span>
                       </div>
-                      <p className={`mt-0.5 truncate text-[11px] ${thread.unread ? 'text-text-primary' : 'text-text-secondary'}`}>
-                        {thread.lastText}
-                      </p>
+                      <div className={`mt-0.5 line-clamp-1 text-[12px] ${thread.unread ? 'text-text-primary' : 'text-text-secondary'}`}>
+                        <WhatsAppText text={thread.lastText} />
+                      </div>
                       <div className="mt-1 flex items-center gap-1">
                         {thread.status === 'archived' && (
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
@@ -844,7 +909,7 @@ export default function ChatWorkspace({
         </aside>
 
         {/* Centre: conversation */}
-        <section className={`${selectedPhone ? 'flex' : 'hidden lg:flex'} min-w-0 flex-1 min-h-0 flex-col overflow-hidden bg-[#fbfcfb]`} aria-label="Conversation">
+        <section className={`${selectedPhone ? 'flex' : 'hidden lg:flex'} chat-wallpaper min-w-0 flex-1 min-h-0 flex-col overflow-hidden`} aria-label="Conversation">
           {!selectedThread ? (
             <div className="flex h-full flex-col items-center justify-center px-6 text-center">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-whatsapp-50 text-whatsapp-600">
@@ -857,7 +922,7 @@ export default function ChatWorkspace({
             </div>
           ) : (
             <>
-              <header className="flex items-center gap-2 border-b border-gray-100 bg-white px-3 py-2.5">
+              <header className="flex items-center gap-2 border-b border-gray-200/70 bg-white/95 px-3 py-2.5 backdrop-blur-sm supports-[backdrop-filter]:bg-white/80">
                 <button
                   type="button"
                   onClick={() => {
@@ -869,14 +934,14 @@ export default function ChatWorkspace({
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-whatsapp-100 text-[10px] font-extrabold text-whatsapp-800">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-whatsapp-500 to-whatsapp-700 text-[11px] font-extrabold text-white shadow-sm">
                   {initials(selectedThread.phone)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12.5px] font-extrabold text-text-primary">
+                  <p className="truncate text-[14px] font-extrabold leading-tight tracking-tight text-text-primary">
                     {selectedThread.name || formatPhone(selectedThread.phone)}
                   </p>
-                  <p className="truncate text-[10px] text-text-secondary">
+                  <p className="truncate text-[11px] text-text-secondary">
                     {selectedThread.channel === 'bot' ? 'WhatsApp bot conversation' : 'Directory bot conversation'}
                     {selectedThread.foundVia ? ` · found via ${selectedThread.foundVia}` : ''}
                   </p>
@@ -888,7 +953,7 @@ export default function ChatWorkspace({
                       window.location.href = `tel:+${phoneDigits(selectedThread.phone)}`
                     }}
                     aria-label="Call customer"
-                    className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[10.5px] font-semibold text-text-primary hover:bg-surface"
+                    className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[11.5px] font-semibold text-text-primary transition-colors hover:border-whatsapp-300 hover:bg-whatsapp-50"
                   >
                     <Phone className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Call</span>
                   </button>
@@ -896,7 +961,7 @@ export default function ChatWorkspace({
                     type="button"
                     onClick={() => openMap(selectedThread.location || '', selectedThread.phone)}
                     aria-label="View location on map"
-                    className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[10.5px] font-semibold text-text-primary hover:bg-surface"
+                    className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[11.5px] font-semibold text-text-primary transition-colors hover:border-whatsapp-300 hover:bg-whatsapp-50"
                   >
                     <MapPin className="h-3.5 w-3.5" /> <span className="hidden sm:inline">View on Map</span>
                   </button>
@@ -912,7 +977,7 @@ export default function ChatWorkspace({
                     <button
                       type="button"
                       onClick={() => setMoreOpen(open => !open)}
-                      className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[10.5px] font-semibold text-text-primary hover:bg-surface"
+                      className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2 text-[11.5px] font-semibold text-text-primary transition-colors hover:border-whatsapp-300 hover:bg-whatsapp-50"
                       aria-expanded={moreOpen}
                       aria-label="More conversation actions"
                     >
@@ -995,7 +1060,7 @@ export default function ChatWorkspace({
                 </div>
               </header>
 
-              <div ref={messagesRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3 sm:px-4">
+              <div ref={messagesRef} className="min-h-0 flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-3 py-4 sm:px-5">
                 {detailLoading && !detail ? (
                   <div className="space-y-2">
                     {[1, 2, 3, 4].map(index => (
@@ -1031,8 +1096,8 @@ export default function ChatWorkspace({
                       return (
                         <div key={`${message.id}-${index}`}>
                           {newDay && message.at && (
-                            <div className="mb-2 mt-1 flex justify-center">
-                              <span className="rounded-full bg-white px-2.5 py-0.5 text-[9.5px] font-semibold text-gray-400 shadow-sm">
+                            <div className="mb-2 mt-2 flex justify-center">
+                              <span className="rounded-full bg-white/90 px-3 py-1 text-[10.5px] font-bold uppercase tracking-wide text-gray-500 shadow-sm ring-1 ring-black/[0.03]">
                                 {formatDay(message.at)}
                               </span>
                             </div>
@@ -1046,7 +1111,7 @@ export default function ChatWorkspace({
                 )}
               </div>
 
-              <div className="border-t border-gray-100 bg-white px-3 py-2.5">
+              <div className="border-t border-gray-200/70 bg-white/95 px-3 py-2.5 backdrop-blur-sm sm:px-4">
                 {detail?.canReply ? (
                   <form
                     onSubmit={event => {
@@ -1069,20 +1134,23 @@ export default function ChatWorkspace({
                         maxLength={4000}
                         placeholder={`Reply to ${selectedThread.name || formatPhone(selectedThread.phone)}…`}
                         aria-label="Reply message"
-                        className="max-h-28 min-h-9 flex-1 resize-y rounded-lg border border-gray-200 px-3 py-2 text-[11.5px] outline-none focus:border-whatsapp-400"
+                        className="max-h-32 min-h-10 flex-1 resize-y rounded-2xl border border-gray-200 bg-surface/60 px-3.5 py-2.5 text-[13px] leading-snug outline-none transition-all placeholder:text-gray-400 focus:border-whatsapp-400 focus:bg-white focus:ring-2 focus:ring-whatsapp-500/15"
                       />
                       <button
                         type="submit"
                         disabled={sending || !reply.trim()}
                         aria-label="Send reply"
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-whatsapp-500 text-white transition-colors hover:bg-whatsapp-600 disabled:opacity-40"
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-whatsapp-500 to-whatsapp-600 text-white shadow-[0_4px_12px_rgba(18,140,126,0.35)] transition-all hover:from-whatsapp-600 hover:to-whatsapp-700 active:scale-95 disabled:opacity-40 disabled:shadow-none"
                       >
-                        {sending ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
+                        {sending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <Send className="h-4 w-4" />}
                       </button>
                     </div>
-                    <p className="text-[9.5px] leading-relaxed text-gray-400">
-                      {detail?.replyHint || 'Sent from the directory WhatsApp number. Enter sends, Shift+Enter adds a line.'}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 px-1 text-[10.5px] leading-relaxed text-gray-400">
+                      <span className="truncate">
+                        {detail?.replyHint || 'Sent from the directory WhatsApp number. Enter sends, Shift+Enter adds a line.'}
+                      </span>
+                      <span className={`shrink-0 tabular-nums ${reply.length > 3600 ? 'text-amber-600' : ''}`}>{reply.length}/4000</span>
+                    </div>
                   </form>
                 ) : (
                   <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
@@ -1152,7 +1220,13 @@ export default function ChatWorkspace({
       )}
 
       {toast && (
-        <div className="fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-full bg-text-primary px-3.5 py-2 text-[11px] font-semibold text-white shadow-dropdown">
+        <div
+          role="status"
+          className={`fixed bottom-5 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full px-4 py-2.5 text-[12px] font-semibold text-white shadow-dropdown ${
+            toast === 'Message sent' ? 'bg-whatsapp-600' : 'bg-text-primary'
+          }`}
+        >
+          {toast === 'Message sent' && <Check className="h-3.5 w-3.5" />}
           {toast}
         </div>
       )}
@@ -1174,9 +1248,9 @@ function StatusPill({ status }: { status: ChatThread['status'] }) {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-gray-50 pb-1.5 last:border-0">
-      <span className="shrink-0 text-[10.5px] font-medium text-gray-400">{label}</span>
-      <span className="min-w-0 break-words text-right text-[11px] font-semibold text-text-primary">{value}</span>
+    <div className="flex items-start justify-between gap-3 border-b border-gray-100 pb-1.5 last:border-0">
+      <span className="shrink-0 text-[11.5px] font-medium text-gray-500">{label}</span>
+      <span className="min-w-0 break-words text-right text-[12px] font-semibold text-text-primary">{value}</span>
     </div>
   )
 }
@@ -1209,8 +1283,8 @@ function MenuButton({
 function MessageBubble({ message }: { message: ChatMessage }) {
   if (message.direction === 'system') {
     return (
-      <div className="flex justify-center py-0.5">
-        <span className="max-w-[85%] rounded-full bg-white px-2.5 py-1 text-center text-[9.5px] font-medium text-text-secondary shadow-sm">
+      <div className="flex justify-center py-1">
+        <span className="max-w-[85%] rounded-full bg-white/90 px-3 py-1 text-center text-[11px] font-medium leading-snug text-text-secondary shadow-sm ring-1 ring-black/[0.03]">
           {message.text}
         </span>
       </div>
@@ -1221,19 +1295,24 @@ function MessageBubble({ message }: { message: ChatMessage }) {
   return (
     <div className={`flex ${outgoing ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-[11.5px] leading-relaxed shadow-[0_1px_2px_rgba(11,20,26,0.08)] sm:max-w-[76%] ${
+        className={`max-w-[86%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-[1.5] shadow-[0_1px_1px_rgba(11,20,26,0.10)] sm:max-w-[72%] ${
           outgoing
-            ? 'rounded-br-[5px] border border-whatsapp-100 bg-gradient-to-b from-whatsapp-50 to-whatsapp-100 text-text-primary'
-            : 'rounded-bl-[5px] border border-gray-200/80 bg-white text-text-primary'
+            ? 'rounded-br-md bg-[#d9fdd3] text-[#111b21] ring-1 ring-[#bfe9b4]'
+            : 'rounded-bl-md bg-white text-[#111b21] ring-1 ring-black/[0.045]'
         }`}
       >
         {message.preview && <MessagePreview preview={message.preview} />}
         {message.text && message.text !== message.preview?.title && (
           <WhatsAppText text={message.text} />
         )}
-        <div className={`mt-1 flex items-center justify-end gap-1 text-[9px] ${outgoing ? 'text-whatsapp-700/70' : 'text-gray-400'}`}>
+        <div
+          className={`mt-1.5 flex items-center justify-end gap-1 text-[10.5px] tabular-nums ${
+            outgoing ? 'text-[#5b7f63]' : 'text-gray-400'
+          }`}
+        >
           {message.at && <span>{formatTime(message.at)}</span>}
-          {outgoing && <Check className="h-3 w-3" />}
+          {outgoing &&
+            (message.pending ? <Clock3 className="h-3 w-3 animate-pulse" aria-label="Sending" /> : <Check className="h-3.5 w-3.5" />)}
         </div>
       </div>
     </div>
