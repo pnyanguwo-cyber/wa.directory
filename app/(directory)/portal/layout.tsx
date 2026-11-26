@@ -6,7 +6,8 @@ import PortalShell, { type ShellNavGroup, type ShellNavItem } from '@/components
 
 export const dynamic = 'force-dynamic'
 
-export default async function PortalLayout({ children, searchParams }: { children: React.ReactNode; searchParams?: { branch?: string } }) {
+export default async function PortalLayout(props: any) {
+  const { children, searchParams } = props as { children: React.ReactNode; searchParams?: { branch?: string } }
   const actor = await getPortalActor()
   if (!actor) redirect('/login')
 

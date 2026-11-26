@@ -62,6 +62,6 @@ export function playChatChime() {
   if (!ctx) return
   if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
   const now = ctx.currentTime + 0.02
-  tone(ctx, 880, now, 0.14, 0.12)
-  tone(ctx, 1174.66, now + 0.13, 0.22, 0.1)
+  tone(ctx, 880, now, 0.16, 0.18)
+  tone(ctx, 1174.66, now + 0.13, 0.26, 0.16)
 }

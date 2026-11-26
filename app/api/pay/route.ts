@@ -6,6 +6,7 @@ import { initiateEcoCashPayment, paynowConfigured } from '@/lib/paynow'
 import { logPaymentEvent } from '@/lib/payment-events'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
 import { PLAN_CONFIG, PERSONAL_PLAN_CONFIG } from '@/types'
+import { getPricing } from '@/lib/pricing'
 import type { PlanType } from '@/types'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     // Personal contacts ride the same plan keys/durations at the half-price
     // personal rates; lives through the same listing_subscriptions engine.
     const isPersonal = kind === 'personal'
+    const pricing = await getPricing()
     const adapters: PaymentAdapters = {
       initiateEcoCashPayment,
       logPaymentEvent: (p) => logPaymentEvent({ ...p, request }),
@@ -54,7 +56,9 @@ export async function POST(request: Request) {
         payerPhone: payer_phone,
         plan,
         hasProAssistance: isPersonal ? false : !!hasProAssistance,
-        amountOverride: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
+        amountOverride: isPersonal
+          ? pricing.personal[plan]
+          : pricing.business[plan] + (hasProAssistance ? pricing.proAssistance : 0),
       },
       adapters
     )
@@ -68,7 +72,7 @@ export async function POST(request: Request) {
       auto_ecocash: result.autoEcoCash,
       instructions: result.instructions,
       message: result.message,
-      amount: isPersonal ? PERSONAL_PLAN_CONFIG[plan].price : undefined,
+      amount: isPersonal ? pricing.personal[plan] : pricing.business[plan] + (hasProAssistance ? pricing.proAssistance : 0),
       label: isPersonal ? 'Personal contact' : PLAN_CONFIG[plan].label,
     })
   } catch {

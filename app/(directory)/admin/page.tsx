@@ -15,6 +15,7 @@ import AdminHarvest from '@/components/admin/admin-harvest'
 import AdminStats from '@/components/admin/admin-stats'
 import AdminRankings from '@/components/admin/admin-rankings'
 import AdminSubscriptions from '@/components/admin/admin-subscriptions'
+import AdminPricing from '@/components/admin/admin-pricing'
 import AdminAccounts from '@/components/admin/admin-accounts'
 import AdminNameContests from '@/components/admin/admin-name-contests'
 import AdminPaymentEvents from '@/components/admin/admin-payment-events'
@@ -43,6 +44,7 @@ type Tab =
   | 'rankings'
   | 'payments'
   | 'subscriptions'
+  | 'pricing'
   | 'accounts'
   | 'organizations'
   | 'contests'
@@ -65,6 +67,8 @@ const NAV: ShellNavGroup[] = [
   },
   {
     title: 'Directory',
+    collapsible: true,
+    defaultOpen: true,
     items: [
       { id: 'listings', label: 'Listings', icon: 'listings' },
       { id: 'categories', label: 'Categories', icon: 'categories' },
@@ -88,6 +92,7 @@ const NAV: ShellNavGroup[] = [
     items: [
       { id: 'payments', label: 'Payment Events', icon: 'payments' },
       { id: 'subscriptions', label: 'Subscriptions', icon: 'subscriptions' },
+      { id: 'pricing', label: 'Pricing', icon: 'payments' },
     ],
   },
   {
@@ -121,11 +126,13 @@ export default function AdminPage() {
   // The chime needs one user gesture before the browser will let audio play.
   useEffect(() => {
     const unlock = () => unlockChatAudio()
-    window.addEventListener('pointerdown', unlock, { once: true })
-    window.addEventListener('keydown', unlock, { once: true })
+    window.addEventListener('pointerdown', unlock)
+    window.addEventListener('keydown', unlock)
+    window.addEventListener('focus', unlock)
     return () => {
       window.removeEventListener('pointerdown', unlock)
       window.removeEventListener('keydown', unlock)
+      window.removeEventListener('focus', unlock)
     }
   }, [])
 
@@ -135,7 +142,6 @@ export default function AdminPage() {
     let stopped = false
     let baseline = false
     async function poll() {
-      if (document.visibilityState !== 'visible') return
       try {
         const res = await fetch('/api/admin/chats?summary=1', { cache: 'no-store' })
         if (!res.ok) return
@@ -198,7 +204,6 @@ export default function AdminPage() {
       {loggingOut && <Splash label="Logging out..." />}
       <PortalShell
         brand="WA Directory"
-        eyebrow="Directory Administration"
         subtitle="Review listings, conversations and training data."
         nav={nav}
         activeId={tab}
@@ -240,6 +245,7 @@ export default function AdminPage() {
         {tab === 'rankings' && <AdminRankings />}
         {tab === 'payments' && <AdminPaymentEvents />}
         {tab === 'subscriptions' && <AdminSubscriptions />}
+        {tab === 'pricing' && <AdminPricing />}
         {tab === 'accounts' && <AdminAccounts />}
         {tab === 'organizations' && <AdminOrganizations />}
         {tab === 'categories' && <AdminCategories />}

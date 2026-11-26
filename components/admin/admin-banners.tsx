@@ -28,6 +28,8 @@ export default function AdminBanners() {
   const [editText, setEditText] = useState('')
   const [editLink, setEditLink] = useState('')
   const [editLabel, setEditLabel] = useState('')
+  const [sideAds, setSideAds] = useState<{ left: { text: string; link: string; image_url: string; active: boolean }; right: { text: string; link: string; image_url: string; active: boolean } }>({ left: { text: '', link: '', image_url: '', active: false }, right: { text: '', link: '', image_url: '', active: false } })
+  const [sideBusy, setSideBusy] = useState(false)
 
   useEffect(() => {
     load()
@@ -40,6 +42,8 @@ export default function AdminBanners() {
       return
     }
     setRows(data.banners || [])
+    const sideRes = await adminFetch('/api/admin/side-ads')
+    if (sideRes.ok) setSideAds(sideRes.data.sideAds)
     setLoading(false)
   }
 
@@ -102,7 +106,23 @@ export default function AdminBanners() {
       method: 'DELETE',
       body: JSON.stringify({ id: b.id }),
     })
-    if (ok) load()
+          if (ok) load()
+  }
+
+  async function saveSideAds() {
+    setSideBusy(true)
+    setMessage('')
+    const { ok, data } = await adminFetch('/api/admin/side-ads', {
+      method: 'PATCH',
+      body: JSON.stringify(sideAds),
+    })
+    setSideBusy(false)
+    if (!ok) {
+      setMessage(data?.error || 'Failed to save side ads')
+      return
+    }
+    setSideAds(data.sideAds)
+    setMessage('Side rail ads saved.')
   }
 
   return (
@@ -211,6 +231,26 @@ export default function AdminBanners() {
           ))}
         </div>
       )}
+
+      <div className="neo-card p-4 space-y-4">
+        <h3 className="text-sm font-bold text-text-primary">Side rail ads (left/right of the page)</h3>
+        <p className="text-xs text-text-secondary">Show vertical ads in the empty side spaces on wide screens.</p>
+        {(['left', 'right'] as const).map(side => (
+          <div key={side} className="space-y-2 rounded-xl border border-gray-100 p-3">
+            <p className="text-xs font-semibold uppercase text-text-secondary">{side} side</p>
+            <label className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+              <input type="checkbox" checked={sideAds[side].active} onChange={e => setSideAds({ ...sideAds, [side]: { ...sideAds[side], active: e.target.checked } })} />
+              Active
+            </label>
+            <input value={sideAds[side].text} onChange={e => setSideAds({ ...sideAds, [side]: { ...sideAds[side], text: e.target.value } })} className="input-field text-sm" placeholder="Ad text" />
+            <input value={sideAds[side].link} onChange={e => setSideAds({ ...sideAds, [side]: { ...sideAds[side], link: e.target.value } })} className="input-field text-sm" placeholder="https://..." />
+            <input value={sideAds[side].image_url} onChange={e => setSideAds({ ...sideAds, [side]: { ...sideAds[side], image_url: e.target.value } })} className="input-field text-sm" placeholder="Image URL (optional)" />
+          </div>
+        ))}
+        <button type="button" disabled={sideBusy} onClick={saveSideAds} className="btn-primary h-10 px-5 text-xs font-semibold">
+          {sideBusy ? 'Saving...' : 'Save side ads'}
+        </button>
+      </div>
     </div>
   )
 }

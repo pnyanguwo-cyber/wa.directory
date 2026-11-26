@@ -2,6 +2,7 @@ import { getSupabase } from '@/lib/supabase-server'
 import { BUSINESS_CARD_COLUMNS } from '@/lib/business-select'
 import SearchBar from '@/components/search-bar'
 import FeaturedScroll from '@/components/featured-scroll'
+import SideAdRails from '@/components/side-ad-rails'
 import FeaturedBusinesses from '@/components/featured-businesses'
 import ShowMoreSection from '@/components/show-more-section'
 import TypingHeadline from '@/components/typing-headline'
@@ -119,7 +120,9 @@ export default async function HomePage() {
   const allVerified = (topRated || []).slice(3)
 
   return (
-    <main className="min-h-[calc(100vh-3.5rem)]">
+    <>
+      <SideAdRails />
+      <main className="min-h-[calc(100vh-3.5rem)]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
@@ -362,6 +365,7 @@ export default async function HomePage() {
         </section>
       </div>
     </main>
+    </>
   )
 }
 

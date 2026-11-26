@@ -31,6 +31,7 @@ import {
   TrendingUp,
   Users,
   Wallet,
+  ChevronDown,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -105,6 +106,10 @@ export interface ShellNavItem {
 export interface ShellNavGroup {
   title?: string
   items: ShellNavItem[]
+  /** When true the group header toggles its items open/closed. */
+  collapsible?: boolean
+  /** Initial open state for a collapsible group (defaults to open). */
+  defaultOpen?: boolean
 }
 
 function isActive(pathname: string, href: string): boolean {
@@ -115,7 +120,7 @@ function isActive(pathname: string, href: string): boolean {
 export default function PortalShell({
   brand,
   logoUrl,
-  eyebrow,
+  eyebrow = '',
   subtitle,
   nav,
   activeId,
@@ -128,7 +133,7 @@ export default function PortalShell({
 }: {
   brand: string
   logoUrl?: string | null
-  eyebrow: string
+  eyebrow?: string
   subtitle?: string
   nav: ShellNavGroup[]
   activeId?: string
@@ -142,6 +147,23 @@ export default function PortalShell({
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const contentRef = useRef<HTMLElement | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {}
+    return initial
+  })
+  // Seed collapsed state from nav on first render / when a collapsible group appears.
+  useEffect(() => {
+    setCollapsedGroups(prev => {
+      const next = { ...prev }
+      for (const group of nav) {
+        if (!group.collapsible || !group.title) continue
+        if (next[group.title] === undefined) {
+          next[group.title] = group.defaultOpen === false
+        }
+      }
+      return next
+    })
+  }, [nav])
   // The chat workspace owns its own internal scrolling (inbox + transcript on
   // one screen), so it must not sit inside a scrolling column. Other full-bleed
   // tabs still scroll normally.
@@ -174,14 +196,28 @@ export default function PortalShell({
 
   const navBody = (
     <nav className="flex-1 overflow-y-auto overscroll-contain px-2.5 py-3 space-y-4" aria-label="Portal sections">
-      {nav.map((group, groupIndex) => (
+      {nav.map((group, groupIndex) => {
+        const isCollapsed = Boolean(group.collapsible && group.title && collapsedGroups[group.title])
+        return (
         <div key={group.title || groupIndex} className="space-y-0.5">
           {group.title && (
-            <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
-              {group.title}
-            </p>
+            group.collapsible ? (
+              <button
+                type="button"
+                onClick={() => group.title && setCollapsedGroups(prev => ({ ...prev, [group.title!]: !prev[group.title!] }))}
+                className="flex w-full items-center justify-between px-2.5 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400 hover:text-text-secondary"
+                aria-expanded={!isCollapsed}
+              >
+                <span>{group.title}</span>
+                <ChevronDown className={`h-3 w-3 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+              </button>
+            ) : (
+              <p className="px-2.5 pb-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">
+                {group.title}
+              </p>
+            )
           )}
-          {group.items.map(item => {
+          {!isCollapsed && group.items.map(item => {
             const Icon = ICONS[item.icon] || LayoutDashboard
             const active = itemActive(item)
             const className = `group flex h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-[12.5px] font-semibold transition-colors ${
@@ -246,7 +282,7 @@ export default function PortalShell({
             )
           })}
         </div>
-      ))}
+      )})}
     </nav>
   )
 

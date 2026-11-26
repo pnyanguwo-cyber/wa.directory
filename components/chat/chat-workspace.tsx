@@ -43,6 +43,24 @@ function chatMessageKey(message: ChatMessage): string {
   return `${message.id}|${message.at || ''}|${message.direction}`
 }
 
+function outsideWindow(iso: string | null | undefined): boolean {
+  if (!iso) return false
+  const ms = new Date(iso).getTime()
+  if (Number.isNaN(ms)) return false
+  return Date.now() - ms > 4 * 60 * 60 * 1000
+}
+
+function isAdminNumber(phone: string, admins: string[]): boolean {
+  const digits = phoneDigits(phone)
+  return admins.some(item => phoneDigits(item) === digits)
+}
+
+function isAgentNumber(phone: string, businesses: string[], admins: string[]): boolean {
+  const digits = phoneDigits(phone)
+  if (admins.some(item => phoneDigits(item) === digits)) return false
+  return businesses.some(item => phoneDigits(item) === digits)
+}
+
 /** The transcript can lag a few seconds behind a send. Keep handoff bubbles on
  * screen until the server copy shows up, instead of letting them blink away
  * and reappear on the next poll. */
@@ -90,6 +108,8 @@ export default function ChatWorkspace({
   emptyTitle = 'No conversations yet',
   emptyBody = 'When a customer talks to the WhatsApp bot, their conversation appears here.',
   subtitle,
+  adminNumbers = [],
+  businessNumbers = [],
 }: {
   endpoint: string
   branchId?: string
@@ -101,6 +121,8 @@ export default function ChatWorkspace({
   emptyTitle?: string
   emptyBody?: string
   subtitle?: string
+  adminNumbers?: string[]
+  businessNumbers?: string[]
 }) {
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [loading, setLoading] = useState(true)
@@ -261,11 +283,13 @@ export default function ChatWorkspace({
   useEffect(() => {
     setMuted(isChatMuted())
     const unlock = () => unlockChatAudio()
-    window.addEventListener('pointerdown', unlock, { once: true })
-    window.addEventListener('keydown', unlock, { once: true })
+    window.addEventListener('pointerdown', unlock)
+    window.addEventListener('keydown', unlock)
+    window.addEventListener('focus', unlock)
     return () => {
       window.removeEventListener('pointerdown', unlock)
       window.removeEventListener('keydown', unlock)
+      window.removeEventListener('focus', unlock)
     }
   }, [])
 
@@ -861,7 +885,22 @@ export default function ChatWorkspace({
                       <div className={`mt-0.5 line-clamp-1 text-[12px] ${thread.unread ? 'text-text-primary' : 'text-text-secondary'}`}>
                         <WhatsAppText text={thread.lastText} />
                       </div>
-                      <div className="mt-1 flex items-center gap-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {outsideWindow(thread.lastAt) && (
+                          <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
+                            Outside 4h
+                          </span>
+                        )}
+                        {isAdminNumber(thread.phone, adminNumbers) && (
+                          <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-200">
+                            Admin
+                          </span>
+                        )}
+                        {isAgentNumber(thread.phone, businessNumbers, adminNumbers) && (
+                          <span className="rounded bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-sky-700 ring-1 ring-sky-200">
+                            Agent
+                          </span>
+                        )}
                         {thread.status === 'archived' && (
                           <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
                             Archived

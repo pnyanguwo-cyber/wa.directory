@@ -3,7 +3,8 @@ import { revalidatePath } from 'next/cache'
 import { getSupabase } from '@/lib/supabase-server'
 import { getActingPortalBusiness } from '@/lib/portal'
 import { sendWhatsAppMessage } from '@/lib/whatsapp'
-import { PLAN_CONFIG, PRO_ASSISTANCE_PRICE } from '@/types'
+import { PLAN_CONFIG } from '@/types'
+import { getPricing } from '@/lib/pricing'
 import type { PlanType } from '@/types'
 import { SITE_URL } from '@/lib/site-url'
 
@@ -48,7 +49,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Yellow Pages listings are free' }, { status: 400 })
     }
 
-    const amount = PLAN_CONFIG[plan].price + (hasProAssistance ? PRO_ASSISTANCE_PRICE : 0)
+    const pricing = await getPricing()
+    const amount = pricing.business[plan] + (hasProAssistance ? pricing.proAssistance : 0)
 
     // Check for existing pending subscription
     const { data: existing } = await supabase

@@ -20,6 +20,7 @@ import {
 } from '@/lib/bot-registration'
 import { startTrialForBusiness, isTrialEligible } from '@/lib/trial-helpers'
 import { PLAN_CONFIG, formatUsd, TRIAL_PLAN_LABEL, type PlanType } from '@/types'
+import { getPricing } from '@/lib/pricing'
 import { logOnboarding, maskPhone } from '@/lib/onboarding-log'
 import { formatHarareDate, getHarareStartOfDay } from '@/lib/date-utils'
 import {
@@ -796,7 +797,9 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
     return
   }
 
+  const pricing = await getPricing()
   const plan = PLAN_CONFIG[selectedPlan]
+  const amount = pricing.business[selectedPlan]
   const businessId = context.businessId || context.listingId
 
   if (!businessId) {
@@ -817,7 +820,7 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
       .insert({
         business_id: businessId,
         plan: selectedPlan,
-        amount: plan.price,
+        amount,
         status: 'pending',
         payment_method: 'ecocash',
         paynow_reference: `LISTING-${businessId}-${Date.now()}`,
@@ -840,7 +843,7 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
       .from('listing_subscriptions')
       .update({
         plan: selectedPlan,
-        amount: plan.price,
+        amount,
         status: 'pending',
         payment_method: 'ecocash',
         is_trial: false,
@@ -861,7 +864,7 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
   logOnboarding('payment_amount_calculated', {
     phone: maskPhone(phone),
     plan: selectedPlan,
-    amount: plan.price,
+    amount,
     subscriptionId,
   })
 
@@ -869,7 +872,7 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
   const paynowRef = `LISTING-${subscriptionId}`
   const result = await initiateEcoCashPayment({
     phone: normalized,
-    amount: plan.price,
+    amount: amount,
     reference: paynowRef,
     additionalInfo: `WA Directory - ${plan.label} subscription for ${context.businessName || 'your business'}`,
   })
@@ -894,8 +897,8 @@ async function handleEcoCashNumber(phone: string, text: string, context: any) {
   await sendWhatsAppMessage(
     phone,
     `✅ *EcoCash Payment Initiated*\n\n` +
-    `A payment request for *$${plan.price.toFixed(2)}* has been sent to *${formatPhone(normalized)}*.\n\n` +
-    `📱 *Action Required:*\n` +
+    `A payment request for *$${amount.toFixed(2)}* has been sent to *${formatPhone(normalized)}*.\n\n` +
+    `Action Required:\n` +
     `1. Check your phone for the EcoCash prompt\n` +
     `2. Enter your EcoCash PIN to authorize\n` +
     `3. You'll receive a confirmation SMS\n\n` +
