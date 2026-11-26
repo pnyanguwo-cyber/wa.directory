@@ -81,6 +81,8 @@ const NAV: ShellNavGroup[] = [
   },
   {
     title: 'Conversations',
+    collapsible: true,
+    defaultOpen: true,
     items: [
       { id: 'chats', label: 'Chats', icon: 'chats' },
       { id: 'harvest', label: 'Harvest Data', icon: 'harvest' },
@@ -89,6 +91,8 @@ const NAV: ShellNavGroup[] = [
   },
   {
     title: 'Revenue',
+    collapsible: true,
+    defaultOpen: true,
     items: [
       { id: 'payments', label: 'Payment Events', icon: 'payments' },
       { id: 'subscriptions', label: 'Subscriptions', icon: 'subscriptions' },
@@ -97,6 +101,8 @@ const NAV: ShellNavGroup[] = [
   },
   {
     title: 'People',
+    collapsible: true,
+    defaultOpen: true,
     items: [
       { id: 'accounts', label: 'Accounts', icon: 'accounts' },
       { id: 'organizations', label: 'Organizations', icon: 'organizations' },
@@ -106,6 +112,8 @@ const NAV: ShellNavGroup[] = [
   },
   {
     title: 'System',
+    collapsible: true,
+    defaultOpen: true,
     items: [
       { id: 'settings', label: 'Settings', icon: 'settings' },
       { id: 'help', label: 'Help & Support', icon: 'help' },

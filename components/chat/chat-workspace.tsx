@@ -47,7 +47,7 @@ function outsideWindow(iso: string | null | undefined): boolean {
   if (!iso) return false
   const ms = new Date(iso).getTime()
   if (Number.isNaN(ms)) return false
-  return Date.now() - ms > 4 * 60 * 60 * 1000
+  return Date.now() - ms > 24 * 60 * 60 * 1000
 }
 
 function isAdminNumber(phone: string, admins: string[]): boolean {
@@ -888,7 +888,7 @@ export default function ChatWorkspace({
                       <div className="mt-1 flex flex-wrap items-center gap-1">
                         {outsideWindow(thread.lastAt) && (
                           <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-200">
-                            Outside 4h
+                            Outside 24h
                           </span>
                         )}
                         {isAdminNumber(thread.phone, adminNumbers) && (
